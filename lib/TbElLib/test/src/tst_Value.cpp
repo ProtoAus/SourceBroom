@@ -576,6 +576,18 @@ TEST_CASE("Value")
     str << "prefix ";
     Value{ArrayType{Value{1.0}, Value{2.0}}}.appendToStream(str);
     CHECK(str.str() == "prefix [\n\t1,\n\t2\n]");
+
+    // with legacy escaping, every backslash and quote is escaped, also in nested values:
+    // the value a"b\c serializes to "a\"b\\c", and the value \\server\share serializes
+    // to "\\\\server\\share"
+    auto legacyStr = std::ostringstream{};
+    Value{ArrayType{
+            Value{"a\"b\\c"},
+            Value{MapType{{"path", Value{"\\\\server\\share"}}}},
+          }}
+      .appendToStream(legacyStr, false, "", StringEscaping::Legacy);
+    CHECK(
+      legacyStr.str() == "[\"a\\\"b\\\\c\", { \"path\": \"\\\\\\\\server\\\\share\" }]");
   }
 
   SECTION("contains")
