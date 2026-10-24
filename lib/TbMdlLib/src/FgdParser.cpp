@@ -87,8 +87,9 @@ Result<PropertyValueTypes::IOParameterType> parseIOParameterType(
     {"ehandle", IOParameterType::EHandle},
   };
 
-  if (const auto iParameterType = nameToTypeMap.find(kdl::str_to_lower(typeName));
-      iParameterType != nameToTypeMap.end())
+  if (
+    const auto iParameterType = nameToTypeMap.find(kdl::str_to_lower(typeName));
+    iParameterType != nameToTypeMap.end())
   {
     return iParameterType->second;
   }
@@ -407,8 +408,10 @@ EntityDefinitionClassInfo FgdParser::parseClassInfo(
       {
         status.warn(token.location(), "Found multiple model properties");
       }
-      classInfo.modelDefinition =
-        parseModel(status, kdl::ci::str_is_equal(typeName, "sprite"));
+      const auto sourceStudio = kdl::ci::str_is_equal(typeName, "studio")
+                                || kdl::ci::str_is_equal(typeName, "studioprop");
+      classInfo.modelDefinition = parseModel(
+        status, kdl::ci::str_is_equal(typeName, "sprite") || sourceStudio, sourceStudio);
     }
     else if (kdl::ci::str_is_equal(typeName, "decal"))
     {
@@ -479,7 +482,7 @@ std::vector<std::string> FgdParser::parseSuperClasses()
 }
 
 ModelDefinition FgdParser::parseModel(
-  ParserStatus& status, const bool allowEmptyExpression)
+  ParserStatus& status, const bool allowEmptyExpression, const bool sourceStudio)
 {
   m_tokenizer.nextToken(FgdToken::OParenthesis);
 
@@ -492,6 +495,11 @@ ModelDefinition FgdParser::parseModel(
       {"path", el::ExpressionNode{el::VariableExpression{"model"}, location}},
       {"scale", el::ExpressionNode{el::VariableExpression{"scale"}, location}},
     }};
+    if (sourceStudio)
+    {
+      defaultModel.elements.emplace(
+        "skin", el::ExpressionNode{el::VariableExpression{"skin"}, location});
+    }
     auto defaultExp = el::ExpressionNode{std::move(defaultModel), location};
     return ModelDefinition{std::move(defaultExp)};
   }
@@ -814,8 +822,9 @@ PropertyDefinition FgdParser::parseFlagsPropertyDefinition(std::string propertyK
       token = m_tokenizer.nextToken(FgdToken::Integer | FgdToken::CBracket);
     }
 
-    flags.push_back(PropertyValueTypes::Flag{
-      value, std::move(shortDescription), std::move(longDescription)});
+    flags.push_back(
+      PropertyValueTypes::Flag{
+        value, std::move(shortDescription), std::move(longDescription)});
   }
 
   return {

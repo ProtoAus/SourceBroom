@@ -193,4 +193,8 @@ struct PropertyDefinition
     PropertyDefinition, key, valueType, shortDescription, longDescription, readOnly);
 };
 
+// FGD keyvalues, inputs and outputs have independent name spaces.
+bool hasSamePropertyDefinitionKey(
+  const PropertyDefinition& lhs, const PropertyDefinition& rhs);
+
 } // namespace tb::mdl

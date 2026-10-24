@@ -2099,7 +2099,19 @@ void MapWindow::showCompileDialog()
   {
     if (saveDocument())
     {
-      showSourceBuildDialog(this, pathAsQString(m_document->map().path()), false);
+      auto* dialog =
+        showSourceBuildDialog(this, pathAsQString(m_document->map().path()), false);
+      connect(
+        dialog, &SourceBuildDialog::navigateToPosition, this, [this](const QVector3D& p) {
+          m_mapView->moveCameraToPosition(vm::vec3f{p.x(), p.y(), p.z()}, true);
+        });
+      connect(dialog, &SourceBuildDialog::showLeak, this, [this](const QString& path) {
+        m_document->loadPointFile(pathFromQString(path));
+        if (m_document->isPointFileLoaded())
+        {
+          m_mapView->moveCameraToCurrentTracePoint();
+        }
+      });
     }
     return;
   }

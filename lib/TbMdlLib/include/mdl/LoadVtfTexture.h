@@ -21,7 +21,9 @@
 
 #include "base/Result.h"
 
+#include <cstddef>
 #include <filesystem>
+#include <optional>
 
 namespace tb
 {
@@ -40,7 +42,10 @@ namespace mdl
 
 bool isVtfTexture(const std::filesystem::path& path);
 
-Result<gl::Texture> loadVtfTexture(fs::Reader& reader);
+// Additional retained-mip budget, checked before pixel allocation/decompression.
+// The decoder's global 256 MiB limit still applies.
+Result<gl::Texture> loadVtfTexture(
+  fs::Reader& reader, std::optional<size_t> decodedByteBudget = std::nullopt);
 
 } // namespace mdl
 } // namespace tb

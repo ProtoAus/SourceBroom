@@ -19,6 +19,7 @@ target_sources(TbMdlLibTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_DefParser.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_EditorContext.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Entity.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceEntityConnections.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_EntityColorPropertyValue.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_EntityDefinitionFileSpec.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_EntityDefinitionManager.cpp
@@ -55,6 +56,11 @@ target_sources(TbMdlLibTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadMd2Model.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadMd3Model.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadMdlModel.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceModelReader.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceCapabilities.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceDependencyPack.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceEditorMetadata.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadSourceModel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadMdxModel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadMipTexture.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadSpriteModel.cpp

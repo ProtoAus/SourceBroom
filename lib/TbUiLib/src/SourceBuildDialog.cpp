@@ -11,18 +11,24 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QTextBrowser>
 #include <QTextCursor>
+#include <QUrl>
 #include <QVBoxLayout>
+#include <QVector>
 
 #include "ui/SourceBuild.h"
+#include "ui/SourceToolsDialog.h"
 
 #include <array>
+#include <memory>
 
 namespace tb::ui
 {
-QDialog* showSourceBuildDialog(
+SourceBuildDialog* showSourceBuildDialog(
   QWidget* parent, const QString& savedVmf, const bool initialPlay)
 {
   auto* dialog = new SourceBuildDialog{parent, savedVmf, initialPlay};
@@ -59,6 +65,12 @@ SourceBuildDialog::SourceBuildDialog(
   auto* fields = new QWidget{this};
   auto* form = new QFormLayout{fields};
   layout->addWidget(fields);
+  auto* target = new QComboBox{fields};
+  target->addItems(
+    {tr("Generic / unknown compatibility"),
+     tr("Classic CSS — VBSP 20"),
+     tr("Strata — VBSP 25")});
+  form->addRow(tr("Compiler output contract (not VMF version)"), target);
   using PathMember = QString SourceBuildSettings::*;
   const auto members = std::array<PathMember, 8>{
     &SourceBuildSettings::vbsp,
@@ -117,18 +129,20 @@ SourceBuildDialog::SourceBuildDialog(
   auto* arguments = new QPlainTextEdit{fields};
   arguments->setMaximumHeight(110);
   form->addRow(tr("Launch args (one per line; {map}, {game})"), arguments);
-  const auto populate = [edits, members, arguments, compilerArguments, argumentMembers](
-                          const SourceBuildSettings& s) {
-    for (auto i = 0; i < 8; ++i)
-    {
-      edits[i]->setText(s.*members[i]);
-    }
-    arguments->setPlainText(s.launchArguments.join('\n'));
-    for (auto i = 0; i < 3; ++i)
-    {
-      compilerArguments[i]->setPlainText((s.*argumentMembers[i]).join('\n'));
-    }
-  };
+  const auto populate =
+    [edits, members, arguments, compilerArguments, argumentMembers, target](
+      const SourceBuildSettings& s) {
+      for (auto i = 0; i < 8; ++i)
+      {
+        edits[i]->setText(s.*members[i]);
+      }
+      target->setCurrentIndex(static_cast<int>(s.bspTarget));
+      arguments->setPlainText(s.launchArguments.join('\n'));
+      for (auto i = 0; i < 3; ++i)
+      {
+        compilerArguments[i]->setPlainText((s.*argumentMembers[i]).join('\n'));
+      }
+    };
   populate(loadSourceBuildSettings());
   connect(presets, &QComboBox::currentIndexChanged, this, [populate](int index) {
     if (index > 0)
@@ -136,22 +150,98 @@ SourceBuildDialog::SourceBuildDialog(
       populate(defaultSourceBuildSettings(static_cast<SourceBuildTarget>(index - 1)));
     }
   });
-  auto* log = new QPlainTextEdit{this};
-  log->setReadOnly(true);
+  auto* log = new QTextBrowser{this};
+  log->setObjectName("sourceBuildLog");
+  log->setOpenLinks(false);
+  log->setOpenExternalLinks(false);
+  const auto locations = std::make_shared<QVector<SourceBuildDiagnostic>>();
+  const auto leak = std::make_shared<QString>();
+  connect(
+    log, &QTextBrowser::anchorClicked, this, [this, locations, leak](const QUrl& url) {
+      if (url.scheme() != "sourcebuild")
+      {
+        return;
+      }
+      if (url.path() == "leak" && !leak->isEmpty())
+      {
+        auto error = QString{};
+        if (validateSourceLeak(*leak, error))
+        {
+          emit showLeak(*leak);
+        }
+        else
+        {
+          QMessageBox::warning(this, tr("Leak display refused"), error);
+        }
+        return;
+      }
+      auto ok = false;
+      const auto index = url.path().toInt(&ok);
+      if (!ok || index < 0 || index >= locations->size())
+      {
+        return;
+      }
+      const auto& location = (*locations)[index];
+      if (location.position)
+      {
+        emit navigateToPosition(*location.position);
+      }
+      else
+      {
+        QMessageBox::information(
+          this,
+          tr("Compiler reference"),
+          location.text
+            + tr(
+              "\nCompiler entity/brush indices are not native VMF IDs. "
+              "Locate this reference in the retained compiler log; "
+              "automatic scene selection is unavailable."));
+      }
+    });
+  connect(m_build, &SourceBuild::diagnostic, this, [log, locations](const QString& line) {
+    const auto location = parseSourceBuildDiagnostic(line);
+    if (!location.position && location.reference.isEmpty())
+    {
+      return;
+    }
+    const auto index = locations->size();
+    locations->push_back(location);
+    log->moveCursor(QTextCursor::End);
+    log->insertHtml(
+      QString("<br/><a href=\"sourcebuild:%1\">%2</a><br/>")
+        .arg(index)
+        .arg((location.position ? QString("Go to: ") : QString("Reference: "))
+               .append(line)
+               .toHtmlEscaped()));
+  });
+  connect(m_build, &SourceBuild::leakReady, this, [log, leak](const QString& path) {
+    *leak = path;
+    log->moveCursor(QTextCursor::End);
+    log->insertHtml(
+      "<br/><a href=\"sourcebuild:leak\">Show this build's leak path "
+      "(use existing next/previous point controls)</a><br/>");
+  });
   layout->addWidget(log, 1);
   auto* buttons = new QHBoxLayout{};
   layout->addLayout(buttons);
   auto* build = new QPushButton{tr("Build"), this};
   auto* play = new QPushButton{tr("Build & Play"), this};
+  auto* tools = new QPushButton{tr("Native metadata / Custom package…"), this};
+  tools->setObjectName("sourceToolsButton");
   auto* close = new QPushButton{tr("Close"), this};
   build->setDefault(!initialPlay);
   play->setDefault(initialPlay);
   buttons->addWidget(build);
   buttons->addWidget(play);
+  buttons->addWidget(tools);
   buttons->addStretch();
   buttons->addWidget(close);
   const auto start = [this,
                       savedVmf,
+                      target,
+                      log,
+                      locations,
+                      leak,
                       edits,
                       members,
                       arguments,
@@ -161,8 +251,13 @@ SourceBuildDialog::SourceBuildDialog(
                       presets,
                       build,
                       play,
+                      tools,
                       close](bool run) {
+    log->clear();
+    locations->clear();
+    leak->clear();
     auto settings = SourceBuildSettings{};
+    settings.bspTarget = static_cast<SourceBspTarget>(target->currentIndex());
     for (auto i = 0; i < 8; ++i)
     {
       settings.*members[i] = edits[i]->text();
@@ -178,12 +273,24 @@ SourceBuildDialog::SourceBuildDialog(
     presets->setEnabled(false);
     build->setEnabled(false);
     play->setEnabled(false);
+    tools->setEnabled(false);
     close->setEnabled(false);
     m_build->start(savedVmf, settings, run);
   };
   connect(build, &QPushButton::clicked, this, [start] { start(false); });
   connect(play, &QPushButton::clicked, this, [start] { start(true); });
   connect(close, &QPushButton::clicked, this, &QDialog::reject);
+  connect(tools, &QPushButton::clicked, this, [this, savedVmf, target] {
+    auto* dialog = new SourceToolsDialog{
+      this, savedVmf, static_cast<SourceBspTarget>(target->currentIndex())};
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(
+      dialog,
+      &SourceToolsDialog::navigateToPosition,
+      this,
+      &SourceBuildDialog::navigateToPosition);
+    dialog->show();
+  });
   connect(m_build, &SourceBuild::output, this, [log](const QString& text) {
     log->moveCursor(QTextCursor::End);
     log->insertPlainText(text);
@@ -193,11 +300,12 @@ SourceBuildDialog::SourceBuildDialog(
     m_build,
     &SourceBuild::finished,
     this,
-    [fields, presets, build, play, close](bool, const QString&) {
+    [fields, presets, build, play, tools, close](bool, const QString&) {
       fields->setEnabled(true);
       presets->setEnabled(true);
       build->setEnabled(true);
       play->setEnabled(true);
+      tools->setEnabled(true);
       close->setEnabled(true);
     });
 }

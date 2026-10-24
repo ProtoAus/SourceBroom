@@ -17,9 +17,8 @@
  along with SourceBroom. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "mdl/VmfDocument.h"
-
 #include "base/ParserException.h"
+#include "mdl/VmfDocument.h"
 
 #include <array>
 #include <stdexcept>
@@ -30,6 +29,18 @@
 
 namespace tb::mdl
 {
+
+TEST_CASE("VmfDocument explicit entry budget refuses before adding entries", "[vmf]")
+{
+  const auto source = std::string{"world { id 1 }"};
+  const auto exact = VmfDocument::parse(source, 2);
+  CHECK(exact.entries().size() == 2);
+  CHECK(exact.serialize() == source);
+  CHECK_THROWS_AS(VmfDocument::parse(source, 1), ParserException);
+  CHECK_THROWS_AS(VmfDocument::parse(source, 0), ParserException);
+  CHECK(VmfDocument::parse(" // no entries\n", 0).serialize() == " // no entries\n");
+  CHECK(VmfDocument::parse(source).serialize() == source);
+}
 
 TEST_CASE("VmfDocument preserves nested structure and repeated outputs", "[vmf]")
 {
@@ -155,8 +166,15 @@ TEST_CASE("VmfDocument rejects unsafe token edits", "[vmf]")
 {
   const auto document = VmfDocument::parse("world { \"key\" \"value\" }");
   const auto invalidTokens = std::vector<std::string>{
-    "", "bare", "two words", "{}", "\"x\" \"injected\" \"y\"", " \"x\"", "\"x\" // comment",
-    "\"unfinished", std::string{"\"x\0y\"", 5}};
+    "",
+    "bare",
+    "two words",
+    "{}",
+    "\"x\" \"injected\" \"y\"",
+    " \"x\"",
+    "\"x\" // comment",
+    "\"unfinished",
+    std::string{"\"x\0y\"", 5}};
   for (const auto& token : invalidTokens)
   {
     INFO(token.size());
@@ -187,6 +205,37 @@ TEST_CASE("VmfDocument does not merge adjacent tokens during edits", "[vmf]")
   CHECK(VmfDocument::parse(comments.serialize(quoted)).entries().size() == 2);
 }
 
+TEST_CASE("VmfDocument removal separates surviving lexical boundaries", "[vmf]")
+{
+  for (const auto& tokens : std::array{
+         std::pair{"b", "c"},
+         std::pair{"/", "/"},
+         std::pair{"/", "*"},
+         std::pair{"*", "/"},
+         std::pair{"\"b\"", "c"},
+         std::pair{"b", "\"c\""}})
+  {
+    const auto source = std::string{"root { a "} + tokens.first + "\"remove\" \"x\""
+                        + tokens.second + " d }";
+    const auto document = VmfDocument::parse(source);
+    CHECK(document.serialize() == source);
+    const auto removal =
+      std::array{VmfStructuralEdit{VmfStructuralEdit::Type::Remove, 2, {}}};
+    const auto saved = document.serialize({}, removal);
+    CHECK(
+      saved == std::string{"root { a "} + tokens.first + " " + tokens.second + " d }");
+    const auto reopened = VmfDocument::parse(saved);
+    REQUIRE(reopened.entries().size() == 3);
+    CHECK(
+      reopened.tokenContents(*reopened.entries()[1].value)
+      == document.tokenContents(*document.entries()[1].value));
+    CHECK(
+      reopened.tokenContents(reopened.entries()[2].key)
+      == document.tokenContents(document.entries()[3].key));
+    CHECK(reopened.tokenContents(*reopened.entries()[2].value) == "d");
+  }
+}
+
 TEST_CASE("VmfDocument has an explicit nesting limit", "[vmf]")
 {
   const auto nested = [](const size_t depth) {
@@ -200,6 +249,35 @@ TEST_CASE("VmfDocument has an explicit nesting limit", "[vmf]")
   };
   CHECK(VmfDocument::parse(nested(256)).entries().size() == 256);
   CHECK_THROWS_AS(VmfDocument::parse(nested(257)), ParserException);
+}
+
+TEST_CASE("VmfDocument structural appends enforce combined nesting depth", "[vmf]")
+{
+  const auto nested = [](const size_t depth) {
+    auto source = std::string{};
+    for (auto i = size_t{0}; i < depth; ++i)
+    {
+      source += "block { ";
+    }
+    source.append(depth, '}');
+    return source;
+  };
+  const auto root = VmfDocument::parse("world {}");
+  const auto safe =
+    std::array{VmfStructuralEdit{VmfStructuralEdit::Type::Append, 0, nested(255)}};
+  const auto tooDeep =
+    std::array{VmfStructuralEdit{VmfStructuralEdit::Type::Append, 0, nested(256)}};
+  CHECK(VmfDocument::parse(root.serialize({}, safe)).entries().size() == 256);
+  CHECK_THROWS_AS(root.serialize({}, tooDeep), std::invalid_argument);
+  CHECK(root.serialize() == "world {}");
+
+  const auto deepest = VmfDocument::parse(nested(256));
+  const auto property = std::array{
+    VmfStructuralEdit{VmfStructuralEdit::Type::Append, 255, "\"key\" \"value\""}};
+  const auto block =
+    std::array{VmfStructuralEdit{VmfStructuralEdit::Type::Append, 255, "child {}"}};
+  CHECK(VmfDocument::parse(deepest.serialize({}, property)).entries().size() == 257);
+  CHECK_THROWS_AS(deepest.serialize({}, block), std::invalid_argument);
 }
 
 TEST_CASE("VmfDocument spans survive copies moves and entry growth", "[vmf]")

@@ -12,6 +12,7 @@
 #include "mdl/Map_Geometry.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
+#include "mdl/SourceEditorMetadata.h"
 #include "mdl/VmfScene.h"
 
 #include "vm/mat.h"
@@ -266,6 +267,70 @@ TEST_CASE("VmfScene", "[vmf]")
     translate(brush(scene.world()));
     CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
+  SECTION("connections on unsupported owners retain opaque brush guards")
+  {
+    for (const auto& owner : {"side", "solid", "world", "other"})
+    {
+      INFO(owner);
+      const auto attachment =
+        std::string{"connections { future_geometry { \"origin\" \"0 0 0\" } } "};
+      auto source = fixture();
+      if (std::string{owner} == "side")
+        source = fixture(false, attachment);
+      else if (std::string{owner} == "solid")
+        source.insert(source.find("solid {") + 7, attachment);
+      else if (std::string{owner} == "world")
+        source.insert(source.find("world {") + 7, attachment);
+      else
+        source = fixture(false, "future { " + attachment + "} ");
+      auto scene = VmfScene::read(source, bounds);
+      CHECK(scene.serialize(scene.world()) == source);
+      translate(brush(scene.world()));
+      CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+    }
+  }
+  SECTION("only supported flat entity outputs permit affected transforms")
+  {
+    for (const auto& contents :
+         {"\"OnUser1\" \"!self,Use,,0.000,-1\"",
+          "future { \"origin\" \"0 0 0\" }",
+          "\"OnUser1\" \"malformed raw attachment\""})
+    {
+      INFO(contents);
+      auto source = fixture();
+      source.insert(source.rfind('}'), std::string{" connections { "} + contents + " } ");
+      const auto supported = std::string{contents}.find("!self") != std::string::npos;
+      // Origin edits must use the same conservative attachment check.
+      {
+        auto scene = VmfScene::read(source, bounds);
+        CHECK(scene.serialize(scene.world()) == source);
+        auto* node =
+          dynamic_cast<EntityNode*>(scene.world().defaultLayer()->children()[1]);
+        auto changed = node->entity();
+        changed.addOrUpdateProperty("origin", "9 17 25");
+        node->setEntity(changed);
+        if (supported)
+        {
+          const auto saved = scene.serialize(scene.world());
+          auto reopened = VmfScene::read(saved, bounds);
+          CHECK(reopened.serialize(reopened.world()) == saved);
+          CHECK(saved.find(contents) != std::string::npos);
+        }
+        else
+          CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+      }
+      // Unsupported output attachments may refer to the moved brush.
+      {
+        auto scene = VmfScene::read(source, bounds);
+        CHECK(scene.serialize(scene.world()) == source);
+        translate(brush(scene.world()));
+        if (supported)
+          CHECK_NOTHROW(scene.serialize(scene.world()));
+        else
+          CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+      }
+    }
+  }
   SECTION("topology additions deletions and lost bindings refuse")
   {
     auto scene = VmfScene::read(fixture(), bounds);
@@ -333,6 +398,67 @@ TEST_CASE("VmfScene", "[vmf]")
       translate(brush(attached.world()));
       CHECK_THROWS_AS(attached.serialize(attached.world()), std::invalid_argument);
     }
+  }
+  SECTION("read-only editor metadata survives acted brush edits without relaxing guards")
+  {
+    const auto metadataBytes = std::string{
+      "visgroups { visgroup { \"visgroupid\" \"10\" \"name\" \"Synthetic\" } }\r\n"
+      "cameras { \"activecamera\" \"0\" camera { \"position\" \"[8 16 24]\" "
+      "\"look\" \"[32 32 32]\" } }\r\n"
+      "cordons { \"active\" \"1\" cordon { \"name\" \"Synthetic\" \"active\" \"1\" "
+      "box { \"mins\" \"-128 -128 -128\" \"maxs\" \"128 128 128\" } } }\r\n"};
+    for (const auto hidden : {false, true})
+    {
+      CAPTURE(hidden);
+      const auto source = fixture(false, {}, hidden) + metadataBytes;
+      auto scene = VmfScene::read(source, bounds);
+      const auto snapshot = SourceEditorMetadata::read(scene.document());
+      REQUIRE(snapshot.diagnostics.empty());
+      REQUIRE(snapshot.memberships.size() == 3);
+      CHECK(snapshot.memberships[1].hiddenByContainer == hidden);
+      CHECK(scene.serialize(scene.world()) == source);
+      translate(brush(scene.world()));
+      const auto saved = scene.serialize(scene.world());
+      CHECK(saved != source);
+      CHECK(saved.substr(saved.size() - metadataBytes.size()) == metadataBytes);
+      auto reopened = VmfScene::read(saved, bounds);
+      const auto acted = SourceEditorMetadata::read(reopened.document());
+      CHECK(acted.diagnostics.empty());
+      CHECK(acted.memberships[1].hiddenByContainer == hidden);
+      CHECK(acted.activeCamera == snapshot.activeCamera);
+      CHECK(acted.cameras[0].eye == snapshot.cameras[0].eye);
+      CHECK(acted.cordons[0].boxes == snapshot.cordons[0].boxes);
+      CHECK(
+        brush(reopened.world()).brush().bounds() == vm::bbox3d{{16, 8, 4}, {80, 72, 68}});
+      brush(reopened.world())
+        .setVisibilityState(
+          hidden ? VisibilityState::Inherited : VisibilityState::Hidden);
+      CHECK_THROWS_AS(reopened.serialize(reopened.world()), std::invalid_argument);
+    }
+    // Interpreting metadata does not make geometry-bearing opaque blocks editable.
+    auto opaque = VmfScene::read(
+      fixture(false, "dispinfo { \"power\" \"2\" }") + metadataBytes, bounds);
+    CHECK(SourceEditorMetadata::read(opaque.document()).cameras[0].navigable());
+    CHECK(opaque.serialize(opaque.world()) == opaque.document().source());
+    translate(brush(opaque.world()));
+    CHECK_THROWS_AS(opaque.serialize(opaque.world()), std::invalid_argument);
+  }
+  SECTION("existing native groups remain read-only with conservative transform refusal")
+  {
+    auto source = fixture();
+    const auto editor = source.find("editor { \"color\"");
+    REQUIRE(editor != std::string::npos);
+    source.insert(editor, "group { \"id\" \"20\" editor { \"color\" \"1 2 3\" } } ");
+    auto scene = VmfScene::read(source, bounds);
+    const auto snapshot = SourceEditorMetadata::read(scene.document());
+    REQUIRE(snapshot.groups.size() == 1);
+    CHECK(snapshot.groups[0].nativeId == "20");
+    CHECK(snapshot.diagnostics.empty());
+    CHECK(scene.serialize(scene.world()) == source);
+    // Group references are not scene parent bindings. Do not invent a GroupNode
+    // projection that would bypass native hierarchy/unknown-attachment guards.
+    translate(brush(scene.world()));
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
   SECTION("invalid plane UV and duplicate ID refuse without dropped faces")
   {

@@ -38,6 +38,8 @@
 #include "vm/vec_io.h"
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <ranges>
 
 namespace tb::mdl
@@ -89,7 +91,153 @@ void setDefaultProperties(
   }
 }
 
+kdl_reflect_impl(SourceEntityConnection);
 kdl_reflect_impl(Entity);
+
+std::optional<SourceConnectionFields> parseSourceConnection(const std::string& value)
+{
+  const auto delimiter = value.find('\x1b') != std::string::npos ? '\x1b' : ',';
+  auto fields = std::vector<std::string>{};
+  auto start = size_t{0};
+  for (auto i = size_t{0}; i <= value.size(); ++i)
+  {
+    if (i == value.size() || value[i] == delimiter)
+    {
+      fields.push_back(value.substr(start, i - start));
+      start = i + 1;
+    }
+  }
+  if (
+    fields.size() != 5 || fields[0].empty() || fields[1].empty()
+    || value.find_first_of("\r\n") != std::string::npos
+    || value.find('\0') != std::string::npos)
+  {
+    return std::nullopt;
+  }
+  double delay = 0;
+  int maxFires = 0;
+  const auto d =
+    std::from_chars(fields[3].data(), fields[3].data() + fields[3].size(), delay);
+  const auto m =
+    std::from_chars(fields[4].data(), fields[4].data() + fields[4].size(), maxFires);
+  if (
+    d.ec != std::errc{} || d.ptr != fields[3].data() + fields[3].size()
+    || !std::isfinite(delay) || delay < 0 || m.ec != std::errc{}
+    || m.ptr != fields[4].data() + fields[4].size() || maxFires < -1)
+  {
+    return std::nullopt;
+  }
+  return SourceConnectionFields{
+    fields[0], fields[1], fields[2], fields[3], fields[4], delimiter};
+}
+
+bool validSourceConnection(const SourceEntityConnection& connection)
+{
+  return !connection.event.empty()
+         && connection.event.find_first_of("\r\n\x1b,") == std::string::npos
+         && connection.event.find('\0') == std::string::npos
+         && parseSourceConnection(connection.value).has_value();
+}
+
+std::optional<std::string> sourceConnectionFieldText(
+  const SourceEntityConnection& connection, const SourceConnectionField field)
+{
+  const auto fields = parseSourceConnection(connection.value);
+  if (!fields)
+  {
+    return std::nullopt;
+  }
+  switch (field)
+  {
+  case SourceConnectionField::Event:
+    return connection.event;
+  case SourceConnectionField::Target:
+    return fields->target;
+  case SourceConnectionField::Input:
+    return fields->input;
+  case SourceConnectionField::Parameter:
+    return fields->parameter;
+  case SourceConnectionField::Delay:
+    return fields->delay;
+  case SourceConnectionField::MaxFires:
+    return fields->maxFires;
+  case SourceConnectionField::Delimiter:
+    return fields->delimiter == '\x1b' ? "ESC" : ",";
+  }
+  return std::nullopt;
+}
+
+std::optional<SourceEntityConnection> editSourceConnectionField(
+  const SourceEntityConnection& connection,
+  const SourceConnectionField field,
+  const std::string& text)
+{
+  auto fields = parseSourceConnection(connection.value);
+  if (!fields)
+  {
+    return std::nullopt;
+  }
+  auto edited = connection;
+  switch (field)
+  {
+  case SourceConnectionField::Event:
+    edited.event = text;
+    break;
+  case SourceConnectionField::Target:
+    fields->target = text;
+    break;
+  case SourceConnectionField::Input:
+    fields->input = text;
+    break;
+  case SourceConnectionField::Parameter:
+    fields->parameter = text;
+    break;
+  case SourceConnectionField::Delay:
+    fields->delay = text;
+    break;
+  case SourceConnectionField::MaxFires:
+    fields->maxFires = text;
+    break;
+  case SourceConnectionField::Delimiter:
+    if (text != "ESC" && text != ",")
+    {
+      return std::nullopt;
+    }
+    fields->delimiter = text == "ESC" ? '\x1b' : ',';
+    break;
+  default:
+    return std::nullopt;
+  }
+  // A delimiter in a field would change the meaning of other fields on reparse.
+  const auto values = {
+    fields->target, fields->input, fields->parameter, fields->delay, fields->maxFires};
+  edited.value.clear();
+  for (const auto& value : values)
+  {
+    if (
+      value.find(fields->delimiter) != std::string::npos
+      || (fields->delimiter == ',' && value.find('\x1b') != std::string::npos))
+    {
+      return std::nullopt;
+    }
+    if (!edited.value.empty())
+    {
+      edited.value += fields->delimiter;
+    }
+    edited.value += value;
+  }
+  return validSourceConnection(edited) ? std::optional{edited} : std::nullopt;
+}
+
+const std::vector<SourceEntityConnection>& Entity::sourceConnections() const
+{
+  return m_sourceConnections;
+}
+
+void Entity::setSourceConnections(std::vector<SourceEntityConnection> connections)
+{
+  m_sourceConnections = std::move(connections);
+}
 
 const vm::bbox3d Entity::DefaultBounds = vm::bbox3d{8.0};
 
@@ -290,8 +438,9 @@ void Entity::renameProperty(const std::string& oldKey, std::string newKey)
   const auto oldIt = findEntityProperty(m_properties, oldKey);
   if (oldIt != std::end(m_properties))
   {
-    if (const auto protIt = std::ranges::find(m_protectedProperties, oldKey);
-        protIt != std::end(m_protectedProperties))
+    if (
+      const auto protIt = std::ranges::find(m_protectedProperties, oldKey);
+      protIt != std::end(m_protectedProperties))
     {
       m_protectedProperties.erase(protIt);
       m_protectedProperties.push_back(newKey);

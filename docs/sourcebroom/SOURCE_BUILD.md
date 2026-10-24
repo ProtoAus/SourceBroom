@@ -1,4 +1,4 @@
-# Source build / launch seam (A4 alpha candidate)
+# Source build / launch seam (A5 tools candidate)
 
 This is an external compiler seam, not by itself evidence that A4 is complete.
 Native save/application integration and automated compile/runtime checks have
@@ -28,7 +28,9 @@ not send the native document through the upstream Quake MAP export runner.
 - `start(savedVmf, settings, play)` validates, stages, and starts the pipeline.
 - `output(QString)` streams both compiler channels and backend diagnostics.
 - `finished(bool success, QString bspPath)` reports success only after all three
-  compilers exit normally with code zero and leave a Source BSP header. On any
+  compilers exit normally with code zero and each successful stage leaves a
+  complete minimum Source BSP header matching the explicitly selected target.
+  Generic header acceptance does not certify a particular branch. On any
   failure the signal has an empty path; a failed runtime launch logs the retained
   staged BSP path for manual recovery.
 - Calling start on a running backend returns false without disturbing that run.
@@ -66,10 +68,25 @@ chosen staging root. The input VMF is copied there and never passed directly to 
 compiler. A fresh run cannot see an old BSP; freshness does not rely on timestamp
 resolution. Compilers receive the staged VMF/BSP and `-game` content directory.
 No output is copied to a runtime until VBSP, VVIS, and VRAD all succeed. Each step
-checks a staged BSP's minimum Source header size and `VBSP` magic; this is not
-whole-BSP semantic validation or a promise of branch/runtime compatibility.
+checks a staged BSP's 1036-byte minimum Source header and `VBSP` magic, plus
+BSP20 for CSS or BSP25 for Strata when that target is selected. Generic checks
+do not infer a version contract. None of these is whole-BSP semantic validation
+or a promise of branch/runtime compatibility.
 Relative instance/include dependencies are not copied to staging; this first seam
 is checked for self-contained brush fixtures, not A6 instance compilation.
+
+Before the first child process, capability preflight parses the **actual staged
+VMF snapshot** through the bounded saved-document reader (128 MiB, one million
+entries, native nesting guard). Native syntax/structure or budget failures stop
+the pipeline; preview-only/unassessed features remain intact with diagnostics.
+Warnings do not certify compiler/game support. The generic profile never claims
+all Source branches are compatible.
+
+The dialog can load a bounded native leak file for display and navigate to a
+finite compiler diagnostic coordinate. Compiler entity/brush indices are not
+VMF IDs. Navigation is not proof of a repaired leak or selection of a native
+object. **Native metadata / Custom package…** opens the separate saved-file
+[metadata/package tools](SOURCE_TOOLS.md); opening them does not compile or launch.
 
 Staged VMF/BSP/compiler artifacts and `build.log` are retained. Compile output
 may include copyrighted content packed by the installed compiler. These local
@@ -124,9 +141,15 @@ replacement.
   are the final successful CSS control/subject configuration.
 - Installed CSS content emitted missing optional language-VPK and GameData-key
   warnings. They were not suppressed or interpreted as full content validation.
-- Subsequent parent integration built the full application and passed all 40
+- Subsequent A4 parent integration built the full application and passed all 40
   TbUiLib CTest entries. A production native-authored ramp edit was compiled
   with both CSS and Momentum toolchains and all three control/edited BSPs loaded
   in isolated FTESurf clients. Native-edited compile/load is now evidenced, not
   just the separately authored backend subject. Independent Hammer++ and owner
   feel/collision acceptance remain pending; no full A4 completion is claimed.
+- The A5 production backend adds acted synthetic controls for preflight refusal
+  before child launch, real helper-call markers, per-stage target checks, leak
+  bounds and diagnostic navigation. Its installed-toolchain opt-in test runs
+  the same backend with an explicit owned VMF/staging root and **never play**.
+  Current totals, real CSS/Momentum checks and the unrelated Windows preference
+  watcher test failure are recorded in [VALIDATION.md](VALIDATION.md).

@@ -47,6 +47,9 @@ struct VmfEntry
   std::optional<VmfEntryId> parent;
   std::vector<VmfEntryId> children;
 
+  /** End of the complete entry, immediately after its value or closing brace. */
+  size_t end = 0;
+
   bool isBlock() const { return !value.has_value(); }
 };
 
@@ -55,6 +58,21 @@ struct VmfValueEdit
   VmfEntryId entry;
   /** Exactly one raw quoted VMF value token, including the outer quotes. */
   std::string token;
+};
+
+/** Structural edits use IDs from this immutable document, never a reparsed output. */
+struct VmfStructuralEdit
+{
+  enum class Type
+  {
+    Key,
+    Remove,
+    Append
+  };
+  Type type;
+  VmfEntryId entry;
+  /** Key: quoted token; Remove: empty; Append: complete child entries. */
+  std::string text;
 };
 
 /**
@@ -73,6 +91,9 @@ private:
 public:
   /** Throws ParserException on malformed syntax, binary input, or excessive depth. */
   static VmfDocument parse(std::string source);
+  /** Caller-supplied entry budget checked before each allocation. Bytes must also
+   * be bounded by file readers before constructing the source string. */
+  static VmfDocument parse(std::string source, size_t maxEntries);
 
   const std::string& source() const;
   const std::vector<VmfEntry>& entries() const;
@@ -87,7 +108,9 @@ public:
    * Rejects invalid IDs, block targets, duplicate edits, and non-quoted replacements
    * with std::invalid_argument. Does not write files or change this document.
    */
-  std::string serialize(std::span<const VmfValueEdit> edits = {}) const;
+  std::string serialize(
+    std::span<const VmfValueEdit> edits = {},
+    std::span<const VmfStructuralEdit> structuralEdits = {}) const;
 };
 
 } // namespace tb::mdl

@@ -43,6 +43,24 @@ value-token edit took effect without touching any file. `--scene` additionally
 checks the production scene bridge and reports explicitly refused geometry.
 The checker does not invoke compilers, write a VMF, or decompile BSPs.
 
+## A5 tool checks
+
+Normal `SourceBuild` controls always use an acted synthetic helper; they do not
+skip when installed compilers are absent. The separate hidden Catch2 case
+`SourceBuild installed toolchain opt-in` requires `SOURCEBROOM_REAL_VMF` (an
+absolute owned saved fixture), `SOURCEBROOM_REAL_STAGING` (an absolute owned
+staging root), and `SOURCEBROOM_REAL_TARGET` (`css` or `momentum`). Invoke that
+exact case in `TbUiLibTest.exe`. It uses the production backend with **no play**,
+checks all stages and verifies the original input remains unchanged. Installed
+compiler outputs/assets are local evidence, never public fixtures.
+
+The shared saved-tools/compiler reader enforces 128 MiB, one million entries
+before insertion, and the native nesting guard. It explicitly refuses excess;
+it does not partially parse/compile a document. Metadata remains read-only and
+custom dependency discovery remains incomplete. See [SOURCE_TOOLS.md](SOURCE_TOOLS.md)
+and [VALIDATION.md](VALIDATION.md) for current controls and the known untouched
+Windows preference replacement test failure.
+
 ## A1 document architecture
 
 The core lives in `lib/TbMdlLib`, not a second map converter. The diagnostic app

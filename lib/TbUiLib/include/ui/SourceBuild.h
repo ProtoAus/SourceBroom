@@ -10,6 +10,9 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QVector3D>
+
+#include <optional>
 
 namespace tb::ui
 {
@@ -21,8 +24,28 @@ enum class SourceBuildTarget
   FteSurf
 };
 
+enum class SourceBspTarget
+{
+  Generic,
+  Css20,
+  Strata25
+};
+
+struct SourceBuildDiagnostic
+{
+  QString text;
+  std::optional<QVector3D> position;
+  QString reference;
+};
+
+// Compiler indices are not native VMF IDs. Never use these references to select nodes.
+SourceBuildDiagnostic parseSourceBuildDiagnostic(const QString& line);
+// Strict, bounded Source .lin input, before handing it to the existing pointfile view.
+bool validateSourceLeak(const QString& path, QString& error);
+
 struct SourceBuildSettings
 {
+  SourceBspTarget bspTarget = SourceBspTarget::Generic;
   QString vbsp;
   QString vvis;
   QString vrad;
@@ -67,6 +90,8 @@ private:
   bool m_running = false;
   bool m_play = false;
   bool m_timedOut = false;
+  QString m_stdoutPending;
+  QString m_stderrPending;
 
 public:
   explicit SourceBuild(QObject* parent = nullptr);
@@ -79,13 +104,19 @@ public:
   static QStringList engineArguments(
     const SourceBuildSettings& settings, const QString& mapName);
   static bool isSourceBsp(const QString& path);
+  static bool validateBsp(const QString& path, SourceBspTarget target, QString& message);
 
 signals:
   void output(const QString& text);
+  void diagnostic(const QString& line);
+  // Only a validated .lin adjacent to this attempt's uniquely staged VMF.
+  void leakReady(const QString& path);
   // bspPath is nonempty only after all compiler steps and output validation succeed.
   void finished(bool success, const QString& bspPath);
 
 private:
+  void consumeOutput(const QByteArray& bytes, QString& pending, bool flush = false);
+  void inspectLeak();
   void runNext();
   void fail(const QString& message);
   void complete();

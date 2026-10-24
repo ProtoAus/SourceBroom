@@ -82,6 +82,12 @@ const PropertyDefinition* getPropertyDefinition(
 const PropertyDefinition* getPropertyDefinition(
   const EntityDefinition* entityDefinition, const std::string& key);
 
+// Metadata consumers must not mistake a same-named input/output for a keyvalue.
+PropertyDefinition* getKeyValuePropertyDefinition(
+  EntityDefinition& entityDefinition, const std::string& key);
+const PropertyDefinition* getKeyValuePropertyDefinition(
+  const EntityDefinition& entityDefinition, const std::string& key);
+
 enum class EntityDefinitionType
 {
   Point,

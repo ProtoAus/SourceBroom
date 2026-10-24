@@ -28,6 +28,7 @@ target_sources(TbUiLibTest
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_KeyboardShortcutUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LayerListBox.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceBuild.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceToolsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SystemPaths.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_TextOutputAdapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_UpdateVersion.cpp

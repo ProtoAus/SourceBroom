@@ -41,7 +41,8 @@ bool isVtfTexture(const std::filesystem::path& path)
 {
   return kdl::path_to_lower(path.extension()) == ".vtf";
 }
-Result<gl::Texture> loadVtfTexture(fs::Reader& reader)
+Result<gl::Texture> loadVtfTexture(
+  fs::Reader& reader, const std::optional<size_t> decodedByteBudget)
 {
   try
   {
@@ -294,6 +295,11 @@ Result<gl::Texture> loadVtfTexture(fs::Reader& reader)
         return Error{"Truncated or oversized VTF mip payload"};
       }
       remaining -= inputSize;
+    }
+
+    if (decodedByteBudget && totalOutput > *decodedByteBudget)
+    {
+      return Error{"VTF exceeds remaining decoded image budget"};
     }
 
     reader.seekFromBegin(imageOffset);

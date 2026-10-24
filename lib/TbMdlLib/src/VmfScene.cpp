@@ -11,6 +11,7 @@
 #include "mdl/LayerNode.h"
 #include "mdl/MapFormat.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -155,7 +156,23 @@ Entity entity(const VmfDocument& d, VmfEntryId id)
       }
     }
   }
-  return Entity{std::move(props)};
+  auto result = Entity{std::move(props)};
+  auto connections = std::vector<SourceEntityConnection>{};
+  for (const auto child : d.entries()[id].children)
+  {
+    if (d.entries()[child].isBlock() && key(d, child) == "connections")
+    {
+      for (const auto row : d.entries()[child].children)
+      {
+        if (!d.entries()[row].isBlock())
+        {
+          connections.push_back({key(d, row), text(d, *d.entries()[row].value), row});
+        }
+      }
+    }
+  }
+  result.setSourceConnections(std::move(connections));
+  return result;
 }
 bool referencesGeometry(const VmfDocument& d, VmfEntryId id)
 {
@@ -175,6 +192,26 @@ bool referencesGeometry(const VmfDocument& d, VmfEntryId id)
   }
   return false;
 }
+bool supportedConnections(
+  const VmfDocument& d, const VmfEntryId owner, const VmfEntryId block)
+{
+  if (key(d, owner) != "entity" || key(d, block) != "connections")
+  {
+    return false;
+  }
+  for (const auto row : d.entries()[block].children)
+  {
+    const auto& entry = d.entries()[row];
+    if (
+      entry.isBlock()
+      || !validSourceConnection({key(d, row), text(d, *entry.value), row}))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool opaque(const VmfDocument& d, VmfEntryId id)
 {
   if (referencesGeometry(d, id))
@@ -209,7 +246,7 @@ bool opaque(const VmfDocument& d, VmfEntryId id)
           return true;
         }
       }
-      else if (name != "editor")
+      else if (name != "editor" && !supportedConnections(d, id, child))
       {
         return true;
       }
@@ -310,7 +347,12 @@ VmfScene VmfScene::read(
         refuse(id, "duplicate native ID within object/face namespace");
       }
     }
-    if (name != "world" && name != "entity" && name != "solid" && name != "side")
+    const auto editableConnections =
+      name == "connections" && d.entries()[id].parent
+      && supportedConnections(d, *d.entries()[id].parent, id);
+    if (
+      name != "world" && name != "entity" && name != "solid" && name != "side"
+      && !editableConnections)
     {
       scene.m_diagnostics.push_back(
         {id,
@@ -323,8 +365,9 @@ VmfScene VmfScene::read(
   }
   scene.m_diagnostics.push_back(
     {*worldId,
-     "Restricted native preview: existing plain brush/entity value edits only; "
-     "no creation, deletion, reparenting, hidden-state editing, or opaque transforms. "
+     "Restricted native editing: existing plain brush values, entity properties and "
+     "ordered outputs; no object creation/deletion, reparenting, hidden-state editing, "
+     "or opaque transforms. "
      "UV axes parsed as doubles; offsets/scales/rotation use the scene float projection. "
      "Unchanged native numeric tokens remain authoritative."});
   for (const auto root : d.roots())
@@ -504,6 +547,8 @@ std::string VmfScene::serialize(const WorldNode& world) const
     refuse(0, "object addition/deletion unsupported");
   }
   auto edits = std::vector<VmfValueEdit>{};
+  auto structural = std::vector<VmfStructuralEdit>{};
+  auto appended = std::map<VmfEntryId, std::string>{};
   const auto edit =
     [&](VmfEntryId block, const std::string& name, std::string replacement) {
       const auto id = property(d, block, name);
@@ -539,24 +584,131 @@ std::string VmfScene::serialize(const WorldNode& world) const
       }
       const auto& bp = eb->entity().properties();
       const auto& ap = ea->entity().properties();
-      if (ap.size() != bp.size())
+      auto names = std::set<std::string>{};
+      for (const auto& p : ap)
       {
-        refuse(id, "entity property addition/deletion unsupported");
+        if (p.key() == "id" || !names.insert(p.key()).second)
+        {
+          refuse(id, "reserved native id or duplicate entity property");
+        }
       }
       for (const auto& p : bp)
       {
         const auto* v = ea->entity().property(p.key());
-        if (!v)
-        {
-          refuse(id, "entity property deletion unsupported");
-        }
-        if (*v != p.value())
+        if (!v || *v != p.value())
         {
           if (opaque(d, id))
           {
             refuse(id, "entity has opaque attachments; edit refused");
           }
-          edit(id, p.key(), *v);
+          if (!v)
+          {
+            const auto entry = property(d, id, p.key());
+            if (!entry)
+            {
+              refuse(id, "stale property binding");
+            }
+            structural.push_back({VmfStructuralEdit::Type::Remove, *entry, {}});
+          }
+          else
+          {
+            edit(id, p.key(), *v);
+          }
+        }
+      }
+      for (const auto& p : ap)
+      {
+        if (!eb->entity().hasProperty(p.key()))
+        {
+          if (opaque(d, id) || property(d, id, p.key()))
+          {
+            refuse(id, "opaque attachment or stale property addition");
+          }
+          appended[id] += quote(p.key()) + " " + quote(p.value()) + "\n";
+        }
+      }
+      const auto& bc = eb->entity().sourceConnections();
+      const auto& ac = ea->entity().sourceConnections();
+      if (bc != ac)
+      {
+        auto blocks = std::vector<VmfEntryId>{};
+        for (const auto child : d.entries()[id].children)
+        {
+          if (d.entries()[child].isBlock() && key(d, child) == "connections")
+          {
+            blocks.push_back(child);
+          }
+        }
+        if (blocks.size() > 1 || key(d, id) != "entity")
+        {
+          refuse(id, "ambiguous connections block or non-entity outputs");
+        }
+        auto retained = std::set<VmfEntryId>{};
+        auto last = std::optional<VmfEntryId>{};
+        auto adding = false;
+        auto newRows = std::string{};
+        for (const auto& row : ac)
+        {
+          if (row.sourceEntry)
+          {
+            const auto it = std::find_if(bc.begin(), bc.end(), [&](const auto& old) {
+              return old.sourceEntry == row.sourceEntry;
+            });
+            if (
+              it == bc.end() || !retained.insert(*row.sourceEntry).second
+              || (last && *row.sourceEntry <= *last) || adding)
+            {
+              refuse(id, "stale, duplicate or reordered connection binding");
+            }
+            last = row.sourceEntry;
+            if (it->event != row.event || it->value != row.value)
+            {
+              if (!validSourceConnection(row))
+              {
+                refuse(id, "invalid edited connection");
+              }
+              if (it->event != row.event)
+              {
+                structural.push_back(
+                  {VmfStructuralEdit::Type::Key, *row.sourceEntry, quote(row.event)});
+              }
+              if (it->value != row.value)
+              {
+                edits.push_back({*row.sourceEntry, quote(row.value)});
+              }
+            }
+          }
+          else
+          {
+            adding = true;
+            if (!validSourceConnection(row))
+            {
+              refuse(id, "invalid new connection");
+            }
+            newRows += quote(row.event) + " " + quote(row.value) + "\n";
+          }
+        }
+        for (const auto& row : bc)
+        {
+          if (!retained.contains(*row.sourceEntry))
+          {
+            if (!validSourceConnection(row))
+            {
+              refuse(id, "malformed native connection cannot be removed");
+            }
+            structural.push_back({VmfStructuralEdit::Type::Remove, *row.sourceEntry, {}});
+          }
+        }
+        if (!newRows.empty())
+        {
+          if (blocks.empty())
+          {
+            appended[id] += "connections\n{\n" + newRows + "}\n";
+          }
+          else
+          {
+            appended[blocks.front()] += newRows;
+          }
         }
       }
     }
@@ -640,7 +792,9 @@ std::string VmfScene::serialize(const WorldNode& world) const
               if (d.entries()[child].isBlock())
               {
                 const auto name = key(d, child);
-                if (name != "solid" && name != "editor" && name != "connections")
+                if (
+                  name != "solid" && name != "editor"
+                  && !supportedConnections(d, otherBinding - 1, child))
                 {
                   refuse(
                     id,
@@ -695,7 +849,11 @@ std::string VmfScene::serialize(const WorldNode& world) const
       refuse(id, "unsupported scene object");
     }
   }
-  if (!edits.empty())
+  for (const auto& [block, entries] : appended)
+  {
+    structural.push_back({VmfStructuralEdit::Type::Append, block, entries});
+  }
+  if (!edits.empty() || !structural.empty())
   {
     for (const auto root : d.roots())
     {
@@ -709,6 +867,6 @@ std::string VmfScene::serialize(const WorldNode& world) const
       }
     }
   }
-  return d.serialize(edits);
+  return d.serialize(edits, structural);
 }
 } // namespace tb::mdl

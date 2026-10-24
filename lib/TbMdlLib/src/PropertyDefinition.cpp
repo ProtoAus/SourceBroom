@@ -96,6 +96,16 @@ std::ostream& operator<<(std::ostream& lhs, const PropertyValueType& rhs)
 
 kdl_reflect_impl(PropertyDefinition);
 
+bool hasSamePropertyDefinitionKey(
+  const PropertyDefinition& lhs, const PropertyDefinition& rhs)
+{
+  return lhs.key == rhs.key
+         && std::holds_alternative<PropertyValueTypes::Input>(lhs.valueType)
+              == std::holds_alternative<PropertyValueTypes::Input>(rhs.valueType)
+         && std::holds_alternative<PropertyValueTypes::Output>(lhs.valueType)
+              == std::holds_alternative<PropertyValueTypes::Output>(rhs.valueType);
+}
+
 std::optional<std::string> PropertyDefinition::defaultValue(
   const PropertyDefinition& definition)
 {

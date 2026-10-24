@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom first alpha
+# Human acceptance — SourceBroom A4/A5 candidates
 
 No owner confirmation has been received for the following checks. Do not turn
 an automated build/screenshot into a human pass. Use newly authored maps/copies;
@@ -15,6 +15,28 @@ never overwrite an original user/corpus VMF for a test.
   matching toolchain. Walk up/along the ramp and inspect the join/UVs. Report
   visible gaps, unexpected collision or surprising controls. Existing automated
   FTESurf compile/load/body logs do not prove this manual feel check.
+
+## A5 authoring-tools candidate — also pending
+
+- [ ] **Ordered native outputs and property hints.** On an owned copy of a CSS or
+  Momentum map, select an existing entity with repeated outputs. Change one
+  delay, undo/redo, Save As, then reopen in matching Hammer++. Confirm row order,
+  repeated events, parameter text and the changed value. Unknown original data
+  must remain present. FGD input/output declarations must not appear as invented
+  ordinary properties; real stored same-name keys remain real keys.
+- [ ] **Familiar prop preview.** With matching installed content configured, open
+  one prop-containing copy for CSS and one for Momentum. Report whether the
+  expected static mesh/material appears or which diagnostic fallback is shown.
+  Do not infer animation, game collision or all-model support from one mesh.
+- [ ] **Saved metadata/camera tools.** Save a copy, open Run -> Compile -> Native
+  metadata / Custom package, inspect a known group/visgroup/hidden/cordon/camera,
+  then try Go to camera eye. Confirm the read-only interpretation and eye-only
+  navigation are understandable; no visibility/clipping authoring is promised.
+- [ ] **Custom distribution workflow.** With authored/custom-only content you
+  have rights to distribute, discover/review a plan, separately approve it, and
+  write a new ZIP. Inspect exclusions/unresolved items and extract to an owned
+  folder. Confirm no installed stock content or original BSP was changed. This
+  visual/manual check is not licence or complete-dependency certification.
 
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation

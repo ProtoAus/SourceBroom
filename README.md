@@ -5,13 +5,16 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** first Windows interactive-alpha candidate: native VMF opening,
-base-texture preview, bounded existing-brush/entity edits, preserving saves,
-and external compile/play. Automated classic Source and Strata compile/runtime
-checks pass; independent Hammer++ visual acceptance is pending. This is not yet
-full Source authoring, displacement editing, prop rendering, or a general release.
+**Status:** Windows A5 authoring-tools candidate: native VMF opening,
+base-texture and bounded static-prop preview, existing-brush/entity edits,
+FGD-backed properties and ordered Source outputs, preserving saves, external
+compile/play, capability preflight, read-only native metadata and an explicit
+custom-content distribution ZIP. CSS and Momentum are the first tested profiles,
+not the only configurable games. Independent Hammer++/owner acceptance remains
+pending; full A5, advanced native authoring and a general release are not claimed.
 
 - [Try the Windows alpha and understand its limits](docs/sourcebroom/ALPHA.md)
+- [Properties, outputs, props, metadata and custom packages](docs/sourcebroom/SOURCE_TOOLS.md)
 - [Measured validation and pending acceptance](docs/sourcebroom/VALIDATION.md)
 - [Ordered alpha roadmap and acceptance gates](docs/sourcebroom/ROADMAP.md)
 - [Development, build, and preservation contract](docs/sourcebroom/DEVELOPMENT.md)

@@ -17,12 +17,13 @@
  along with TrenchBroom. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "el/Expression.h"
 #include "el/ParseExpression.h"
 #include "el/VariableStore.h"
 #include "mdl/CatchConfig.h"
 #include "mdl/ModelDefinition.h"
 
+#include <cmath>
+#include <limits>
 #include <map>
 #include <tuple>
 
@@ -93,6 +94,38 @@ TEST_CASE("ModelDefinition")
     CHECK(
       modelDefinition.modelSpecification(el::VariableTable{variables})
       == expectedModelSpecification);
+  }
+
+  SECTION("skin and frame indices are bounded before floating integer conversion")
+  {
+    const auto definition =
+      makeModelDefinition(R"({ path: "models/probe.mdl", skin: skin, frame: frame })");
+    const auto upper = std::ldexp(1.0, std::numeric_limits<long>::digits);
+    const auto last = std::nextafter(upper, 0.0);
+    const auto valid = el::VariableTable{{
+      {"skin", el::Value{2.75}},
+      {"frame", el::Value{last}},
+    }};
+    CHECK(
+      definition.modelSpecification(valid)
+      == ModelSpecification{"models/probe.mdl", 2u, static_cast<size_t>(last)});
+    for (const auto value :
+         {upper,
+          1e100,
+          -1e100,
+          std::numeric_limits<double>::infinity(),
+          -std::numeric_limits<double>::infinity(),
+          std::numeric_limits<double>::quiet_NaN()})
+    {
+      CAPTURE(value);
+      const auto variables = el::VariableTable{{
+        {"skin", el::Value{value}},
+        {"frame", el::Value{value}},
+      }};
+      CHECK(
+        definition.modelSpecification(variables)
+        == ModelSpecification{"models/probe.mdl", 0u, 0u});
+    }
   }
 
   SECTION("defaultModelSpecification")

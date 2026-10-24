@@ -24,6 +24,7 @@
 #include "vm/vec.h"
 
 #include <string>
+#include <vector>
 
 namespace tb::mdl
 {
@@ -34,6 +35,11 @@ enum class SetDefaultPropertyMode;
 
 struct EntityColorPropertyValue;
 struct EntityDefinition;
+struct SourceEntityConnection;
+
+/** Replaces ordered outputs of exactly one selected native Source entity via undo. */
+bool setSourceEntityConnections(
+  Map& map, std::vector<SourceEntityConnection> connections);
 
 EntityNode* createPointEntity(
   Map& map, const EntityDefinition& definition, const vm::vec3d& delta);

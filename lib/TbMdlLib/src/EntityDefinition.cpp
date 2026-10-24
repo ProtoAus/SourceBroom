@@ -25,8 +25,6 @@
 
 #include "vm/bbox_io.h" // IWYU pragma: keep
 
-#include <algorithm>
-
 namespace tb::mdl
 {
 
@@ -52,14 +50,24 @@ kdl_reflect_impl(EntityDefinition);
 PropertyDefinition* getPropertyDefinition(
   EntityDefinition& entityDefinition, const std::string& key)
 {
-  if (const auto it = std::ranges::find_if(
-        entityDefinition.propertyDefinitions,
-        [&](const PropertyDefinition& property) { return property.key == key; });
-      it != entityDefinition.propertyDefinitions.end())
+  auto* firstMatch = static_cast<PropertyDefinition*>(nullptr);
+  for (auto& property : entityDefinition.propertyDefinitions)
   {
-    return &*it;
+    if (property.key == key)
+    {
+      if (
+        !std::holds_alternative<PropertyValueTypes::Input>(property.valueType)
+        && !std::holds_alternative<PropertyValueTypes::Output>(property.valueType))
+      {
+        return &property;
+      }
+      if (!firstMatch)
+      {
+        firstMatch = &property;
+      }
+    }
   }
-  return nullptr;
+  return firstMatch;
 }
 
 const PropertyDefinition* getPropertyDefinition(
@@ -74,6 +82,24 @@ const PropertyDefinition* getPropertyDefinition(
   return entityDefinition ? getPropertyDefinition(*entityDefinition, key) : nullptr;
 }
 
+PropertyDefinition* getKeyValuePropertyDefinition(
+  EntityDefinition& entityDefinition, const std::string& key)
+{
+  auto* property = getPropertyDefinition(entityDefinition, key);
+  return property
+             && !std::holds_alternative<PropertyValueTypes::Input>(property->valueType)
+             && !std::holds_alternative<PropertyValueTypes::Output>(property->valueType)
+           ? property
+           : nullptr;
+}
+
+const PropertyDefinition* getKeyValuePropertyDefinition(
+  const EntityDefinition& entityDefinition, const std::string& key)
+{
+  return getKeyValuePropertyDefinition(
+    const_cast<EntityDefinition&>(entityDefinition), key);
+}
+
 std::string_view getShortName(const EntityDefinition& entityDefinition)
 {
   const auto index = entityDefinition.name.find_first_of('_');
@@ -84,9 +110,10 @@ std::string_view getShortName(const EntityDefinition& entityDefinition)
 
 bool compareEntityDefinitions(const EntityDefinition& lhs, const EntityDefinition& rhs)
 {
-  if (const auto compareResult =
-        kdl::ci::str_compare_natural(getShortName(lhs), getShortName(rhs));
-      compareResult != 0)
+  if (
+    const auto compareResult =
+      kdl::ci::str_compare_natural(getShortName(lhs), getShortName(rhs));
+    compareResult != 0)
   {
     return compareResult < 0;
   }

@@ -1,78 +1,89 @@
-# Try the Windows SourceBroom alpha
+# Try the Windows SourceBroom A5 tools candidate
 
-This is the first bounded interactive-alpha candidate, not a replacement for
-Hammer yet. Native VMF remains authoritative; no Quake MAP conversion is involved.
-CSS and Momentum are the first profiles. FTESurf is optional and only one play
-target. Generic Source 1 installations can use manual game/compiler paths.
+This is an experimental native-VMF editor candidate, not a public release or a
+claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
+generic Source 1 content, FGD and external tool paths remain configurable.
+FTESurf is an optional runtime, not an editor dependency.
 
-## Open, change, save
+## Start safely
 
-1. Extract the complete Windows package and run `SourceBroom.exe` beside its Qt
-   DLLs/resources. Keep the whole folder together. No Valve content is bundled.
-2. **Work on a copy.** Open an existing `.vmf`, or copy the supplied
-   `games/Source-common/starter.vmf` to your own map-work folder first. Do not use
-   upstream File > New as an assertion that arbitrary new Source geometry is
-   supported at this stage.
-3. Choose the matching **Counter-Strike: Source**, **Momentum Mod**, or generic
-   **Source 1** profile. Set its game path to the installed mod
-   folder containing `gameinfo.txt` (for example `cstrike` or `momentum`), not
-   the Steam root or a compiler `bin` folder. Missing textures need the correct
-   content mount; the editor does not download them.
-4. The supplied starter is a newly authored sealed room with a ramp and spawn.
-   Select an existing plain brush and move it a small grid step; undo/redo it.
-   Existing plain convex brushes support affine transforms and material/UV
-   edits. Existing entity property values can be changed within preserving-save
-   restrictions.
-5. Use **Save As** to a new `.vmf`. No-op saves retain original bytes. Supported
-   edits patch only affected native values. Unsafe topology/opaque-data changes
-   or externally changed backing files produce errors rather than a misleading
-   successful save. Inspect the error/console; never treat it as a saved map.
-6. Open the saved copy in your normal Hammer/Hammer++ branch. Check the ramp,
-   texture orientation, entities and bounds before trusting a new map workflow.
+1. Extract the **whole** package to a writable folder and run `SourceBroom.exe`.
+   Keep the matching Qt DLLs, plugins, `games/` and other resources beside it;
+   copying only the EXE is not an installed-package test.
+2. Choose **Counter-Strike: Source**, **Momentum Mod**, or generic **Source 1**.
+   Set its content path to the installed game directory containing `gameinfo.txt`
+   (for example `cstrike` or `momentum`), not just its parent Steam directory.
+3. Open a **copy** of an existing VMF, or the authored
+   `games/Source-common/starter.vmf`. Use **Save As** to an owned new filename.
+   No original user/corpus map is a test write target.
+4. Move an existing plain ramp one small grid step, undo/redo, and Save As.
+   Unsupported operations must refuse preserving-save with a diagnostic. Never
+   treat an error as a successful save or overwrite the original to test it.
+
+## New tools to try
+
+- Select an existing entity. Inspect its FGD-backed property hints and Source
+  outputs table. Repeated event rows remain ordered; edit a delay, undo/redo,
+  Save As, and reopen the copy in Hammer++. Defaults are hints, not inserted
+  keyvalues. Unknown native data is preserved, not automatically repaired.
+- Open a prop-containing copy using matching installed content. Supported
+  MDL/VVD/VTX data has a bounded static/default-pose preview with material lookup;
+  missing/unsupported data has a diagnostic fallback. Full animation, physics,
+  bodygroup and shader parity are not claimed.
+- Save, then use **Run -> Compile -> Native metadata / Custom package…**. The
+  metadata tab reads the **saved** snapshot: groups, visgroups, hidden state,
+  cameras and cordons are read-only. **Go to camera eye** moves only the eye,
+  not the full Hammer camera orientation. Reload after saving changes.
+- To test packaging, use a dedicated **custom-only** game-relative content root
+  you have rights to distribute. Discover/review the exact plan, then approve it
+  separately and write a **new** distribution ZIP. Do not select a Steam install.
+  This is incomplete discovery, not automatic BSP embedding or stock-content
+  redistribution. Read every unresolved/excluded item.
+
+[Native tool details](SOURCE_TOOLS.md) explain the exact limits and safety checks.
 
 ## Compile and play
 
-Use the **Run** menu's compile action. Build without play first; configure
-an installed external VBSP/VVIS/VRAD toolchain and the correct game directory.
-Use the build-and-play action once that works. Tool paths, game/content directory,
-output/staging directory and client executable are editable. Review them when
-switching presets; source-game content is not implicitly interchangeable with a
-compiler branch. No proprietary compiler is included.
+Use **Run -> Compile** on a saved VMF. Select the intended CSS, Momentum, FTESurf
+or editable tool configuration. Check all tool, content, staging, runtime and
+maps paths before deliberately clicking **Build** or **Build & Play**. Extra
+arguments are one argument per line, not a shell command.
 
-[Source build configuration](SOURCE_BUILD.md) explains the fields and safety
-contract. The log contains each tool's output. A stage failure stops the chain;
-a stale BSP is not accepted as a new successful build. The map is staged under
-an owned unique name rather than overwriting your normal BSP.
+The backend preflights the actual staged native document before starting a
+compiler. CSS20 and Strata25 target-header contracts are checked after every
+successful stage. Generic acceptance does not certify arbitrary Source games.
+A fresh owned staging directory prevents an old BSP from passing as a new build.
+A failed stage never promotes a BSP or launches a runtime. Compiler warnings and
+preview/unassessed feature diagnostics still need inspection.
 
-For standard CSS/Momentum play, choose that game's client and correct branch.
-For optional FTESurf testing, choose its executable and runtime gamedir. A VMF
-being readable does not mean every game/engine understands every BSP version.
-Classic CSS version-20 and Momentum Strata version-25 authored outputs have
-both been compiled and loaded in isolated FTESurf clients on the development
-machine; that is not a blanket claim for all Source branches or maps.
+The dialog supports bounded leak display and navigation to diagnostic positions.
+Compiler indices are not native VMF IDs; navigation is not a repaired leak.
+[Source build configuration](SOURCE_BUILD.md) covers the process and file contract.
 
-## Deliberately limited
+Build & Play copies only a fully successful BSP under a new unique name and
+requests a detached runtime launch. It does not kill an existing game. Launch
+success is not proof the map loaded, materials match, or ramp collision is right.
+Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest.md).
 
-- Start with **existing plain brush maps**. Some supplied real maps are refused
-  for invalid/incompatible geometry or UVs; nothing is silently stripped.
-- No new/deleted/duplicated brush topology, arbitrary hierarchy/group changes,
-  displacement sculpting, overlay/instance editing, props, or full FGD/I/O
-  authoring yet. Some upstream tools remain visible; unsupported changes cause
-  preserving-save refusal. Undo the change or reopen your original copy.
-- Displacement/opaque data can survive unedited, but that does not make the
-  affected geometry freely transformable. Never rely on a thumbnail to establish
-  that an opaque object rendered correctly.
-- Materials are a **VMT/VTF base-texture preview**, not Source lighting/PBR/shader
-  emulation. Missing or unsupported materials may fall back with diagnostics.
-- Source pixel resources load on scene/viewport demand instead of decoding an
-  entire installed game's catalog. Long-session cache eviction and performance
-  across huge maps/libraries remain unverified.
-- Windows x64 only has been built/packaged here. Do not infer tested Linux/macOS
-  compatibility from upstream's cross-platform support.
-- SourceBroom uses a separate settings namespace and disables the upstream
-  replacement updater. It does not migrate or alter your TrenchBroom settings.
+## Important limits
 
-Please report the operation and diagnostic rather than supplying proprietary
-assets or a full private map publicly. [Validation](VALIDATION.md),
-[roadmap](ROADMAP.md), [known findings](../../BACKLOG.md) and
-[pending human checks](../../lextest.md) separate evidence from unfinished work.
+- Existing plain brush/entity edits are the safe native surface. Arbitrary new
+  geometry/entities, deletion, topology, hierarchy, displacements, overlays and
+  instances are not supported authoring features. Some upstream controls remain
+  visible; a refusing save is not a successful export.
+- Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
+  does not apply cordon clipping itself; unchanged VMF is passed to external tools
+  whose behavior must be checked.
+- Base texture/static model preview is not full Source shader/game parity.
+- All 38 supplied maps pass lossless syntax/no-edit checks; six are explicitly
+  refused by scene geometry/UV validation rather than silently dropped.
+- Current regression evidence is **164/164 model tests and 41/42 UI tests**;
+  the untouched Windows preference replacement test has an access-denied failure.
+  Details and prior A4 evidence are in [VALIDATION.md](VALIDATION.md).
+- The package includes no Valve assets, Source compilers or external user maps.
+  Keep the older A4 package as recovery; do not merge different package DLL sets.
+
+For the quickest feedback, check one native output edit in Hammer++ and the
+appearance of one familiar prop-containing map. Report the game/profile and the
+exact observation, not a blanket compatibility verdict. No performance advantage
+over Hammer++ or all-branch compatibility has been measured.

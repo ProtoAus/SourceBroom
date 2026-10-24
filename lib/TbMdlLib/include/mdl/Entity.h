@@ -43,6 +43,50 @@ class EntityModel;
 class EntityModelFrame;
 struct ModelSpecification;
 
+/** Ordered native Source output row. Untouched values may be malformed and stay opaque.
+ */
+struct SourceEntityConnection
+{
+  std::string event;
+  std::string value;
+  std::optional<size_t> sourceEntry;
+
+  kdl_reflect_decl(SourceEntityConnection, event, value, sourceEntry);
+};
+
+struct SourceConnectionFields
+{
+  std::string target;
+  std::string input;
+  std::string parameter;
+  std::string delay;
+  std::string maxFires;
+  char delimiter;
+};
+
+/** Accepts comma or actual ESC separated fields; never normalizes the original value. */
+std::optional<SourceConnectionFields> parseSourceConnection(const std::string& value);
+bool validSourceConnection(const SourceEntityConnection& connection);
+
+enum class SourceConnectionField
+{
+  Event,
+  Target,
+  Input,
+  Parameter,
+  Delay,
+  MaxFires,
+  Delimiter
+};
+
+std::optional<std::string> sourceConnectionFieldText(
+  const SourceEntityConnection& connection, SourceConnectionField field);
+/** Changes only the selected field, retaining all other bytes and native identity. */
+std::optional<SourceEntityConnection> editSourceConnectionField(
+  const SourceEntityConnection& connection,
+  SourceConnectionField field,
+  const std::string& text);
+
 enum class SetDefaultPropertyMode
 {
   SetExisting,
@@ -87,9 +131,10 @@ public:
 
 private:
   std::vector<EntityProperty> m_properties;
+  std::vector<SourceEntityConnection> m_sourceConnections;
   std::vector<std::string> m_protectedProperties;
 
-  kdl_reflect_decl(Entity, m_properties, m_protectedProperties);
+  kdl_reflect_decl(Entity, m_properties, m_protectedProperties, m_sourceConnections);
 
   /**
    * Specifies whether this entity has children or not. This does not necessarily
@@ -130,6 +175,9 @@ public:
 public: // property management
   const std::vector<EntityProperty>& properties() const;
   void setProperties(std::vector<EntityProperty> properties);
+
+  const std::vector<SourceEntityConnection>& sourceConnections() const;
+  void setSourceConnections(std::vector<SourceEntityConnection> connections);
 
   /**
    * Sets the protected property keys of this entity.

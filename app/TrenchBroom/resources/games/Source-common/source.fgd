@@ -1,8 +1,30 @@
-// Minimal, newly authored SourceBroom alpha definitions, GPL-3.0-or-later.
-// Not Valve's SDK FGD. Use the target game's own licensed FGD for full coverage.
+// Newly authored SourceBroom fallback definitions, GPL-3.0-or-later.
+// Not Valve's SDK FGD. Select the installed target game's licensed FGD in
+// Entity > Browser > Settings for branch-specific classes and full coverage.
+// These common Source 1 interfaces intentionally do not imply engine support.
 @BaseClass = Named [
  targetname(string) : "Name"
  spawnflags(flags) = []
+ input Kill(void) : "Remove this entity"
+ input FireUser1(void) : "Fire the first user output"
+ input FireUser2(void) : "Fire the second user output"
+ input FireUser3(void) : "Fire the third user output"
+ input FireUser4(void) : "Fire the fourth user output"
+ output OnUser1(void) : "First user event"
+ output OnUser2(void) : "Second user event"
+ output OnUser3(void) : "Third user event"
+ output OnUser4(void) : "Fourth user event"
+]
+@BaseClass = EnableDisable [
+ StartDisabled(choices) : "Initially disabled" : 0 = [ 0 : "No" 1 : "Yes" ]
+ input Enable(void) : "Enable this entity"
+ input Disable(void) : "Disable this entity"
+ input Toggle(void) : "Toggle enabled state"
+]
+@BaseClass = PropModel [
+ model(studio) : "Model"
+ angles(string) : "Angles" : "0 0 0"
+ skin(integer) : "Skin" : 0
 ]
 @SolidClass = worldspawn [
  skyname(string) : "Sky" : "sky_day01_01"
@@ -10,16 +32,73 @@
 @PointClass base(Named) color(0 180 0) size(-16 -16 0, 16 16 72) = info_player_start : "Player start" []
 @PointClass base(Named) color(0 80 220) size(-16 -16 0, 16 16 72) = info_player_counterterrorist : "Counter-terrorist start" []
 @PointClass base(Named) color(220 80 0) size(-16 -16 0, 16 16 72) = info_player_terrorist : "Terrorist start" []
+@PointClass base(Named) color(200 180 255) size(-8 -8 -8, 8 8 8) = info_target : "Named target" []
 @PointClass base(Named) color(255 255 80) size(-8 -8 -8, 8 8 8) = light : "Point light" [
  _light(color255) : "Color and brightness" : "255 255 255 300"
+ input TurnOn(void) : "Turn the light on"
+ input TurnOff(void) : "Turn the light off"
+ input Toggle(void) : "Toggle the light"
 ]
 @PointClass base(Named) color(255 255 80) size(-8 -8 -8, 8 8 8) = light_environment : "Environment light" [
  _light(color255) : "Sun color and brightness" : "255 255 255 300"
  _ambient(color255) : "Ambient color and brightness" : "128 128 128 100"
 ]
-@SolidClass base(Named) = func_detail : "Detail brush" []
-@SolidClass base(Named) = func_brush : "Brush entity" []
-@SolidClass base(Named) = trigger_multiple : "Multiple trigger" []
-@SolidClass base(Named) = trigger_push : "Push trigger" [
- speed(float) : "Speed" : 100
+@SolidClass = func_detail : "Detail brush" []
+@SolidClass base(Named, EnableDisable) = func_brush : "Brush entity" [
+ Solidity(choices) : "Solidity" : 0 = [ 0 : "Toggle" 1 : "Never solid" 2 : "Always solid" ]
 ]
+@BaseClass base(Named, EnableDisable) = Trigger [
+ filtername(target_destination) : "Filter entity"
+ output OnStartTouch(void) : "An entity starts touching"
+ output OnEndTouch(void) : "An entity stops touching"
+ output OnTrigger(void) : "Trigger fires"
+]
+@SolidClass base(Trigger) = trigger_multiple : "Multiple trigger" [
+ wait(float) : "Retrigger delay" : 1
+]
+@SolidClass base(Trigger) = trigger_once : "Once-only trigger" []
+@SolidClass base(Trigger) = trigger_push : "Push trigger" [
+ speed(float) : "Speed" : 100
+ pushdir(string) : "Push direction" : "0 0 0"
+]
+@PointClass base(Named, EnableDisable) color(80 180 255) size(-8 -8 -8, 8 8 8) = logic_relay : "Relay an event" [
+ input Trigger(void) : "Fire OnTrigger when enabled"
+ input CancelPending(void) : "Cancel delayed pending outputs"
+ output OnTrigger(void) : "Relay triggered"
+]
+@PointClass base(Named) color(80 180 255) size(-8 -8 -8, 8 8 8) = logic_auto : "Map lifecycle events" [
+ output OnMapSpawn(void) : "The map has spawned"
+ output OnNewGame(void) : "A new game has started"
+ output OnLoadGame(void) : "A saved game has loaded"
+]
+@PointClass base(Named, EnableDisable) color(80 180 255) size(-8 -8 -8, 8 8 8) = logic_timer : "Timed event" [
+ RefireTime(float) : "Interval" : 1
+ UseRandomTime(choices) : "Random interval" : 0 = [ 0 : "No" 1 : "Yes" ]
+ LowerRandomBound(float) : "Minimum random interval" : 1
+ UpperRandomBound(float) : "Maximum random interval" : 2
+ input FireTimer(void) : "Fire the timer immediately"
+ input ResetTimer(void) : "Reset the countdown"
+ input RefireTime(float) : "Set the interval"
+ output OnTimer(void) : "Timer event"
+]
+@PointClass base(Named, EnableDisable) color(80 180 255) size(-8 -8 -8, 8 8 8) = math_counter : "Numeric counter" [
+ startvalue(float) : "Initial value" : 0
+ min(float) : "Minimum" : 0
+ max(float) : "Maximum" : 0
+ input Add(float) : "Add to the value"
+ input Subtract(float) : "Subtract from the value"
+ input SetValue(float) : "Set the value and fire outputs"
+ input SetValueNoFire(float) : "Set the value without outputs"
+ input GetValue(void) : "Fire OnGetValue"
+ output OutValue(float) : "Current value changed"
+ output OnGetValue(float) : "Requested current value"
+ output OnHitMin(void) : "Value reached the minimum"
+ output OnHitMax(void) : "Value reached the maximum"
+]
+@PointClass base(Named, PropModel) studio() color(180 180 255) = prop_static : "Static prop (compiled by the target toolchain)" [
+ solid(choices) : "Collision" : 6 = [ 0 : "None" 2 : "Bounding box" 6 : "Model collision" ]
+]
+@PointClass base(Named, PropModel, EnableDisable) studio() color(180 180 255) = prop_dynamic : "Dynamic prop (static editor preview)" [
+ solid(choices) : "Collision" : 6 = [ 0 : "None" 2 : "Bounding box" 6 : "Model collision" ]
+]
+@PointClass base(Named, PropModel) studio() color(180 180 255) = prop_physics : "Physics prop (static editor preview)" []

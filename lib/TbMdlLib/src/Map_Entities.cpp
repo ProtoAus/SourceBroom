@@ -27,6 +27,7 @@
 #include "mdl/GameInfo.h"
 #include "mdl/LinkedGroupUtils.h"
 #include "mdl/Map.h"
+#include "mdl/MapFormat.h"
 #include "mdl/Map_Geometry.h"
 #include "mdl/Map_Groups.h"
 #include "mdl/Map_Nodes.h"
@@ -39,6 +40,8 @@
 #include "kd/overload.h"
 #include "kd/ranges/contains.h"
 #include "kd/string_utils.h"
+
+#include <set>
 
 namespace tb::mdl
 {
@@ -182,12 +185,74 @@ EntityNode* createBrushEntity(Map& map, const EntityDefinition& definition)
   return entityNode;
 }
 
+bool setSourceEntityConnections(Map& map, std::vector<SourceEntityConnection> connections)
+{
+  const auto nodes = map.selection().allEntities();
+  if (
+    map.worldNode().mapFormat() != MapFormat::SourceVMF || nodes.size() != 1
+    || !dynamic_cast<EntityNode*>(nodes.front()))
+  {
+    return false;
+  }
+  const auto& before = nodes.front()->entity().sourceConnections();
+  auto seen = std::set<size_t>{};
+  auto last = std::optional<size_t>{};
+  auto adding = false;
+  for (const auto& row : connections)
+  {
+    const SourceEntityConnection* old = nullptr;
+    if (row.sourceEntry)
+    {
+      if (
+        adding || !seen.insert(*row.sourceEntry).second
+        || (last && *row.sourceEntry <= *last))
+        return false;
+      last = row.sourceEntry;
+      for (const auto& candidate : before)
+      {
+        if (candidate.sourceEntry == row.sourceEntry)
+          old = &candidate;
+      }
+      if (!old)
+        return false;
+    }
+    else
+      adding = true;
+    if (
+      (!old || old->event != row.event || old->value != row.value)
+      && !validSourceConnection(row))
+      return false;
+  }
+  for (const auto& old : before)
+  {
+    if (
+      old.sourceEntry && !seen.contains(*old.sourceEntry) && !validSourceConnection(old))
+      return false;
+  }
+  return applyAndSwap(
+    map,
+    "Set Source Outputs",
+    nodes,
+    collectContainingGroups(kdl::vec_static_cast<Node*>(nodes)),
+    kdl::overload(
+      [](Layer&) { return true; },
+      [](Group&) { return true; },
+      [&](Entity& entity) {
+        entity.setSourceConnections(connections);
+        return true;
+      },
+      [](Brush&) { return true; },
+      [](BezierPatch&) { return true; }));
+}
+
 bool setEntityProperty(
   Map& map,
   const std::string& key,
   const std::string& value,
   const bool defaultToProtected)
 {
+  if (map.worldNode().mapFormat() == MapFormat::SourceVMF && key == "id")
+    return false;
   const auto entityNodes = map.selection().allEntities();
   return applyAndSwap(
     map,
@@ -207,6 +272,10 @@ bool setEntityProperty(
 
 bool renameEntityProperty(Map& map, const std::string& oldKey, const std::string& newKey)
 {
+  if (
+    map.worldNode().mapFormat() == MapFormat::SourceVMF
+    && (oldKey == "id" || newKey == "id"))
+    return false;
   const auto entityNodes = map.selection().allEntities();
   return applyAndSwap(
     map,
@@ -226,6 +295,8 @@ bool renameEntityProperty(Map& map, const std::string& oldKey, const std::string
 
 bool removeEntityProperty(Map& map, const std::string& key)
 {
+  if (map.worldNode().mapFormat() == MapFormat::SourceVMF && key == "id")
+    return false;
   const auto entityNodes = map.selection().allEntities();
   return applyAndSwap(
     map,

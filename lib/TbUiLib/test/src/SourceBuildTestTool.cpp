@@ -8,6 +8,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QThread>
+#include <QtEndian>
+
+#include <cstdio>
 
 int main(int argc, char** argv)
 {
@@ -40,6 +43,19 @@ int main(int argc, char** argv)
   {
     QThread::msleep(3000);
   }
+  if (mode == "diagnostic" || mode == "leak-failure")
+  {
+    std::fputs("WARNING: entity 2 brush 3 at (128 -64 32)\n", stdout);
+    std::fflush(stdout);
+    if (QFileInfo(args[3]).suffix() == "vmf")
+    {
+      auto leak = QFile{QFileInfo(args[3]).dir().filePath(
+        QFileInfo(args[3]).completeBaseName() + ".lin")};
+      if (!leak.open(QIODevice::WriteOnly))
+        return 15;
+      leak.write("128 -64 32\n256 -64 32\n");
+    }
+  }
   if (mode != "missing")
   {
     auto bsp = QFile{
@@ -50,9 +66,11 @@ int main(int argc, char** argv)
     }
     auto data = QByteArray(1036, '\0');
     data.replace(0, 4, mode == "invalid" ? "NOPE" : "VBSP");
+    qToLittleEndian<qint32>(mode == "wrong-version" ? 25 : 20, data.data() + 4);
     bsp.write(data);
   }
-  return mode == "failure" || (mode == "failure-vis" && previousCalls == 1)
+  return mode == "failure" || mode == "leak-failure"
+             || (mode == "failure-vis" && previousCalls == 1)
              || (mode == "failure-rad" && previousCalls == 2)
            ? 23
            : 0;

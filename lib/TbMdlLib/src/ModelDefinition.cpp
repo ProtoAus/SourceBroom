@@ -31,8 +31,10 @@
 #include "kd/string_compare.h"
 #include "kd/string_format.h"
 
-#include "vm/scalar.h"
 #include "vm/vec_io.h"
+
+#include <cmath>
+#include <limits>
 
 namespace tb::mdl
 {
@@ -57,8 +59,15 @@ size_t index(const el::Value& value)
     return 0;
   }
 
-  const auto intValue = value.convertTo(el::ValueType::Number).integerValue();
-  return static_cast<size_t>(vm::max(0l, intValue));
+  const auto number = value.convertTo(el::ValueType::Number).numberValue();
+  // Bound BEFORE the integer conversion. LONG_MAX can round up as a double on
+  // LP64, so use the exact exclusive power-of-two boundary instead.
+  const auto upper = std::ldexp(1.0, std::numeric_limits<long>::digits);
+  if (!std::isfinite(number) || number < 0.0 || number >= upper)
+  {
+    return 0;
+  }
+  return static_cast<size_t>(static_cast<long>(number));
 }
 
 ModelSpecification convertToModel(const el::Value& value)

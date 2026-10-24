@@ -34,6 +34,7 @@
 #include "mdl/LoadMd3Model.h"
 #include "mdl/LoadMdlModel.h"
 #include "mdl/LoadMdxModel.h"
+#include "mdl/LoadSourceModel.h"
 #include "mdl/LoadSpriteModel.h"
 #include "mdl/Palette.h"
 
@@ -64,8 +65,11 @@ Result<EntityModelData> loadEntityModelData(
 {
   const auto modelName = path.filename().string();
   return fs.openFile(path) | kdl::and_then([&](auto file) -> Result<EntityModelData> {
+           if (canLoadSourceModel(path, file->reader()))
+           {
+             return loadSourceModel(path, fs, logger);
+           }
            auto reader = file->reader().buffer();
-
            if (canLoadMdlModel(path, reader))
            {
              return loadPalette(fs, materialConfig) | kdl::and_then([&](auto palette) {
@@ -164,6 +168,19 @@ EntityModel loadEntityModelAsync(
   Logger& logger)
 {
   auto name = path.filename().string();
+  // Source preview must not retain the document's filesystem/logger or material
+  // callback across an asynchronous close. Resolve only the requested prop now.
+  const auto sourceFile = fs.openFile(path);
+  if (
+    !sourceFile.is_error()
+    && canLoadSourceModel(path, (sourceFile | kdl::value())->reader()))
+  {
+    auto completed =
+      std::make_shared<Result<EntityModelData>>(loadSourceModel(path, fs, logger));
+    auto resource = createResource(
+      [completed]() mutable -> Result<EntityModelData> { return std::move(*completed); });
+    return EntityModel{std::move(name), std::move(resource)};
+  }
   auto loader =
     makeEntityModelDataResourceLoader(fs, materialConfig, path, loadMaterial, logger);
   auto resource = createResource(std::move(loader));

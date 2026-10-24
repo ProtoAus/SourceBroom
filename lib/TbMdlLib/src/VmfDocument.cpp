@@ -23,6 +23,7 @@
 #include "base/ParserException.h"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -59,7 +60,9 @@ bool isWhitespace(const char c)
   auto column = size_t{1};
   for (auto i = size_t{0}; i < offset; ++i)
   {
-    if (source[i] == '\n' || (source[i] == '\r' && (i + 1 == offset || source[i + 1] != '\n')))
+    if (
+      source[i] == '\n'
+      || (source[i] == '\r' && (i + 1 == offset || source[i + 1] != '\n')))
     {
       ++line;
       column = 1;
@@ -185,21 +188,29 @@ void validateReplacement(const std::string& replacement)
   {
     auto lexer = Lexer{replacement};
     const auto token = lexer.next();
-    if (token.type != TokenType::Text || !token.source.quoted || token.source.offset != 0
-        || token.source.length != replacement.size() || lexer.next().type != TokenType::End)
+    if (
+      token.type != TokenType::Text || !token.source.quoted || token.source.offset != 0
+      || token.source.length != replacement.size() || lexer.next().type != TokenType::End)
     {
-      throw std::invalid_argument{"VMF replacement must be exactly one quoted value token"};
+      throw std::invalid_argument{
+        "VMF replacement must be exactly one quoted value token"};
     }
   }
   catch (const ParserException& e)
   {
-    throw std::invalid_argument{std::string{"Invalid VMF replacement token: "} + e.what()};
+    throw std::invalid_argument{
+      std::string{"Invalid VMF replacement token: "} + e.what()};
   }
 }
 
 } // namespace
 
 VmfDocument VmfDocument::parse(std::string source)
+{
+  return parse(std::move(source), std::numeric_limits<size_t>::max());
+}
+
+VmfDocument VmfDocument::parse(std::string source, const size_t maxEntries)
 {
   auto document = VmfDocument{};
   document.m_source = std::move(source);
@@ -223,6 +234,7 @@ VmfDocument VmfDocument::parse(std::string source)
       {
         fail(document.m_source, key.source.offset, "Unexpected closing VMF brace");
       }
+      document.m_entries[parents.back()].end = key.source.offset + key.source.length;
       parents.pop_back();
       continue;
     }
@@ -242,12 +254,18 @@ VmfDocument VmfDocument::parse(std::string source)
     }
 
     const auto id = document.m_entries.size();
+    if (id >= maxEntries)
+    {
+      fail(document.m_source, key.source.offset, "VMF exceeds the caller's entry budget");
+    }
     const auto parent = parents.empty() ? std::nullopt : std::optional{parents.back()};
-    document.m_entries.push_back(VmfEntry{
-      key.source,
-      value.type == TokenType::Text ? std::optional{value.source} : std::nullopt,
-      parent,
-      {}});
+    document.m_entries.push_back(
+      VmfEntry{
+        key.source,
+        value.type == TokenType::Text ? std::optional{value.source} : std::nullopt,
+        parent,
+        {},
+        value.source.offset + value.source.length});
     if (parent)
     {
       document.m_entries[*parent].children.push_back(id);
@@ -301,15 +319,17 @@ std::string_view VmfDocument::tokenContents(const VmfToken& token) const
   return text;
 }
 
-std::string VmfDocument::serialize(const std::span<const VmfValueEdit> edits) const
+std::string VmfDocument::serialize(
+  const std::span<const VmfValueEdit> edits,
+  const std::span<const VmfStructuralEdit> structuralEdits) const
 {
   struct Replacement
   {
-    VmfToken target;
-    const std::string* token;
+    size_t offset;
+    size_t length;
+    std::string text;
   };
   auto replacements = std::vector<Replacement>{};
-  replacements.reserve(edits.size());
   for (const auto& edit : edits)
   {
     if (edit.entry >= m_entries.size() || !m_entries[edit.entry].value)
@@ -317,24 +337,93 @@ std::string VmfDocument::serialize(const std::span<const VmfValueEdit> edits) co
       throw std::invalid_argument{"VMF value edit must target an existing property"};
     }
     validateReplacement(edit.token);
-    replacements.push_back({*m_entries[edit.entry].value, &edit.token});
+    const auto& token = *m_entries[edit.entry].value;
+    replacements.push_back({token.offset, token.length, edit.token});
+  }
+  for (const auto& edit : structuralEdits)
+  {
+    if (edit.entry >= m_entries.size())
+    {
+      throw std::invalid_argument{"VMF structural edit has invalid entry ID"};
+    }
+    const auto& entry = m_entries[edit.entry];
+    switch (edit.type)
+    {
+    case VmfStructuralEdit::Type::Key:
+      validateReplacement(edit.text);
+      replacements.push_back({entry.key.offset, entry.key.length, edit.text});
+      break;
+    case VmfStructuralEdit::Type::Remove:
+      if (!edit.text.empty())
+      {
+        throw std::invalid_argument{"VMF removal must have empty replacement"};
+      }
+      // Removing adjacent quoted tokens can join bare tokens or even form a
+      // comment delimiter. Keep every surviving byte and separate the new boundary.
+      replacements.push_back(
+        {entry.key.offset,
+         entry.end - entry.key.offset,
+         entry.key.offset > 0 && entry.end < m_source.size()
+             && !isWhitespace(m_source[entry.key.offset - 1])
+             && !isWhitespace(m_source[entry.end])
+           ? " "
+           : ""});
+      break;
+    case VmfStructuralEdit::Type::Append:
+      if (!entry.isBlock() || edit.text.empty() || edit.text.starts_with("\xef\xbb\xbf"))
+      {
+        throw std::invalid_argument{"VMF append requires a block and complete entries"};
+      }
+      try
+      {
+        const auto fragment = VmfDocument::parse(edit.text);
+        if (fragment.roots().empty())
+        {
+          throw std::invalid_argument{"VMF append requires complete entries"};
+        }
+        auto destinationDepth = size_t{1};
+        for (auto parent = entry.parent; parent; parent = m_entries[*parent].parent)
+        {
+          ++destinationDepth;
+        }
+        auto fragmentDepths = std::vector<size_t>{};
+        fragmentDepths.reserve(fragment.entries().size());
+        for (const auto& child : fragment.entries())
+        {
+          const auto depth = (child.parent ? fragmentDepths[*child.parent] : size_t{0})
+                             + (child.isBlock() ? size_t{1} : size_t{0});
+          if (depth > MaxBlockDepth - destinationDepth)
+          {
+            throw std::invalid_argument{"VMF append exceeds the document nesting limit"};
+          }
+          fragmentDepths.push_back(depth);
+        }
+      }
+      catch (const ParserException& e)
+      {
+        throw std::invalid_argument{std::string{"Invalid VMF append: "} + e.what()};
+      }
+      // Separate tokens even when the original closing brace has no leading trivia.
+      replacements.push_back({entry.end - 1, 0, "\n" + edit.text + "\n"});
+      break;
+    }
   }
   std::sort(replacements.begin(), replacements.end(), [](const auto& a, const auto& b) {
-    return a.target.offset < b.target.offset;
+    return a.offset < b.offset;
   });
-
   auto result = std::string{};
-  result.reserve(m_source.size());
   auto position = size_t{0};
+  auto previousOffset = std::optional<size_t>{};
   for (const auto& replacement : replacements)
   {
-    if (replacement.target.offset < position)
+    if (replacement.offset < position || previousOffset == replacement.offset)
     {
-      throw std::invalid_argument{"Duplicate VMF value edit"};
+      throw std::invalid_argument{"Overlapping or duplicate VMF edits"};
     }
-    result.append(m_source, position, replacement.target.offset - position);
-    result.append(*replacement.token);
-    position = replacement.target.offset + replacement.target.length;
+    result.append(m_source, position, replacement.offset - position);
+    result.append(replacement.text);
+    position = replacement.offset + replacement.length;
+    previousOffset = replacement.offset;
   }
   result.append(m_source, position, m_source.size() - position);
   return result;

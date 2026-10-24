@@ -73,10 +73,11 @@ std::optional<PropertyDefinition> mergePropertyDefinitions(
           mergedDefaultValue = mergedDefaultValue | flagValue;
         }
 
-        mergedFlags.push_back(PropertyValueTypes::Flag{
-          baseclassFlag->value,
-          baseclassFlag->shortDescription,
-          baseclassFlag->longDescription});
+        mergedFlags.push_back(
+          PropertyValueTypes::Flag{
+            baseclassFlag->value,
+            baseclassFlag->shortDescription,
+            baseclassFlag->longDescription});
       }
       else if (classFlag)
       {
@@ -85,8 +86,9 @@ std::optional<PropertyDefinition> mergePropertyDefinitions(
           mergedDefaultValue = mergedDefaultValue | flagValue;
         }
 
-        mergedFlags.push_back(PropertyValueTypes::Flag{
-          classFlag->value, classFlag->shortDescription, classFlag->longDescription});
+        mergedFlags.push_back(
+          PropertyValueTypes::Flag{
+            classFlag->value, classFlag->shortDescription, classFlag->longDescription});
       }
     }
 
@@ -129,7 +131,7 @@ void inheritPropertyDefinitions(
   {
     auto it = std::ranges::find_if(
       inheritingClass.propertyDefinitions,
-      [&](const auto& a) { return a.key == propertyDefinition.key; });
+      [&](const auto& a) { return hasSamePropertyDefinitionKey(a, propertyDefinition); });
     if (it == std::end(inheritingClass.propertyDefinitions))
     {
       inheritingClass.propertyDefinitions.push_back(propertyDefinition);
@@ -327,9 +329,10 @@ void findSuperClassesAndInheritFrom(
 {
   const auto findClassInfoWithType =
     [&](const auto& classes, const auto type) -> const EntityDefinitionClassInfo* {
-    if (const auto it =
-          std::ranges::find_if(classes, [&](const auto* c) { return c->type == type; });
-        it != classes.end())
+    if (
+      const auto it =
+        std::ranges::find_if(classes, [&](const auto* c) { return c->type == type; });
+      it != classes.end())
     {
       return *it;
     }

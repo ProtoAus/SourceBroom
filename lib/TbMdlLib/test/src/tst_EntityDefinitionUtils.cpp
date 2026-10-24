@@ -54,80 +54,81 @@ TEST_CASE("EntityDefinitionUtils")
 
     using T = std::tuple<std::vector<EntityDefinition>, std::vector<EntityDefinition>>;
 
-    const auto [originalDefinitions, expectedDefinitions] = GENERATE(values<T>({
-      {{}, {}},
-      {{
-         {"some_definition", {}, "", {}},
-       },
-       {
-         {"some_definition",
-          {},
-          "",
-          {
-            targetDefinition,
-            killtargetDefinition,
-            targetnameDefinition,
-          }},
-       }},
-      {{
-         {"some_definition",
-          {},
-          "",
-          {
-            {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
-            {Target, mdl::PropertyValueTypes::String{}, "", ""},
-            {Killtarget, mdl::PropertyValueTypes::String{}, "", ""},
-            {Targetname, mdl::PropertyValueTypes::String{}, "", ""},
-          }},
-       },
-       {
-         {"some_definition",
-          {},
-          "",
-          {
-            {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
-            {Target, mdl::PropertyValueTypes::LinkSource{}, "", ""},
-            {Killtarget, mdl::PropertyValueTypes::LinkSource{}, "", ""},
-            {Targetname, mdl::PropertyValueTypes::LinkTarget{}, "", ""},
-          }},
-       }},
-      {{
-         {"some_definition",
-          {},
-          "",
-          {
-            {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
-            {Target, mdl::PropertyValueTypes::LinkSource{}, "", ""},
-          }},
-         {"some_other_definition",
-          {},
-          "",
-          {
-            {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
-            {Target, mdl::PropertyValueTypes::String{}, "", ""},
-            {Killtarget, mdl::PropertyValueTypes::String{}, "", ""},
-            {Targetname, mdl::PropertyValueTypes::String{}, "", ""},
-          }},
-       },
-       {
-         {"some_definition",
-          {},
-          "",
-          {
-            {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
-            {Target, mdl::PropertyValueTypes::LinkSource{}, "", ""},
-          }},
-         {"some_other_definition",
-          {},
-          "",
-          {
-            {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
-            {Target, mdl::PropertyValueTypes::String{}, "", ""},
-            {Killtarget, mdl::PropertyValueTypes::String{}, "", ""},
-            {Targetname, mdl::PropertyValueTypes::String{}, "", ""},
-          }},
-       }},
-    }));
+    const auto [originalDefinitions, expectedDefinitions] = GENERATE(
+      values<T>({
+        {{}, {}},
+        {{
+           {"some_definition", {}, "", {}},
+         },
+         {
+           {"some_definition",
+            {},
+            "",
+            {
+              targetDefinition,
+              killtargetDefinition,
+              targetnameDefinition,
+            }},
+         }},
+        {{
+           {"some_definition",
+            {},
+            "",
+            {
+              {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
+              {Target, mdl::PropertyValueTypes::String{}, "", ""},
+              {Killtarget, mdl::PropertyValueTypes::String{}, "", ""},
+              {Targetname, mdl::PropertyValueTypes::String{}, "", ""},
+            }},
+         },
+         {
+           {"some_definition",
+            {},
+            "",
+            {
+              {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
+              {Target, mdl::PropertyValueTypes::LinkSource{}, "", ""},
+              {Killtarget, mdl::PropertyValueTypes::LinkSource{}, "", ""},
+              {Targetname, mdl::PropertyValueTypes::LinkTarget{}, "", ""},
+            }},
+         }},
+        {{
+           {"some_definition",
+            {},
+            "",
+            {
+              {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
+              {Target, mdl::PropertyValueTypes::LinkSource{}, "", ""},
+            }},
+           {"some_other_definition",
+            {},
+            "",
+            {
+              {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
+              {Target, mdl::PropertyValueTypes::String{}, "", ""},
+              {Killtarget, mdl::PropertyValueTypes::String{}, "", ""},
+              {Targetname, mdl::PropertyValueTypes::String{}, "", ""},
+            }},
+         },
+         {
+           {"some_definition",
+            {},
+            "",
+            {
+              {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
+              {Target, mdl::PropertyValueTypes::LinkSource{}, "", ""},
+            }},
+           {"some_other_definition",
+            {},
+            "",
+            {
+              {"some_key", mdl::PropertyValueTypes::String{}, "", ""},
+              {Target, mdl::PropertyValueTypes::String{}, "", ""},
+              {Killtarget, mdl::PropertyValueTypes::String{}, "", ""},
+              {Targetname, mdl::PropertyValueTypes::String{}, "", ""},
+            }},
+         }},
+      }));
 
     CAPTURE(originalDefinitions);
 
@@ -137,6 +138,41 @@ TEST_CASE("EntityDefinitionUtils")
     CHECK(definitions == expectedDefinitions);
   }
 
+  SECTION("metadata does not consume Source I/O declarations")
+  {
+    const auto hasOriginValue = GENERATE(false, true);
+    auto properties = std::vector<PropertyDefinition>{
+      {"origin", PropertyValueTypes::Input{PropertyValueTypes::IOParameterType::Void}},
+      {"target", PropertyValueTypes::Input{PropertyValueTypes::IOParameterType::String}},
+    };
+    if (hasOriginValue)
+    {
+      properties.push_back({"origin", PropertyValueTypes::String{"1 2 3"}});
+    }
+    auto definitions = std::vector<EntityDefinition>{
+      {"source_probe", {}, "", std::move(properties), PointEntityDefinition{}}};
+    addOrSetDefaultEntityLinkProperties(definitions);
+    addOrConvertOriginProperties(definitions);
+    const auto& definition = definitions.front();
+    CHECK(
+      std::holds_alternative<PropertyValueTypes::Input>(
+        definition.propertyDefinitions[0].valueType));
+    CHECK(
+      std::holds_alternative<PropertyValueTypes::Input>(
+        definition.propertyDefinitions[1].valueType));
+    const auto* origin = getKeyValuePropertyDefinition(definition, "origin");
+    const auto* target = getKeyValuePropertyDefinition(definition, "target");
+    REQUIRE(origin);
+    REQUIRE(target);
+    CHECK(std::holds_alternative<PropertyValueTypes::Origin>(origin->valueType));
+    CHECK(std::holds_alternative<PropertyValueTypes::LinkSource>(target->valueType));
+    if (hasOriginValue)
+    {
+      CHECK(PropertyDefinition::defaultValue(*origin) == "1 2 3");
+    }
+    CHECK(!getKeyValuePropertyDefinition(definition, "unknown"));
+  }
+
   SECTION("addOrConvertOriginProperties")
   {
     using namespace EntityPropertyKeys;
@@ -144,57 +180,58 @@ TEST_CASE("EntityDefinitionUtils")
 
     using T = std::tuple<std::vector<EntityDefinition>, std::vector<EntityDefinition>>;
 
-    const auto [originalDefinitions, expectedDefinitions] = GENERATE(values<T>({
-      {{}, {}},
-      {{
-         {"some_brush_definition", {}, "", {}},
-       },
-       {
-         {"some_brush_definition", {}, "", {}},
-       }},
-      {{
-         {"point_definition_no_origin", {}, "", {}, PointEntityDefinition{}},
-       },
-       {
-         {"point_definition_no_origin",
-          {},
-          "",
-          {PropertyDefinition{
-            "origin",
-            PropertyValueTypes::Origin{},
-            "point entity origin",
-            "generated by TrenchBroom"}},
-          PointEntityDefinition{}},
-       }},
-      {{
-         {"point_definition_string_origin",
-          {},
-          "",
-          {PropertyDefinition{"origin", PropertyValueTypes::String{}, {}, {}}},
-          PointEntityDefinition{}},
-       },
-       {
-         {"point_definition_string_origin",
-          {},
-          "",
-          {PropertyDefinition{"origin", PropertyValueTypes::Origin{}, {}, {}}},
-          PointEntityDefinition{}},
-       }},
-      {{
-         {"point_definition_string_origin_with_default",
-          {},
-          "",
-          {PropertyDefinition{"origin", PropertyValueTypes::String{"1 2 3"}, {}, {}}},
-          PointEntityDefinition{}},
-       },
-       {
-         {"point_definition_string_origin_with_default",
-          {},
-          "",
-          {PropertyDefinition{"origin", PropertyValueTypes::Origin{"1 2 3"}, {}, {}}},
-          PointEntityDefinition{}},
-       }},
-    }));
+    const auto [originalDefinitions, expectedDefinitions] = GENERATE(
+      values<T>({
+        {{}, {}},
+        {{
+           {"some_brush_definition", {}, "", {}},
+         },
+         {
+           {"some_brush_definition", {}, "", {}},
+         }},
+        {{
+           {"point_definition_no_origin", {}, "", {}, PointEntityDefinition{}},
+         },
+         {
+           {"point_definition_no_origin",
+            {},
+            "",
+            {PropertyDefinition{
+              "origin",
+              PropertyValueTypes::Origin{},
+              "point entity origin",
+              "generated by TrenchBroom"}},
+            PointEntityDefinition{}},
+         }},
+        {{
+           {"point_definition_string_origin",
+            {},
+            "",
+            {PropertyDefinition{"origin", PropertyValueTypes::String{}, {}, {}}},
+            PointEntityDefinition{}},
+         },
+         {
+           {"point_definition_string_origin",
+            {},
+            "",
+            {PropertyDefinition{"origin", PropertyValueTypes::Origin{}, {}, {}}},
+            PointEntityDefinition{}},
+         }},
+        {{
+           {"point_definition_string_origin_with_default",
+            {},
+            "",
+            {PropertyDefinition{"origin", PropertyValueTypes::String{"1 2 3"}, {}, {}}},
+            PointEntityDefinition{}},
+         },
+         {
+           {"point_definition_string_origin_with_default",
+            {},
+            "",
+            {PropertyDefinition{"origin", PropertyValueTypes::Origin{"1 2 3"}, {}, {}}},
+            PointEntityDefinition{}},
+         }},
+      }));
 
     CAPTURE(originalDefinitions);
 

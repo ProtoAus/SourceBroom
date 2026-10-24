@@ -13,8 +13,7 @@ compatible merely because they also use VMF.
 - Fork established from upstream `6e9185edd35e614f96864cd20a7abe4fed23e408`.
 - **A0 complete:** repository and ordered plan.
 - **A1 complete:** native, lossless VMF document foundation and read-only corpus
-  checker. [Validation and limitations](VALIDATION.md): 141 model-library tests
-  pass (including 9 VMF cases); all 38 supplied maps pass byte-preservation and
+  checker. All 38 supplied maps pass byte-preservation and
   in-memory mutation checks with original SHA-256 hashes unchanged.
 - **A2 implemented and verified:** native-backed VMF scene construction, stable
   bindings, Source UVs, explicit opaque-feature restrictions, and GUI opening.
@@ -31,9 +30,17 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- A5 and later are not implemented. No Source compiler, Valve content, or
-  third-party/user map is bundled. See [alpha instructions](ALPHA.md) and
-  [current validation](VALIDATION.md) for supported operations and limits.
+- **A5 bounded candidate implemented; full exit pending:** FGD-backed property
+  hints and ordered/repeated Source outputs, bounded static MDL/VVD/VTX preview,
+  saved-file metadata inspection/camera-eye navigation, native capability
+  preflight, target BSP-header checks, leak/position diagnostics, and explicit
+  custom-only distribution ZIPs. These are [bounded tools](SOURCE_TOOLS.md), not
+  native metadata authoring, complete dependency discovery or all-branch support.
+  The current [validation](VALIDATION.md) records 164 model-library passes and
+  41/42 UI passes with one untouched Windows preference-test failure; no blanket
+  clean-suite claim. Independent Hammer++/owner checks remain pending.
+- A6 is not implemented. No Source compiler, Valve content, or third-party/user
+  map is bundled. See [alpha instructions](ALPHA.md) for the owner test path.
 
 A stage is complete only when its exit criteria have evidence. Parsing is not
 semantic validation; byte preservation is not Hammer compatibility; a build is
@@ -128,6 +135,15 @@ it is not a substitute for preservation or numerical claims.
 This is the first interactive alpha, **not** a claim of complete Source support.
 
 ### A5 — Everyday Source authoring
+
+**Candidate boundary:** existing native entities have typed FGD hints and an
+ordered output table; supported props have a static root/default-pose preview.
+Groups, visgroups, hidden state and cordons are interpreted/validated read-only,
+not scene-parent or visibility authoring. A camera action moves the eye only.
+Custom dependency discovery is incomplete and writes an explicitly reviewed
+new distribution ZIP, not a BSP pak lump. Generic Source remains configurable
+without certifying arbitrary branches. [Tool limits](SOURCE_TOOLS.md) and
+[human gates](../../lextest.md) remain part of the full A5 exit.
 
 - Entity FGD integration and Source input/output editing, including repeated
   outputs and both documented output separators.

@@ -51,9 +51,9 @@ TEST_CASE("loadVtfTexture")
   put(63, 1, 2);
   data[80] = 42;
   data[84] = 99;
-  const auto load = [&]() {
+  const auto load = [&](std::optional<size_t> budget = std::nullopt) {
     auto reader = fs::Reader::from(data.data(), data.data() + data.size());
-    return loadVtfTexture(reader);
+    return loadVtfTexture(reader, budget);
   };
   SECTION("mips are reversed into renderer order")
   {
@@ -64,6 +64,17 @@ TEST_CASE("loadVtfTexture")
     REQUIRE(texture.buffersIfLoaded().size() == 2);
     CHECK(texture.buffersIfLoaded()[0].data()[0] == 99);
     CHECK(texture.buffersIfLoaded()[1].data()[0] == 42);
+  }
+  SECTION("remaining budget includes all retained mip buffers")
+  {
+    REQUIRE(load(20).is_success());
+    const auto result = load(19);
+    REQUIRE(result.is_error());
+    CHECK(
+      std::get<Error>(result | kdl::error()).msg
+      == "VTF exceeds remaining decoded image budget");
+    CHECK(load(16).is_error()); // Base level fits, but the smaller mip does not.
+    CHECK(load(0).is_error());
   }
   SECTION("common block compressed formats")
   {
@@ -156,6 +167,16 @@ TEST_CASE("loadVtfTexture")
               }));
         }
       }
+    }
+    SECTION("budget refusal precedes decompression")
+    {
+      data[112] = 0; // Invalid zlib bytes: budget must refuse before inspecting these.
+      const auto result = load(19);
+      REQUIRE(result.is_error());
+      CHECK(
+        std::get<Error>(result | kdl::error()).msg
+        == "VTF exceeds remaining decoded image budget");
+      CHECK(load(20).is_error());
     }
     SECTION("strength zero ignores compression sizes")
     {

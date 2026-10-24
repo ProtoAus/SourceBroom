@@ -62,6 +62,7 @@
 #include <optional>
 #include <string>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #define MODEL_LOG(x)
@@ -71,16 +72,20 @@ namespace tb::ui
 namespace
 {
 
+bool isKeyValueDeclaration(const mdl::PropertyDefinition& definition)
+{
+  return !std::holds_alternative<mdl::PropertyValueTypes::Input>(definition.valueType)
+         && !std::holds_alternative<mdl::PropertyValueTypes::Output>(
+           definition.valueType);
+}
+
 bool isPropertyReadOnly(const mdl::Entity& entity, const std::string& key)
 {
   if (const auto* entityDefinition = entity.definition())
   {
-    if (const auto iPropertyDefinition = std::ranges::find_if(
-          entityDefinition->propertyDefinitions,
-          [&](const auto& propertyDefinition) { return propertyDefinition.key == key; });
-        iPropertyDefinition != entityDefinition->propertyDefinitions.end())
+    if (const auto* property = mdl::getKeyValuePropertyDefinition(*entityDefinition, key))
     {
-      return iPropertyDefinition->readOnly;
+      return property->readOnly;
     }
   }
 
@@ -289,7 +294,10 @@ std::vector<std::string> allKeys(
       {
         for (const auto& propertyDefinition : entityDefinition->propertyDefinitions)
         {
-          result.insert(propertyDefinition.key);
+          if (isKeyValueDeclaration(propertyDefinition))
+          {
+            result.insert(propertyDefinition.key);
+          }
         }
       }
     }
@@ -387,27 +395,31 @@ std::vector<std::string> getAllPropertyKeys(const mdl::Map& map)
     result.insert(keys.begin(), keys.end());
   };
 
-  map.worldNode().accept(kdl::overload(
-    [&](auto&& thisLambda, const mdl::WorldNode& worldNode) {
-      addEntityKeys(worldNode);
-      worldNode.visitChildren(thisLambda);
-    },
-    [](auto&& thisLambda, const mdl::LayerNode& layerNode) {
-      layerNode.visitChildren(thisLambda);
-    },
-    [](auto&& thisLambda, const mdl::GroupNode& groupNode) {
-      groupNode.visitChildren(thisLambda);
-    },
-    [&](const mdl::EntityNode& entityNode) { addEntityKeys(entityNode); },
-    [](const mdl::BrushNode&) {},
-    [](const mdl::PatchNode&) {}));
+  map.worldNode().accept(
+    kdl::overload(
+      [&](auto&& thisLambda, const mdl::WorldNode& worldNode) {
+        addEntityKeys(worldNode);
+        worldNode.visitChildren(thisLambda);
+      },
+      [](auto&& thisLambda, const mdl::LayerNode& layerNode) {
+        layerNode.visitChildren(thisLambda);
+      },
+      [](auto&& thisLambda, const mdl::GroupNode& groupNode) {
+        groupNode.visitChildren(thisLambda);
+      },
+      [&](const mdl::EntityNode& entityNode) { addEntityKeys(entityNode); },
+      [](const mdl::BrushNode&) {},
+      [](const mdl::PatchNode&) {}));
 
   // also add keys from all loaded entity definitions
   for (const auto& entityDefinition : map.entityDefinitionManager().definitions())
   {
     for (const auto& propertyDefinition : entityDefinition.propertyDefinitions)
     {
-      result.insert(propertyDefinition.key);
+      if (isKeyValueDeclaration(propertyDefinition))
+      {
+        result.insert(propertyDefinition.key);
+      }
     }
   }
 
@@ -460,38 +472,39 @@ template <typename... ValueType>
 std::vector<std::string> getAllValuesForPropertyValueTypes(const mdl::Map& map)
 {
   auto result = kdl::flat_set<std::string>();
-  map.worldNode().accept(kdl::overload(
-    [](auto&& thisLambda, const mdl::WorldNode& worldNode) {
-      worldNode.visitChildren(thisLambda);
-    },
-    [](auto&& thisLambda, const mdl::LayerNode& layerNode) {
-      layerNode.visitChildren(thisLambda);
-    },
-    [&](auto&& thisLambda, const mdl::GroupNode& groupNode) {
-      groupNode.visitChildren(thisLambda);
-    },
-    [&](const mdl::EntityNode& entityNode) {
-      if (const auto* entityDefinition = entityNode.entity().definition())
-      {
-        auto propertyValues =
-          entityDefinition->propertyDefinitions
-          | std::views::filter([](const auto& propertyDefinition) {
-              return (
-                std::holds_alternative<ValueType>(propertyDefinition.valueType) || ...);
-            })
-          | std::views::transform([&](const auto& propertyDefinition) {
-              return entityNode.entity().property(propertyDefinition.key);
-            })
-          | std::views::filter(
-            [](const auto* propertyValue) { return propertyValue != nullptr; })
-          | std::views::transform(
-            [](const auto& propertyValue) { return *propertyValue; });
+  map.worldNode().accept(
+    kdl::overload(
+      [](auto&& thisLambda, const mdl::WorldNode& worldNode) {
+        worldNode.visitChildren(thisLambda);
+      },
+      [](auto&& thisLambda, const mdl::LayerNode& layerNode) {
+        layerNode.visitChildren(thisLambda);
+      },
+      [&](auto&& thisLambda, const mdl::GroupNode& groupNode) {
+        groupNode.visitChildren(thisLambda);
+      },
+      [&](const mdl::EntityNode& entityNode) {
+        if (const auto* entityDefinition = entityNode.entity().definition())
+        {
+          auto propertyValues =
+            entityDefinition->propertyDefinitions
+            | std::views::filter([](const auto& propertyDefinition) {
+                return (
+                  std::holds_alternative<ValueType>(propertyDefinition.valueType) || ...);
+              })
+            | std::views::transform([&](const auto& propertyDefinition) {
+                return entityNode.entity().property(propertyDefinition.key);
+              })
+            | std::views::filter(
+              [](const auto* propertyValue) { return propertyValue != nullptr; })
+            | std::views::transform(
+              [](const auto& propertyValue) { return *propertyValue; });
 
-        result.insert(propertyValues.begin(), propertyValues.end());
-      }
-    },
-    [&](const mdl::BrushNode&) {},
-    [&](const mdl::PatchNode&) {}));
+          result.insert(propertyValues.begin(), propertyValues.end());
+        }
+      },
+      [&](const mdl::BrushNode&) {},
+      [&](const mdl::PatchNode&) {}));
 
   // remove the empty string
   result.erase("");
@@ -882,8 +895,9 @@ bool EntityPropertyModel::setData(
       qDebug() << "tried to set " << mapStringToUnicode(map.encoding(), propertyRow.key)
                << " to " << value.toString());
 
-    if (updateProperty(
-          rowIndex, mapStringFromUnicode(map.encoding(), value.toString()), nodes))
+    if (
+      updateProperty(
+        rowIndex, mapStringFromUnicode(map.encoding(), value.toString()), nodes))
     {
       return true;
     }

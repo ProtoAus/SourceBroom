@@ -20,17 +20,22 @@
 #include "TestEnvironment.h"
 #include "TestParserStatus.h"
 #include "el/TestUtils.h"
+#include "el/VariableStore.h"
 #include "fs/DiskIO.h"
 #include "fs/Reader.h"
 #include "fs/TraversalMode.h"
 #include "mdl/CatchConfig.h"
+#include "mdl/Entity.h"
 #include "mdl/EntityDefinition.h"
 #include "mdl/EntityDefinitionTestUtils.h"
+#include "mdl/EntityPropertiesVariableStore.h"
 #include "mdl/FgdParser.h"
+#include "mdl/ModelSpecification.h"
 #include "mdl/PropertyDefinition.h"
 
 #include "kd/ranges/contains.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 
@@ -42,6 +47,162 @@ namespace tb::mdl
 
 TEST_CASE("FgdParser")
 {
+  SECTION("Source keyvalues inputs and outputs have independent namespaces")
+  {
+    const auto source = R"(
+      @PointClass = timer [
+        input RefireTime(float) : "Set interval"
+        RefireTime(float) : "Initial interval" : 1
+        output RefireTime(float) : "Interval event"
+        input RefireTime(string) : "Duplicate input must still be refused"
+      ]
+    )";
+    auto parser = FgdParser{source, RgbaF{1, 1, 1, 1}};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 1);
+    const auto& definition = definitions.front();
+    REQUIRE(definition.propertyDefinitions.size() == 3);
+    CHECK(status.countStatus(LogLevel::Warn) == 1);
+    CHECK(status.countStatus(LogLevel::Error) == 0);
+    CHECK(
+      std::holds_alternative<PropertyValueTypes::Input>(
+        definition.propertyDefinitions[0].valueType));
+    CHECK(
+      std::holds_alternative<PropertyValueTypes::Float>(
+        definition.propertyDefinitions[1].valueType));
+    CHECK(
+      std::holds_alternative<PropertyValueTypes::Output>(
+        definition.propertyDefinitions[2].valueType));
+    const auto* value = getPropertyDefinition(definition, "RefireTime");
+    REQUIRE(value);
+    CHECK(std::holds_alternative<PropertyValueTypes::Float>(value->valueType));
+    CHECK(std::get<PropertyValueTypes::Float>(value->valueType).defaultValue == 1.0f);
+  }
+
+  SECTION("Source declaration namespaces are retained through inheritance")
+  {
+    const auto source = R"(
+      @BaseClass = Base [
+        value(string) : "Initial value" : "base"
+        input value(void) : "Base input"
+        output value(void) : "Base output"
+      ]
+      @PointClass base(Base) = Inherit [ value(integer) : "Value" : 4 ]
+      @PointClass base(Base) = Override [
+        input value(string) : "Derived input"
+        output value(float) : "Derived output"
+      ]
+    )";
+    auto parser = FgdParser{source, RgbaF{1, 1, 1, 1}};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 2);
+    CHECK(status.countStatus(LogLevel::Warn) == 0);
+    CHECK(status.countStatus(LogLevel::Error) == 0);
+    for (const auto& definition : definitions)
+    {
+      REQUIRE(definition.propertyDefinitions.size() == 3);
+      const auto* value = getPropertyDefinition(definition, "value");
+      REQUIRE(value);
+      CHECK(
+        PropertyDefinition::defaultValue(*value)
+        == (definition.name == "Inherit" ? "4" : "base"));
+      const auto input =
+        std::ranges::find_if(definition.propertyDefinitions, [](const auto& p) {
+          return std::holds_alternative<PropertyValueTypes::Input>(p.valueType);
+        });
+      const auto output =
+        std::ranges::find_if(definition.propertyDefinitions, [](const auto& p) {
+          return std::holds_alternative<PropertyValueTypes::Output>(p.valueType);
+        });
+      REQUIRE(input != definition.propertyDefinitions.end());
+      REQUIRE(output != definition.propertyDefinitions.end());
+      const auto overridden = definition.name == "Override";
+      CHECK(
+        std::get<PropertyValueTypes::Input>(input->valueType).parameterType
+        == (overridden ? PropertyValueTypes::IOParameterType::String : PropertyValueTypes::IOParameterType::Void));
+      CHECK(
+        std::get<PropertyValueTypes::Output>(output->valueType).parameterType
+        == (overridden ? PropertyValueTypes::IOParameterType::Float : PropertyValueTypes::IOParameterType::Void));
+    }
+  }
+
+  SECTION("Source studio optional skin cannot overflow and does not rewrite properties")
+  {
+    auto parser = FgdParser{"@PointClass studio() = probe []", RgbaF{1, 1, 1, 1}};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 1);
+    REQUIRE(definitions[0].pointEntityDefinition.has_value());
+    for (const auto* raw : {"2", "1.75", "1e100", "-1e100", "inf", "nan"})
+    {
+      CAPTURE(raw);
+      const auto entity = Entity{{{"model", "models/probe.mdl"}, {"skin", raw}}};
+      const auto variables = EntityPropertiesVariableStore{entity};
+      const auto spec =
+        definitions[0].pointEntityDefinition->modelDefinition.modelSpecification(
+          variables)
+        | kdl::value();
+      CHECK(spec.path == std::filesystem::path{"models/probe.mdl"});
+      CHECK(spec.skinIndex == (std::string{raw} == "2" ? 2u
+        : std::string{raw} == "1.75" ? 1u : 0u));
+      REQUIRE(entity.property("skin"));
+      CHECK(*entity.property("skin") == raw);
+    }
+  }
+
+  SECTION("SourceBroom builtin authoring definitions are actionable")
+  {
+    const auto path = getFixtureRoot() / "games/Source-common/source.fgd";
+    auto file = fs::Disk::openFile(path) | kdl::value();
+    auto reader = file->reader().buffer();
+    auto parser = FgdParser{reader.stringView(), RgbaF{1, 1, 1, 1}, path};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    CHECK(status.countStatus(LogLevel::Warn) == 0);
+    CHECK(status.countStatus(LogLevel::Error) == 0);
+    const auto findDefinition = [&](const std::string& name) -> const EntityDefinition& {
+      const auto found = std::ranges::find(definitions, name, &EntityDefinition::name);
+      REQUIRE(found != definitions.end());
+      return *found;
+    };
+    const auto& relay = findDefinition("logic_relay");
+    const auto* event = getPropertyDefinition(relay, "OnTrigger");
+    const auto* input = getPropertyDefinition(relay, "Trigger");
+    REQUIRE(event);
+    REQUIRE(input);
+    CHECK(std::holds_alternative<PropertyValueTypes::Output>(event->valueType));
+    CHECK(std::holds_alternative<PropertyValueTypes::Input>(input->valueType));
+    const auto& counter = findDefinition("math_counter");
+    const auto* add = getPropertyDefinition(counter, "Add");
+    REQUIRE(add);
+    CHECK(
+      std::get<PropertyValueTypes::Input>(add->valueType).parameterType
+      == PropertyValueTypes::IOParameterType::Float);
+    const auto& timer = findDefinition("logic_timer");
+    CHECK(
+      std::ranges::count(
+        timer.propertyDefinitions, "RefireTime", &PropertyDefinition::key)
+      == 2);
+    for (const auto* name : {"prop_static", "prop_dynamic", "prop_physics"})
+    {
+      const auto& prop = findDefinition(name);
+      REQUIRE(prop.pointEntityDefinition.has_value());
+      const auto variables = el::VariableTable{{
+        {"model", el::Value{std::string{"models/props/sourcebroom_probe.mdl"}}},
+        {"skin", el::Value{2}},
+      }};
+      const auto spec =
+        prop.pointEntityDefinition->modelDefinition.modelSpecification(variables)
+        | kdl::value();
+      CHECK(spec.path == std::filesystem::path{"models/props/sourcebroom_probe.mdl"});
+      CHECK(spec.skinIndex == 2u);
+      CHECK(getPropertyDefinition(prop, "model"));
+      CHECK(getPropertyDefinition(prop, "skin"));
+    }
+  }
+
   SECTION("Included files")
   {
     const auto basePath = getFixtureRoot() / "games/";
@@ -946,37 +1107,38 @@ TEST_CASE("FgdParser")
 
       using T = std::tuple<std::string, mdl::PropertyDefinition>;
 
-      const auto [str, expectedPropertyDefinition] = GENERATE(values<T>({
-        {R"(test1(color1) : "Property 1" : "1.0 0.5 0.0" : "Longer description 1")",
-         {"test1",
-          mdl::PropertyValueTypes::Color<RgbF>{"1.0 0.5 0.0"},
-          "Property 1",
-          "Longer description 1"}},
+      const auto [str, expectedPropertyDefinition] = GENERATE(
+        values<T>({
+          {R"(test1(color1) : "Property 1" : "1.0 0.5 0.0" : "Longer description 1")",
+           {"test1",
+            mdl::PropertyValueTypes::Color<RgbF>{"1.0 0.5 0.0"},
+            "Property 1",
+            "Longer description 1"}},
 
-        {R"(test2(color255) : "Property 2" : "255 127 0" : "Longer description 2")",
-         {"test2",
-          mdl::PropertyValueTypes::Color<RgbB>{"255 127 0"},
-          "Property 2",
-          "Longer description 2"}},
+          {R"(test2(color255) : "Property 2" : "255 127 0" : "Longer description 2")",
+           {"test2",
+            mdl::PropertyValueTypes::Color<RgbB>{"255 127 0"},
+            "Property 2",
+            "Longer description 2"}},
 
-        {R"(test3(color1) : "Property 3" : "0.2 0.3 0.4 1000" : "Longer description 3")",
-         {"test3",
-          mdl::PropertyValueTypes::Color<RgbF>{"0.2 0.3 0.4 1000"},
-          "Property 3",
-          "Longer description 3"}},
+          {R"(test3(color1) : "Property 3" : "0.2 0.3 0.4 1000" : "Longer description 3")",
+           {"test3",
+            mdl::PropertyValueTypes::Color<RgbF>{"0.2 0.3 0.4 1000"},
+            "Property 3",
+            "Longer description 3"}},
 
-        {R"(test4(color255) : "Property 4" : "10 20 30 1000" : "Longer description 4")",
-         {"test4",
-          mdl::PropertyValueTypes::Color<RgbB>{"10 20 30 1000"},
-          "Property 4",
-          "Longer description 4"}},
+          {R"(test4(color255) : "Property 4" : "10 20 30 1000" : "Longer description 4")",
+           {"test4",
+            mdl::PropertyValueTypes::Color<RgbB>{"10 20 30 1000"},
+            "Property 4",
+            "Longer description 4"}},
 
-        {R"(test5(color255) : "Property 5" : : "Longer description 5")",
-         {"test5",
-          mdl::PropertyValueTypes::Color<RgbB>{},
-          "Property 5",
-          "Longer description 5"}},
-      }));
+          {R"(test5(color255) : "Property 5" : : "Longer description 5")",
+           {"test5",
+            mdl::PropertyValueTypes::Color<RgbB>{},
+            "Property 5",
+            "Longer description 5"}},
+        }));
 
       CAPTURE(str);
 
@@ -1215,11 +1377,12 @@ TEST_CASE("FgdParser")
                 el::cs(
                   el::eq(el::var("startonground"), el::lit("1")),
                   el::lit(el::MapType{{"path", el::Value{":progs/polyp.mdl"}}})),
-                el::lit(el::MapType{
-                  {"path", el::Value{":progs/polyp.mdl"}},
-                  {"frame", el::Value{153}},
-                  {"skin", el::Value{0}},
-                }),
+                el::lit(
+                  el::MapType{
+                    {"path", el::Value{":progs/polyp.mdl"}},
+                    {"frame", el::Value{153}},
+                    {"skin", el::Value{0}},
+                  }),
               })},
               {}},
           },
@@ -1382,8 +1545,9 @@ TEST_CASE("FgdParser")
       REQUIRE(defs);
       CHECK(defs.value().size() == 2u);
       CHECK(kdl::ranges::contains(defs.value(), "worldspawn", &EntityDefinition::name));
-      CHECK(kdl::ranges::contains(
-        defs.value(), "info_player_start", &EntityDefinition::name));
+      CHECK(
+        kdl::ranges::contains(
+          defs.value(), "info_player_start", &EntityDefinition::name));
     }
 
     SECTION("parseNestedInclude")
@@ -1400,8 +1564,9 @@ TEST_CASE("FgdParser")
       REQUIRE(defs);
       CHECK(defs.value().size() == 3u);
       CHECK(kdl::ranges::contains(defs.value(), "worldspawn", &EntityDefinition::name));
-      CHECK(kdl::ranges::contains(
-        defs.value(), "info_player_start", &EntityDefinition::name));
+      CHECK(
+        kdl::ranges::contains(
+          defs.value(), "info_player_start", &EntityDefinition::name));
       CHECK(
         kdl::ranges::contains(defs.value(), "info_player_coop", &EntityDefinition::name));
     }

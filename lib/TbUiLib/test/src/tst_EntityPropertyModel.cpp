@@ -17,13 +17,14 @@
  along with TrenchBroom. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "mdl/Entity.h"
 #include "mdl/EntityDefinitionManager.h"
 #include "mdl/EntityNode.h"
 #include "mdl/GroupNode.h"
 #include "mdl/Map.h"
+#include "mdl/Map_Entities.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
-#include "mdl/NodeIndex.h"
 #include "ui/CatchConfig.h"
 #include "ui/EntityPropertyModel.h"
 #include "ui/MapDocument.h"
@@ -33,6 +34,67 @@
 
 namespace tb::ui
 {
+
+TEST_CASE("EntityPropertyModel keeps I/O declarations out of ordinary keyvalue rows")
+{
+  auto fixture = MapDocumentFixture{};
+  auto& document = fixture.create();
+  auto& map = document.map();
+  map.entityDefinitionManager().setDefinitions({
+    {"io_probe",
+     {},
+     {},
+     {
+       {"Trigger", mdl::PropertyValueTypes::Input{}},
+       {"OnTrigger", mdl::PropertyValueTypes::Output{}},
+       {"shared", mdl::PropertyValueTypes::Input{}},
+       {"shared", mdl::PropertyValueTypes::Output{}},
+       {"shared", mdl::PropertyValueTypes::String{std::string{"hint"}}},
+     }},
+  });
+  auto* entity = new mdl::EntityNode{mdl::Entity{{{"classname", "io_probe"}}}};
+  mdl::addNodes(map, {{&mdl::parentForNodes(map), {entity}}});
+  mdl::selectNodes(map, {entity});
+  auto model = EntityPropertyModel{document};
+  REQUIRE(model.showDefaultRows());
+
+  SECTION(
+    "definition-only inputs and outputs are neither default rows nor key completions")
+  {
+    CHECK(model.rowIndexForPropertyKey("Trigger") == -1);
+    CHECK(model.rowIndexForPropertyKey("OnTrigger") == -1);
+    const auto shared = model.rowIndexForPropertyKey("shared");
+    REQUIRE(shared >= 0);
+    CHECK(model.rows()[static_cast<size_t>(shared)].valueMutable);
+    const auto row = model.rowIndexForPropertyKey("classname");
+    REQUIRE(row >= 0);
+    const auto completions =
+      model.getCompletions(model.index(row, EntityPropertyModel::ColumnKey));
+    CHECK_FALSE(completions.contains("Trigger"));
+    CHECK_FALSE(completions.contains("OnTrigger"));
+    CHECK(completions.contains("shared"));
+    REQUIRE(model.setData(
+      model.index(shared, EntityPropertyModel::ColumnValue), "ordinary", Qt::EditRole));
+    REQUIRE(entity->entity().property("shared"));
+    CHECK(*entity->entity().property("shared") == "ordinary");
+  }
+  SECTION(
+    "genuine native keys remain ordinary even when an I/O declaration shares the name")
+  {
+    REQUIRE(mdl::setEntityProperty(map, "OnTrigger", "owner_defined"));
+    model.updateFromMap();
+    const auto row = model.rowIndexForPropertyKey("OnTrigger");
+    REQUIRE(row >= 0);
+    CHECK(model.rows()[static_cast<size_t>(row)].valueMutable);
+    CHECK(model.getCompletions(model.index(row, EntityPropertyModel::ColumnKey))
+            .contains("OnTrigger"));
+    REQUIRE(model.setData(
+      model.index(row, EntityPropertyModel::ColumnValue), "changed", Qt::EditRole));
+    REQUIRE(entity->entity().property("OnTrigger"));
+    CHECK(*entity->entity().property("OnTrigger") == "changed");
+    CHECK(entity->entity().sourceConnections().empty());
+  }
+}
 
 TEST_CASE("EntityPropertyModel")
 {
@@ -83,6 +145,8 @@ TEST_CASE("EntityPropertyModel")
      {},
      {},
      {
+       {"readonly",
+        mdl::PropertyValueTypes::Input{mdl::PropertyValueTypes::IOParameterType::Void}},
        {
          "readonly",
          mdl::PropertyValueTypes::String{},

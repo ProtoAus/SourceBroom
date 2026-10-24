@@ -14,6 +14,7 @@
 #include "mdl/MapFixture.h"
 #include "mdl/MapFormat.h"
 #include "mdl/Map_CopyPaste.h"
+#include "mdl/Map_Entities.h"
 #include "mdl/Map_Geometry.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
@@ -445,6 +446,31 @@ TEST_CASE("VmfMap", "[vmf]")
     const auto expectedBounds = before.translate(vm::vec3d{16, 0, 0});
     CHECK(vm::is_equal(selected->brush().bounds().min, expectedBounds.min, 1e-8));
     CHECK(vm::is_equal(selected->brush().bounds().max, expectedBounds.max, 1e-8));
+    const auto editOutputs = std::getenv("SOURCEBROOM_A5_OUTPUTS") != nullptr;
+    if (editOutputs)
+    {
+      auto* relay = static_cast<EntityNode*>(nullptr);
+      for (auto* child : map.worldNode().defaultLayer()->children())
+      {
+        if (auto* entity = dynamic_cast<EntityNode*>(child))
+        {
+          if (entity->entity().classname() == "logic_relay")
+          {
+            relay = entity;
+          }
+        }
+      }
+      REQUIRE(relay);
+      auto rows = relay->entity().sourceConnections();
+      REQUIRE(rows.size() == 2);
+      const auto originalSecond = rows[1];
+      rows[0].value = "!self,Disable,,0.125,-1";
+      deselectAll(map);
+      selectNodes(map, {relay});
+      REQUIRE(setSourceEntityConnections(map, rows));
+      REQUIRE(setEntityProperty(map, "spawnflags", "0"));
+      CHECK(relay->entity().sourceConnections()[1] == originalSecond);
+    }
     const auto destination =
       output ? std::filesystem::path{output} : env.dir() / "room edited.vmf";
     REQUIRE_FALSE(std::filesystem::exists(destination));
@@ -455,6 +481,27 @@ TEST_CASE("VmfMap", "[vmf]")
     CHECK(
       reopened.worldNode().defaultLayer()->childCount()
       == map.worldNode().defaultLayer()->childCount());
+    if (editOutputs)
+    {
+      auto checked = false;
+      for (auto* child : reopened.worldNode().defaultLayer()->children())
+      {
+        if (const auto* entity = dynamic_cast<const EntityNode*>(child))
+        {
+          if (entity->entity().classname() == "logic_relay")
+          {
+            const auto& rows = entity->entity().sourceConnections();
+            REQUIRE(rows.size() == 2);
+            CHECK(rows[0].value == "!self,Disable,,0.125,-1");
+            CHECK(rows[1].value == "!self,Enable,,1,-1");
+            REQUIRE(entity->entity().property("spawnflags"));
+            CHECK(*entity->entity().property("spawnflags") == "0");
+            checked = true;
+          }
+        }
+      }
+      CHECK(checked);
+    }
     CHECK(readBinary(path) == original);
     if (input)
     {
