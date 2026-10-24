@@ -55,10 +55,17 @@ std::filesystem::path cacheLookupKey(const std::filesystem::path& normalizedPath
 
 } // namespace
 
-DiskFileSystem::DiskFileSystem(const std::filesystem::path& root)
+DiskFileSystem::DiskFileSystem(
+  const std::filesystem::path& root,
+  const std::function<void(const Error&)>& logInitialError)
   : m_root{root.lexically_normal()}
 {
-  std::ignore = reload();
+  std::ignore = reload() | kdl::transform_error([&](const auto& error) {
+                  if (logInitialError)
+                  {
+                    logInitialError(error);
+                  }
+                });
 }
 
 DiskFileSystem::~DiskFileSystem() = default;

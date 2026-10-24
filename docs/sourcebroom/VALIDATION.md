@@ -64,6 +64,10 @@ are not public fixtures.
   **3841 ms** for catalog construction. Skipping a redundant initial rescan saves
   repeated work; no stale cross-map cache or pruning is used. Metadata registration
   requests zero pixel decodes; an explicitly requested texture subsequently loads.
+- Initial disk-index traversal errors are surfaced during mounting. An authored
+  self-referential symlink control proves the constructor error callback acts,
+  no partial cache is published, and removing the fault allows explicit reload
+  recovery. A healthy constructor is silent; the callback is not retained.
 - A normal map-level regression proves an initial loose material is registered,
   a newly added file is absent before explicit reload and present afterward, and
   removal is reflected after the next reload. Non-Source callers still rescan.

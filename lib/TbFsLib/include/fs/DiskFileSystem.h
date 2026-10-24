@@ -23,6 +23,7 @@
 #include "fs/FileSystem.h"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <shared_mutex>
 #include <string>
@@ -59,7 +60,10 @@ protected:
   mutable std::shared_mutex m_mutex;
 
 public:
-  explicit DiskFileSystem(const std::filesystem::path& root);
+  // Reports constructor reload errors synchronously; the callback is not retained.
+  explicit DiskFileSystem(
+    const std::filesystem::path& root,
+    const std::function<void(const Error&)>& logInitialError = {});
   ~DiskFileSystem() override;
 
   const std::filesystem::path& root() const;

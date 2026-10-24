@@ -52,6 +52,9 @@ Normal model tests cover initial loose-material discovery followed by explicit
 reload after file addition and removal. Initial Source loading skips only the
 redundant rescan of its newly constructed filesystem; explicit reload and other
 map formats keep their prior behavior. No cross-document cache is introduced.
+Game filesystem mounting supplies a synchronous constructor-only error reporter,
+so an initial disk-index traversal failure still has an actionable diagnostic
+without a second successful-path scan.
 
 For a read-only installed-content measurement, set `SOURCEBROOM_PROFILE_GAME`
 to a game directory containing `gameinfo.txt`, then invoke the hidden Catch2 case

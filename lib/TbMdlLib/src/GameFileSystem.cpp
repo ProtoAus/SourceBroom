@@ -192,7 +192,9 @@ void GameFileSystem::addSearchPath(
 void GameFileSystem::addFileSystemPath(const std::filesystem::path& path, Logger& logger)
 {
   logger.info() << "Adding file system path " << path;
-  mount("", std::make_unique<fs::DiskFileSystem>(path));
+  mount("", std::make_unique<fs::DiskFileSystem>(path, [&](const Error& error) {
+          logger.error() << "Could not index game file system: " << error.msg;
+        }));
 }
 
 namespace

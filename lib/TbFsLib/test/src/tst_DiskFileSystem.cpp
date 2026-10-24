@@ -34,6 +34,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <string>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -85,6 +86,28 @@ TEST_CASE("DiskFileSystem")
       CHECK(fs.reload() == Result<void>{});
       CHECK(fs.pathInfo("newDir") == fs::PathInfo::Directory);
       CHECK(fs.pathInfo("newDir/newFile.txt") == fs::PathInfo::File);
+    }
+
+    SECTION("initial traversal errors are reported without a second scan")
+    {
+      auto env = makeTestEnvironment();
+      auto errors = std::vector<std::string>{};
+      const auto report = [&](const Error& error) { errors.push_back(error.msg); };
+      auto healthy = DiskFileSystem{env.dir(), report};
+      CHECK(errors.empty());
+      CHECK(healthy.pathInfo("test.txt") == fs::PathInfo::File);
+
+      env.createSymLink("loop", "loop");
+      CHECK(healthy.reload().is_error());
+      CHECK(healthy.pathInfo("test.txt") == fs::PathInfo::File);
+      auto failed = DiskFileSystem{env.dir(), report};
+      REQUIRE(errors.size() == 1);
+      CHECK(errors[0].find("Failed to reload") != std::string::npos);
+      CHECK(failed.pathInfo("test.txt") == fs::PathInfo::Unknown);
+      REQUIRE(env.remove("loop"));
+      REQUIRE(failed.reload().is_success());
+      CHECK(failed.pathInfo("test.txt") == fs::PathInfo::File);
+      CHECK(errors.size() == 1);
     }
 
     SECTION("constructing over a non-existent root does not error")

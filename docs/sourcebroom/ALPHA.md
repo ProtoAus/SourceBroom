@@ -25,7 +25,8 @@ FTESurf is an optional runtime, not an editor dependency.
 Source startup no longer repeats its just-completed content scan, and enabled
 material-folder selection uses a hashed lookup instead of repeatedly walking the
 whole list. This does not skip materials or introduce a stale cross-map cache;
-explicit material reload still discovers added and removed loose files.
+explicit material reload still discovers added and removed loose files. Initial
+loose-directory indexing errors are reported without rescanning healthy mounts.
 
 The shared GUI/checker preview envelope is now **+/-131072 units**. It is an
 editor preview policy, not a promise that every Source branch compiles or plays
