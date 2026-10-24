@@ -4,7 +4,7 @@
 - Read `docs/sourcebroom/ROADMAP.md` and `docs/sourcebroom/DEVELOPMENT.md` before changing Source support; update verified status without overstating capabilities.
 - Native VMF is authoritative. Do not route editing through Quake MAP or discard repeated keys, unknown data, IDs, references, or original numeric text.
 - Never edit the owner's original test corpus or commit third-party/user VMFs, Valve assets, proprietary SDK code, or local logs. Use synthetic public fixtures.
-- The GUI is still upstream TrenchBroom. Do not enable VMF saving before the scene/preservation and safe-save gates are met.
+- The first native interactive alpha is integrated. Keep VMF saves behind the scene/preservation and safe-save guards; unsupported edits must refuse. Read current validation and pending human gates rather than inferring full Source authoring support.
 - Keep the existing CMake/Catch2 infrastructure; parser tests and tools must use the same production code.
 
 # Upstream TrenchBroom Guidance
