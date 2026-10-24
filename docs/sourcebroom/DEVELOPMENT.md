@@ -41,7 +41,26 @@ The checker reads inputs only. It parses every document, verifies unchanged
 serialization, reports structure counts, and optionally proves an in-memory
 value-token edit took effect without touching any file. `--scene` additionally
 checks the production scene bridge and reports explicitly refused geometry.
+The default +/-131072 preview envelope matches the GUI. Use, for example,
+`--scene --world-bounds 65536` for a smaller-envelope control; the finite positive
+extent is bounded by 1048576 and requires `--scene`. It is not an engine limit.
 The checker does not invoke compilers, write a VMF, or decompile BSPs.
+
+## A5.1 content/startup checks
+
+Normal model tests cover initial loose-material discovery followed by explicit
+reload after file addition and removal. Initial Source loading skips only the
+redundant rescan of its newly constructed filesystem; explicit reload and other
+map formats keep their prior behavior. No cross-document cache is introduced.
+
+For a read-only installed-content measurement, set `SOURCEBROOM_PROFILE_GAME`
+to a game directory containing `gameinfo.txt`, then invoke the hidden Catch2 case
+`Source content catalog profiling opt-in` in `TbMdlLibTest.exe`. It reports mount,
+reload, catalog and equivalent linear/hashed membership timings, checks identical
+ordered selection/name signatures, proves catalog registration did not decode
+pixels, then explicitly requests a texture to prove the loader acts. Keep game
+files/logs private and report the workload; this is not an end-to-end benchmark
+or a substitute for visual acceptance.
 
 ## A5 tool checks
 

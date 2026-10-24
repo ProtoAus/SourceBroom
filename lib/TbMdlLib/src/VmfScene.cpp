@@ -472,7 +472,9 @@ VmfScene VmfScene::read(
       auto result = Brush::create(bounds, std::move(faces));
       if (result.is_error())
       {
-        refuse(id, "invalid or unbounded Source solid");
+        refuse(
+          id,
+          "invalid or unbounded Source solid: " + std::get<Error>(result.error()).msg);
       }
       auto brush = std::move(result).value();
       if (brush.faceCount() != count || !brush.closed() || !brush.fullySpecified())

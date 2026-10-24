@@ -350,7 +350,7 @@ private: // Asset management
   void clearEntityDefinitions();
 
   void reloadMaterials();
-  void loadMaterials();
+  void loadMaterials(bool rescanFileSystems = true);
   void clearMaterials();
 
   void setMaterials();

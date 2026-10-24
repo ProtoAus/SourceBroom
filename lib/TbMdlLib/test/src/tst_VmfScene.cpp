@@ -84,6 +84,38 @@ void translate(BrushNode& node)
 TEST_CASE("VmfScene", "[vmf]")
 {
   const auto bounds = vm::bbox3d{4096};
+  SECTION("finite Source preview envelope accepts distant closed solids without repair")
+  {
+    const auto previewBounds =
+      vm::bbox3d{-VmfScene::PreviewWorldExtent, VmfScene::PreviewWorldExtent};
+    auto scene = VmfScene::read(fixture(), bounds);
+    auto moved = brush(scene.world()).brush();
+    REQUIRE(
+      moved
+        .transform(
+          previewBounds, vm::translation_matrix(vm::vec3d{100000, -90000, 80000}), true)
+        .is_success());
+    brush(scene.world()).setBrush(std::move(moved));
+    const auto native = scene.serialize(scene.world());
+    CHECK_THROWS_AS(
+      VmfScene::read(native, vm::bbox3d{-65536, 65536}), std::invalid_argument);
+    auto reopened = VmfScene::read(native, previewBounds);
+    CHECK(reopened.serialize(reopened.world()) == native);
+    const auto& b = brush(reopened.world()).brush();
+    CHECK(b.faceCount() == 6);
+    CHECK(b.vertexCount() == 8);
+    CHECK(b.bounds() == vm::bbox3d{{100000, -90000, 80000}, {100064, -89936, 80064}});
+
+    auto open = fixture();
+    const auto first = open.find("side {");
+    const auto last = open.find('}', first);
+    REQUIRE(first != std::string::npos);
+    REQUIRE(last != std::string::npos);
+    open.erase(first, last - first + 1);
+    CHECK_THROWS_AS(VmfScene::read(open, previewBounds), std::invalid_argument);
+    CHECK_THROWS_AS(
+      VmfScene::read(open, vm::bbox3d{-1048576, 1048576}), std::invalid_argument);
+  }
   SECTION("box bounds winding double axes and native bindings")
   {
     const auto source = fixture();

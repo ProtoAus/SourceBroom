@@ -1276,7 +1276,9 @@ void Map::loadAssets()
   loadEntityDefinitions();
   setEntityDefinitions();
   setEntityModels();
-  loadMaterials();
+  // Source content was just indexed by createGameFileSystem. Explicit reloads
+  // below still rescan loose files and archives; no cross-document cache is used.
+  loadMaterials(m_worldNode->mapFormat() != MapFormat::SourceVMF);
   setMaterials();
 }
 
@@ -1340,7 +1342,7 @@ void Map::reloadMaterials()
   loadMaterials();
 }
 
-void Map::loadMaterials()
+void Map::loadMaterials(const bool rescanFileSystems)
 {
   if (const auto* wadStr = m_worldNode->entity().property(EntityPropertyKeys::Wad))
   {
@@ -1359,11 +1361,13 @@ void Map::loadMaterials()
       gameInfo().gameConfig.materialConfig.root, searchPaths, wadPaths, logger());
   }
 
-  // rescans the loose-file search path mounts (e.g. reloadWads above only replaces the
-  // wad mounts, it doesn't pick up files added to or removed from disk directories)
-  m_gameFileSystem->reload() | kdl::transform_error([&](auto e) {
-    m_logger.error() << "Could not reload game file systems: " + e.msg;
-  });
+  // Explicit reload must discover added/removed loose files as well as WADs.
+  if (rescanFileSystems)
+  {
+    m_gameFileSystem->reload() | kdl::transform_error([&](auto e) {
+      m_logger.error() << "Could not reload game file systems: " + e.msg;
+    });
+  }
 
   m_materialManager->clear();
 

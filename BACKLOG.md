@@ -3,13 +3,24 @@
 Later requested feature work belongs in [the roadmap](docs/sourcebroom/ROADMAP.md).
 These are observed limitations/follow-ups, not a claim that all have a product fix.
 
-- **Scene compatibility — `lib/TbMdlLib/src/VmfScene.cpp`.** Six of the 38 supplied
-  external VMFs are refused by strict geometry/UV validation; all 38 still pass
-  the lossless syntax/no-edit checks. Preserve diagnostics and input hashes;
+- **Scene compatibility — `lib/TbMdlLib/src/VmfScene.cpp`.** After the larger
+  finite A5.1 preview envelope, three of 38 supplied external VMFs still refuse:
+  duplicate IDs, an invalid UV scale and an incomplete brush. All 38 pass the
+  lossless syntax/no-edit checks. Preserve diagnostics and input hashes;
   obtain a minimal licensed/authored reproducer before changing tolerances.
   Falsifier: production `SourceBroomVmfCheck --scene` must accept the reproducer
   with correct bounds/UVs and no silently dropped object; malformed controls
   must remain refused. External map contents/names/logs stay out of public Git.
+- **Initial Source content latency — `mdl/GameFileSystem.cpp`,
+  `mdl/LoadMaterialCollections.cpp`.** A5.1 removes the redundant initial rescan
+  and quadratic browser membership lookup, without dropping catalog entries.
+  The measured large installed-content sample still spends about 5.6 seconds
+  on its first mount/index and 3.8 seconds building 66,741 material registrations.
+  This is one host/workload, not a latency guarantee or a Hammer++ comparison.
+  Falsifier for further optimization: same complete catalog/name signature,
+  zero metadata-triggered pixel decodes, explicit-reload add/remove freshness,
+  and lower measured initial latency. Do not use a stale cache or prune content
+  to manufacture an improvement.
 - **Long-session texture residency — `gl/Resource.h`, `mdl/Map.cpp`.** Source
   catalogs no longer force pixel decoding for metadata. Pixels requested by
   scene references or viewport activation can still accumulate over a long
@@ -26,7 +37,8 @@ These are observed limitations/follow-ups, not a claim that all have a product f
 - **Windows preference regression check — `test/src/tst_QPreferenceStore.cpp`,
   replacement/reload sections.** The A5 full UI run passed 41/42, with this
   untouched test throwing rename `Access is denied` in its task-owned Unicode
-  fixture; one narrow rerun repeated it. Earlier runs also observed intermittent
+  fixture; one narrow rerun repeated it. The A5.1 full run passes 42/42 including
+  this test, but that single pass does not establish a fix. Earlier runs observed intermittent
   sharing failures. The host/watcher cause is not conclusively diagnosed and no
   unrelated product/test code was changed to conceal it. Falsifier: a bounded
   same-host control consistently performs both atomic replacements, observes

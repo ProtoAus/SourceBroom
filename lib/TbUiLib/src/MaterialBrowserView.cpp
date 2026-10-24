@@ -46,7 +46,6 @@
 #include "ui/MapDocument.h"
 
 #include "kd/contracts.h"
-#include "kd/ranges/contains.h"
 #include "kd/ranges/to.h"
 #include "kd/string_compare.h"
 #include "kd/string_compare_natural.h"
@@ -59,6 +58,7 @@
 
 #include <ranges>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace tb::ui
@@ -220,12 +220,14 @@ void MaterialBrowserView::addMaterialToLayout(
 std::vector<const gl::MaterialCollection*> MaterialBrowserView::getCollections() const
 {
   const auto& map = m_document.map();
-  const auto enabledMaterialCollections = mdl::enabledMaterialCollections(map);
+  const auto enabledPaths = mdl::enabledMaterialCollections(map);
+  const auto enabledMaterialCollections =
+    std::unordered_set<std::filesystem::path>{enabledPaths.begin(), enabledPaths.end()};
 
   auto result = std::vector<const gl::MaterialCollection*>{};
   for (const auto& collection : map.materialManager().collections())
   {
-    if (kdl::ranges::contains(enabledMaterialCollections, collection.path()))
+    if (enabledMaterialCollections.contains(collection.path()))
     {
       result.push_back(&collection);
     }

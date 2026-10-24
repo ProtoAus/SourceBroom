@@ -34,6 +34,9 @@ private:
   explicit VmfScene(VmfDocument document);
 
 public:
+  // Finite editor preview envelope, not an engine/branch compatibility claim.
+  static constexpr double PreviewWorldExtent = 131072.0;
+
   VmfScene(VmfScene&&) noexcept;
   VmfScene& operator=(VmfScene&&) noexcept;
   ~VmfScene();

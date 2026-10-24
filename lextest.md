@@ -16,6 +16,24 @@ never overwrite an original user/corpus VMF for a test.
   visible gaps, unexpected collision or surprising controls. Existing automated
   FTESurf compile/load/body logs do not prove this manual feel check.
 
+## A5 owner feedback — observed, limited scope
+
+The owner reports that **some** supplied Momentum Hammer VMFs load, while many
+show `Native VMF load refused: VMF entry 938: invalid or unbounded Source solid`.
+They describe program startup, map loading and opening the materials window as
+very slow. This is actual qualitative owner evidence, not measured latency/FPS,
+all-map compatibility or approval of prop/shader/I/O/collision correctness.
+The compatibility/performance follow-up is active; the specific checks below
+remain pending until actually observed and confirmed.
+
+## A5.1 usability retry — pending owner observation
+
+- [ ] Retry the map that produced entry 938, using the new candidate executable
+  and a copied VMF. Report the profile and exact diagnostic if it still refuses.
+- [ ] Open the material browser, scroll briefly and select a familiar material.
+  Report whether startup/map opening and browser responsiveness feel improved;
+  this observation does not establish a measured speedup or visual parity.
+
 ## A5 authoring-tools candidate — also pending
 
 - [ ] **Ordered native outputs and property hints.** On an owned copy of a CSS or

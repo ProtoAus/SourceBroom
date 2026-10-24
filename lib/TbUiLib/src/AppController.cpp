@@ -39,6 +39,7 @@
 #include "mdl/EnvironmentConfig.h"
 #include "mdl/GameManager.h"
 #include "mdl/MapHeader.h"
+#include "mdl/VmfScene.h"
 #include "ui/AboutDialog.h"
 #include "ui/ActionManager.h"
 #include "ui/CrashDialog.h"
@@ -291,8 +292,10 @@ bool AppController::newDocument()
   return m_mapWindowManager->createDocument(
            *gameInfo,
            mapFormat,
-           mapFormat == mdl::MapFormat::SourceVMF ? vm::bbox3d{-65536.0, 65536.0}
-                                                  : MapDocument::DefaultWorldBounds)
+           mapFormat == mdl::MapFormat::SourceVMF
+             ? vm::
+                 bbox3d{-mdl::VmfScene::PreviewWorldExtent, mdl::VmfScene::PreviewWorldExtent}
+             : MapDocument::DefaultWorldBounds)
          | kdl::transform([&]() {
              m_welcomeWindow->close();
              return true;
@@ -353,7 +356,8 @@ bool AppController::openDocument(const std::filesystem::path& path)
                       mapFormat,
                       (mapFormat == mdl::MapFormat::SourceVMF
                        || kdl::path_to_lower(absPath.extension()) == ".vmf")
-                        ? vm::bbox3d{-65536.0, 65536.0}
+                        ? vm::
+                            bbox3d{-mdl::VmfScene::PreviewWorldExtent, mdl::VmfScene::PreviewWorldExtent}
                         : MapDocument::DefaultWorldBounds,
                       std::move(absPath))
                     | kdl::transform([&]() {

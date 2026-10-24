@@ -1,4 +1,4 @@
-# SourceBroom validation — bounded A5 tools candidate
+# SourceBroom validation — A5.1 usability follow-up
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
@@ -28,21 +28,48 @@ not substituted for compilation or runtime checks.
 
 | Check | Actual result |
 | --- | --- |
-| Full model-library CTest suite | **164/164 passed** |
-| Full normal UI CTest suite, installed-tool opt-in separate | **41/42 passed**; untouched `QPreferenceStore` replacement test failed with Windows rename `Access is denied` |
-| Narrow preference-test recheck | Same access-denied failure; no unrelated product/test repair, no blanket green-suite claim |
+| Full filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 165/165 + 42/42 passed** (248 entries) |
+| Preference replacement history | The untouched test passes this full run; earlier A5 full/narrow runs failed with Windows rename `Access is denied`. One pass is not a fix or a claim of consistent host behavior |
 | Focused accepted-fix UI controls | **4/4 passed**: property/I/O namespace controls, production build backend and metadata/package tools |
 | Lossless supplied corpus | **38/38 passed**, no-edit plus acted in-memory mutation; original SHA-256 unchanged |
-| Scene supplied corpus | **32/38 constructed**; six explicit geometry/UV refusals, not skipped success |
+| Scene supplied corpus | **35/38 constructed** under the shared +/-131072 preview envelope, versus **32/38** under the explicit +/-65536 control; three ID/geometry/UV refusals remain, not skipped success |
 | Native edited ramp/entity/output save | Production native map save/reopen control changes actual ramp bounds, property data and one repeated-output delay; original/copy separation maintained |
 | Installed CSS/Momentum pipeline | Production backend VBSP/VVIS/VRAD completes for an authored native-edited fixture; target headers are BSP20/BSP25, inputs unchanged; no game launched by this check |
-| Installed prop preview | Actual CSS and Momentum model/material fixtures opened in the application and closed with exit zero; input fixtures unchanged |
+| Build-tree A5.1 GUI smoke | Actual Momentum prop fixture and two external copied maps opened and closed with exit zero; inputs unchanged. Title readiness is not visual or owner acceptance |
+| Historical A5 installed GUI smoke | CSS/Momentum starter fixtures opened; the installed-prop description was overbroad because an unsupported input environment variable was ignored. Build-tree prop evidence is separate; installed A5.1 coverage belongs to its receipt |
 | Packaging implementation | Authored custom files and optional short-name synthetic BSP written to new ZIP; independent reader extracts exact bytes; no-overwrite/approval/snapshot/path/budget refusals exercised |
 
-The corpus checks were repeated for A5's parser/snapshot integration; later
-accepted fixes did not change the corpus parser/scene/preservation code. This
-sample is useful evidence, not all-map/all-game coverage. External map names,
-content and raw private logs are not public fixtures.
+The corpus was rerun through syntax/mutation, old-envelope and current-envelope
+arms for A5.1, with all original hashes unchanged. This sample is useful evidence,
+not all-map/all-game coverage. External map names, content and raw private logs
+are not public fixtures.
+
+### Usability controls and measured limits
+
+- A closed authored box translated far beyond the old preview envelope has the
+  expected six faces/eight vertices and exact bounds in the new envelope; its
+  preserving save/reopen is byte-identical. The old envelope refuses it. An open
+  authored brush still refuses even at +/-1048576; no missing face is repaired.
+- The three remaining external refusals are duplicate native IDs, invalid UV
+  scale and an incomplete brush. Larger bounds alone do not conceal them.
+- A smaller +/-32768 diagnostic arm reproduces the reported `entry 938` error on
+  one supplied map; its owned copy opens in the A5.1 GUI. This does not establish
+  which executable/configuration produced the owner's original observation.
+- On one installed Momentum workload, **10,488 collections / 66,741 material
+  registrations** retain the same complete catalog/name signature. Equivalent
+  ordered membership selection measures about **2545 ms linear / 12.6 ms hashed**,
+  including hash-set construction. This is a targeted microbenchmark, not a
+  claimed whole-editor speedup or a Hammer++ comparison.
+- That workload still needs about **5593 ms** for its first mount/index and
+  **3841 ms** for catalog construction. Skipping a redundant initial rescan saves
+  repeated work; no stale cross-map cache or pruning is used. Metadata registration
+  requests zero pixel decodes; an explicitly requested texture subsequently loads.
+- A normal map-level regression proves an initial loose material is registered,
+  a newly added file is absent before explicit reload and present afterward, and
+  removal is reflected after the next reload. Non-Source callers still rescan.
+
+Initial content latency, broad browsing and long-session residency remain limits
+in [BACKLOG.md](../../BACKLOG.md); no universal startup-time promise is made.
 
 ### Acted controls and review closure
 
@@ -68,10 +95,11 @@ content and raw private logs are not public fixtures.
   revalidated; a fresh bounded closure review found no remaining blocker. Parent
   pre/post SHA-256 attestation proved the exact reviewed code stayed unchanged.
 
-The known preference replacement failure was observed before this fix batch as
-well; its implementation/fixture code is untouched. A file watcher/sharing or
-host cause is not conclusively diagnosed. It is recorded, not hidden by skipping
-or weakening a test. See [BACKLOG.md](../../BACKLOG.md).
+The historical preference replacement failure predates this follow-up; its
+implementation/fixture code remains untouched. Although the latest full run
+passes, a file watcher/sharing or host cause is not conclusively diagnosed. It
+remains recorded rather than being declared fixed or hidden by weakening a test.
+See [BACKLOG.md](../../BACKLOG.md).
 
 ## Retained A4 evidence and manual gates
 

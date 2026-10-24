@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5 tools candidate
+# Try the Windows SourceBroom A5.1 usability candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -19,6 +19,20 @@ FTESurf is an optional runtime, not an editor dependency.
 4. Move an existing plain ramp one small grid step, undo/redo, and Save As.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
+
+## Usability follow-up
+
+Source startup no longer repeats its just-completed content scan, and enabled
+material-folder selection uses a hashed lookup instead of repeatedly walking the
+whole list. This does not skip materials or introduce a stale cross-map cache;
+explicit material reload still discovers added and removed loose files.
+
+The shared GUI/checker preview envelope is now **+/-131072 units**. It is an
+editor preview policy, not a promise that every Source branch compiles or plays
+at that size. Open/incomplete brushes, duplicate IDs and invalid UVs still refuse
+rather than being silently repaired or dropped. More detailed brush diagnostics
+include the underlying failure reason. Retry a failing map on a copy in this
+candidate and report its exact diagnostic if it still refuses.
 
 ## New tools to try
 
@@ -75,10 +89,12 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   does not apply cordon clipping itself; unchanged VMF is passed to external tools
   whose behavior must be checked.
 - Base texture/static model preview is not full Source shader/game parity.
-- All 38 supplied maps pass lossless syntax/no-edit checks; six are explicitly
-  refused by scene geometry/UV validation rather than silently dropped.
-- Current regression evidence is **164/164 model tests and 41/42 UI tests**;
-  the untouched Windows preference replacement test has an access-denied failure.
+- All 38 supplied maps pass lossless syntax/no-edit checks; **35/38** construct
+  scenes. Three still refuse for duplicate IDs, invalid UV scale or an incomplete
+  brush; the editor does not silently discard those objects.
+- Current four-suite regression evidence is **248/248 passed**: Fs20, Gl21,
+  Mdl165 and Ui42. A prior untouched Windows preference replacement failure
+  passed in this run but remains a known intermittent finding, not a claimed fix.
   Details and prior A4 evidence are in [VALIDATION.md](VALIDATION.md).
 - The package includes no Valve assets, Source compilers or external user maps.
   Keep the older A4 package as recovery; do not merge different package DLL sets.

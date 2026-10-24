@@ -17,8 +17,9 @@ compatible merely because they also use VMF.
   in-memory mutation checks with original SHA-256 hashes unchanged.
 - **A2 implemented and verified:** native-backed VMF scene construction, stable
   bindings, Source UVs, explicit opaque-feature restrictions, and GUI opening.
-  The 38-file supplied corpus remains byte-identical; 32 load as scenes and six
-  are explicitly refused with geometry/UV diagnostics rather than silently pruned.
+  The 38-file supplied corpus remains byte-identical; the A5.1 larger finite
+  preview envelope now constructs 35 scenes. Three are explicitly refused with
+  ID/geometry/UV diagnostics rather than silently pruned.
 - **A3 implemented for the first alpha:** game-configurable loose/VPK content,
   bounded VTF/VMT base-texture preview, CSS/Momentum/generic Source 1 profiles,
   and demand-driven pixel loading. Actual CSS and Momentum GUI previews render
@@ -36,9 +37,11 @@ compatible merely because they also use VMF.
   preflight, target BSP-header checks, leak/position diagnostics, and explicit
   custom-only distribution ZIPs. These are [bounded tools](SOURCE_TOOLS.md), not
   native metadata authoring, complete dependency discovery or all-branch support.
-  The current [validation](VALIDATION.md) records 164 model-library passes and
-  41/42 UI passes with one untouched Windows preference-test failure; no blanket
-  clean-suite claim. Independent Hammer++/owner checks remain pending.
+  The A5.1 usability follow-up removes duplicate initial Source indexing and
+  quadratic enabled-folder selection. Current [validation](VALIDATION.md) records
+  Fs20/Gl21/Mdl165/Ui42 passing (248 entries). The earlier preference-test failure
+  passed this run but remains an unresolved intermittent finding, not a fix.
+  Independent Hammer++/owner checks remain pending.
 - A6 is not implemented. No Source compiler, Valve content, or third-party/user
   map is bundled. See [alpha instructions](ALPHA.md) for the owner test path.
 

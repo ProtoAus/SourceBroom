@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -47,11 +48,13 @@ namespace fs = std::filesystem;
 void usage()
 {
   std::cout
-    << "SourceBroomVmfCheck [--probe-edit] [--scene] [--] <file.vmf|directory>...\n"
+    << "SourceBroomVmfCheck [--probe-edit] [--scene] [--world-bounds extent] "
+       "[--] <file.vmf|directory>...\n"
        "Read-only native syntax/byte-preservation checker.\n"
        "--probe-edit tests a surgical value edit in memory only.\n"
-       "--scene also loads the production plain-brush scene (bounds +/-65536)\n"
-       "and checks its unchanged serialization; not a BSP/gameplay validator.\n";
+       "--scene loads the production plain-brush scene (default bounds +/-131072)\n"
+       "and checks its unchanged serialization; not a BSP/gameplay validator.\n"
+       "--world-bounds sets an explicit preview extent, not a Source branch contract.\n";
 }
 
 bool isVmf(const fs::path& path)
@@ -108,9 +111,11 @@ void probeEdit(const tb::mdl::VmfDocument& document)
   }
 }
 
-std::array<size_t, 3> probeScene(const tb::mdl::VmfDocument& document)
+std::array<size_t, 3> probeScene(
+  const tb::mdl::VmfDocument& document, const double worldExtent)
 {
-  const auto scene = tb::mdl::VmfScene::read(document.source(), vm::bbox3d{65536.0});
+  const auto scene =
+    tb::mdl::VmfScene::read(document.source(), vm::bbox3d{-worldExtent, worldExtent});
   if (scene.serialize(scene.world()) != document.source())
   {
     throw std::runtime_error{"Unedited native scene differs from input"};
@@ -132,7 +137,8 @@ std::array<size_t, 3> probeScene(const tb::mdl::VmfDocument& document)
   return counts;
 }
 
-size_t checkFile(const fs::path& path, const bool probe, const bool sceneCheck)
+size_t checkFile(
+  const fs::path& path, const bool probe, const bool sceneCheck, const double worldExtent)
 {
   auto stream = std::ifstream{path, std::ios::binary};
   if (!stream)
@@ -169,7 +175,8 @@ size_t checkFile(const fs::path& path, const bool probe, const bool sceneCheck)
     probeEdit(document);
   }
 
-  const auto sceneCounts = sceneCheck ? probeScene(document) : std::array<size_t, 3>{};
+  const auto sceneCounts =
+    sceneCheck ? probeScene(document, worldExtent) : std::array<size_t, 3>{};
   auto blocks = size_t{0};
   auto solids = size_t{0};
   auto sides = size_t{0};
@@ -210,6 +217,8 @@ int main(const int argc, char* argv[])
 {
   auto probe = false;
   auto sceneCheck = false;
+  auto worldExtent = tb::mdl::VmfScene::PreviewWorldExtent;
+  auto customWorldExtent = false;
   auto options = true;
   auto inputs = std::vector<fs::path>{};
   for (auto i = 1; i < argc; ++i)
@@ -228,6 +237,32 @@ int main(const int argc, char* argv[])
     {
       sceneCheck = true;
     }
+    else if (options && arg == "--world-bounds")
+    {
+      if (++i >= argc)
+      {
+        std::cerr << "--world-bounds requires a finite extent in (0, 1048576]\n";
+        return 2;
+      }
+      const auto value = std::string{argv[i]};
+      auto consumed = size_t{0};
+      try
+      {
+        worldExtent = std::stod(value, &consumed);
+      }
+      catch (const std::exception&)
+      {
+        consumed = std::string::npos;
+      }
+      if (
+        consumed != value.size() || !std::isfinite(worldExtent) || worldExtent <= 0.0
+        || worldExtent > 1048576.0)
+      {
+        std::cerr << "--world-bounds requires a finite extent in (0, 1048576]\n";
+        return 2;
+      }
+      customWorldExtent = true;
+    }
     else if (options && arg == "--")
     {
       options = false;
@@ -241,6 +276,11 @@ int main(const int argc, char* argv[])
     {
       inputs.emplace_back(arg);
     }
+  }
+  if (customWorldExtent && !sceneCheck)
+  {
+    std::cerr << "--world-bounds requires --scene\n";
+    return 2;
   }
   if (inputs.empty())
   {
@@ -291,7 +331,7 @@ int main(const int argc, char* argv[])
   {
     try
     {
-      bytes += checkFile(file, probe, sceneCheck);
+      bytes += checkFile(file, probe, sceneCheck, worldExtent);
     }
     catch (const std::exception& e)
     {

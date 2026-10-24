@@ -21,19 +21,191 @@
 #include "base/Logger.h"
 #include "fs/File.h"
 #include "fs/TestEnvironment.h"
+#include "gl/Material.h"
+#include "gl/MaterialCollection.h"
+#include "gl/MaterialManager.h"
+#include "gl/Resource.h"
+#include "gl/ResourceManager.h"
+#include "gl/Texture.h"
 #include "mdl/EnvironmentConfig.h"
 #include "mdl/GameConfig.h"
 #include "mdl/GameFileSystem.h"
+#include "mdl/GameInfo.h"
+#include "mdl/LoadMaterialCollections.h"
+#include "mdl/Map.h"
+#include "mdl/MapFormat.h"
+#include "mdl/Map_Assets.h"
 #include "mdl/SourceContent.h"
 
 #include "kd/result.h"
+#include "kd/task_manager.h"
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
+#include <iostream>
+#include <mutex>
+#include <unordered_set>
 
 #include <catch2/catch_test_macros.hpp>
 
 namespace tb::mdl
 {
+// Explicit opt-in uses installed content read-only, never a public asset fixture.
+TEST_CASE("Source content catalog profiling opt-in", "[.][source][profiling]")
+{
+  const auto* directory = std::getenv("SOURCEBROOM_PROFILE_GAME");
+  REQUIRE(directory);
+  const auto start = std::chrono::steady_clock::now();
+  auto fs = GameFileSystem{};
+  auto logger = NullLogger{};
+  REQUIRE(fs.initializeSource(directory, logger).is_success());
+  const auto mounted = std::chrono::steady_clock::now();
+  REQUIRE(fs.reload().is_success());
+  const auto reloaded = std::chrono::steady_clock::now();
+  auto config = MaterialConfig{};
+  config.root = "materials";
+  config.extensions = {".vmt"};
+  auto taskManager = kdl::task_manager{4};
+  auto resources = std::vector<std::shared_ptr<gl::TextureResource>>{};
+  auto mutex = std::mutex{};
+  auto decodes = std::atomic_size_t{0};
+  const auto create = [&](gl::ResourceLoader<gl::Texture> loader) {
+    auto resource =
+      std::make_shared<gl::TextureResource>([&, loader = std::move(loader)]() {
+        ++decodes;
+        return loader();
+      });
+    resource->setLoadingPolicy(gl::ResourceLoadingPolicy::OnDemand);
+    const auto lock = std::lock_guard{mutex};
+    resources.push_back(resource);
+    return resource;
+  };
+  const auto collections =
+    loadMaterialCollections(fs, config, create, taskManager, logger) | kdl::value();
+  const auto catalogued = std::chrono::steady_clock::now();
+  auto enabledPaths = std::vector<std::filesystem::path>{};
+  for (const auto& collection : collections)
+  {
+    enabledPaths.push_back(collection.path());
+  }
+  const auto selectionStart = std::chrono::steady_clock::now();
+  auto linear = std::vector<std::filesystem::path>{};
+  for (const auto& collection : collections)
+  {
+    if (std::ranges::find(enabledPaths, collection.path()) != enabledPaths.end())
+    {
+      linear.push_back(collection.path());
+    }
+  }
+  const auto linearSelected = std::chrono::steady_clock::now();
+  const auto enabledSet =
+    std::unordered_set<std::filesystem::path>{enabledPaths.begin(), enabledPaths.end()};
+  auto hashed = std::vector<std::filesystem::path>{};
+  for (const auto& collection : collections)
+  {
+    if (enabledSet.contains(collection.path()))
+    {
+      hashed.push_back(collection.path());
+    }
+  }
+  const auto hashedSelected = std::chrono::steady_clock::now();
+  CHECK(linear == hashed);
+  CHECK(hashed == enabledPaths);
+  auto names = std::vector<std::string>{};
+  auto probeId = std::optional<gl::ResourceId>{};
+  for (const auto& collection : collections)
+  {
+    for (const auto& material : collection.materials())
+    {
+      names.push_back(material.name());
+      if (material.name() == "brick/brickwall001a")
+      {
+        probeId = material.textureResource().id();
+      }
+    }
+  }
+  std::ranges::sort(names);
+  auto signature = uint64_t{14695981039346656037ULL};
+  for (const auto& name : names)
+  {
+    for (const auto c : name)
+    {
+      signature = (signature ^ static_cast<unsigned char>(c)) * 1099511628211ULL;
+    }
+    signature *= 1099511628211ULL;
+  }
+  REQUIRE(names.size() > 1000);
+  CHECK(resources.size() == names.size());
+  CHECK(decodes == 0);
+  REQUIRE(probeId.has_value());
+  const auto probe = std::ranges::find_if(
+    resources, [&](const auto& resource) { return resource->id() == *probeId; });
+  REQUIRE(probe != resources.end());
+  (*probe)->loadSync();
+  CHECK(decodes == 1);
+  REQUIRE((*probe)->get());
+  CHECK((*probe)->get()->width() > 0);
+  CHECK((*probe)->get()->height() > 0);
+  const auto probed = std::chrono::steady_clock::now();
+  const auto ms = [](const auto a, const auto b) {
+    return std::chrono::duration<double, std::milli>(b - a).count();
+  };
+  std::cout << "SOURCE_PROFILE mount_ms=" << ms(start, mounted)
+            << " reload_ms=" << ms(mounted, reloaded)
+            << " catalog_ms=" << ms(reloaded, catalogued)
+            << " linear_selection_ms=" << ms(selectionStart, linearSelected)
+            << " hashed_selection_ms=" << ms(linearSelected, hashedSelected)
+            << " probe_ms=" << ms(hashedSelected, probed)
+            << " collections=" << collections.size() << " materials=" << names.size()
+            << " registrations=" << resources.size() << " decoded=" << decodes
+            << " names_fnv64=" << signature << '\n';
+}
+
+TEST_CASE("Source map initial catalog and explicit reload retain loose-file freshness")
+{
+  auto env = fs::TestEnvironment{};
+  env.createFile(
+    "gameinfo.txt", "GameInfo { FileSystem { SearchPaths { Game |gameinfo_path|. } } }");
+  env.createFile("map.vmf", "world { id 1 classname worldspawn }");
+  env.createDirectory("materials");
+  env.createFile("materials/one.vmt", "LightmappedGeneric { $basetexture one }");
+  REQUIRE(env.fileExists("materials/one.vmt"));
+  auto config = GameConfig{};
+  config.name = "Source fresh catalog control";
+  config.fileSystemConfig.packageFormat.format = "vpk";
+  config.materialConfig.root = "materials";
+  config.materialConfig.extensions = {".vmt"};
+  auto gameInfo = makeGameInfo(std::move(config));
+  auto taskManager = kdl::task_manager{2};
+  auto resourceManager = gl::ResourceManager{};
+  auto logger = NullLogger{};
+  auto map = Map::loadMap(
+               EnvironmentConfig{},
+               gameInfo,
+               env.dir(),
+               MapFormat::SourceVMF,
+               vm::bbox3d{65536},
+               env.dir() / "map.vmf",
+               taskManager,
+               resourceManager,
+               logger)
+             | kdl::value();
+  REQUIRE(map->materialManager().materials().size() == 1);
+  CHECK(map->materialManager().materials()[0]->name() == "one");
+  env.createFile("materials/two.vmt", "LightmappedGeneric { $basetexture two }");
+  CHECK(map->materialManager().materials().size() == 1);
+  reloadMaterialCollections(*map);
+  REQUIRE(map->materialManager().materials().size() == 2);
+  REQUIRE(env.remove("materials/one.vmt"));
+  reloadMaterialCollections(*map);
+  REQUIRE(map->materialManager().materials().size() == 1);
+  CHECK(map->materialManager().materials()[0]->name() == "two");
+}
+
 TEST_CASE("SourceContent")
 {
   SECTION("gameinfo search order and tokens")
