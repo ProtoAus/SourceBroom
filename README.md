@@ -1,4 +1,23 @@
-# TrenchBroom
+# SourceBroom
+
+SourceBroom is an early-alpha fork of [TrenchBroom](https://github.com/TrenchBroom/TrenchBroom)
+working toward **native Source 1 VMF editing**, with FTESurf as the first verified
+target and classic Source/Strata profiles planned.
+
+**Status:** initial native document foundation; the GUI still behaves as upstream
+TrenchBroom and does **not** yet open or edit VMFs. No SourceBroom editor binaries
+have been released. Existing upstream support is described below.
+
+- [Ordered alpha roadmap and acceptance gates](docs/sourcebroom/ROADMAP.md)
+- [Development, build, and preservation contract](docs/sourcebroom/DEVELOPMENT.md)
+
+VMF will remain the authoritative editable file, not an export through Quake MAP.
+Valve assets, compiler executables, and user maps are not bundled. The upstream
+GPL-3.0-or-later license and attribution are retained.
+
+---
+
+## Upstream TrenchBroom
 
 [![TrenchBroom Icon](app/TrenchBroom/resources/graphics/images/AppIcon.png)](https://www.youtube.com/watch?v=shcAvnYp9ow)
 

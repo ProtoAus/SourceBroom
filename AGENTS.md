@@ -1,4 +1,13 @@
-# TrenchBroom Coding Agent Guidance
+# SourceBroom Coding Agent Guidance
+
+## SourceBroom contract
+- Read `docs/sourcebroom/ROADMAP.md` and `docs/sourcebroom/DEVELOPMENT.md` before changing Source support; update verified status without overstating capabilities.
+- Native VMF is authoritative. Do not route editing through Quake MAP or discard repeated keys, unknown data, IDs, references, or original numeric text.
+- Never edit the owner's original test corpus or commit third-party/user VMFs, Valve assets, proprietary SDK code, or local logs. Use synthetic public fixtures.
+- The GUI is still upstream TrenchBroom. Do not enable VMF saving before the scene/preservation and safe-save gates are met.
+- Keep the existing CMake/Catch2 infrastructure; parser tests and tools must use the same production code.
+
+# Upstream TrenchBroom Guidance
 
 ## Project structure
 - The project contains several applications under /app. The main application target is TrenchBroom.
