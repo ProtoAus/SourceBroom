@@ -105,6 +105,9 @@ private:
   // brush renderer
   mutable bool m_markedToRenderFace = false;
 
+  // Native Source planes must not use Quake's near-integer epsilon snapping.
+  bool m_preservePlanePrecision = false;
+
 public:
   BrushFace(const BrushFace& other);
   BrushFace(BrushFace&& other) noexcept;
@@ -121,7 +124,8 @@ public:
     m_materialName,
     m_surfaceAttributes,
     m_materialReference,
-    m_uvCoordSystem);
+    m_uvCoordSystem,
+    m_preservePlanePrecision);
 
   /**
    * Creates a face using TB's default UV projection for the given map format and the
@@ -179,6 +183,19 @@ public:
     const vm::vec3d& vAxis,
     MapFormat mapFormat);
 
+  /** Native planes opt out of near-integer correction, including after transforms. */
+  static Result<BrushFace> createFromValve(
+    const vm::vec3d& point1,
+    const vm::vec3d& point2,
+    const vm::vec3d& point3,
+    std::string materialName,
+    const UvAttributes& uvAttributes,
+    const SurfaceAttributes& surfaceAttributes,
+    const vm::vec3d& uAxis,
+    const vm::vec3d& vAxis,
+    MapFormat mapFormat,
+    bool preservePlanePrecision);
+
   /**
    * Creates a face with the given UV coordinate system, which carries the face's UV
    * attributes.
@@ -190,6 +207,17 @@ public:
     std::string materialName,
     UvCoordSystem uvCoordSystem,
     const SurfaceAttributes& surfaceAttributes);
+
+  static Result<BrushFace> create(
+    const vm::vec3d& point0,
+    const vm::vec3d& point1,
+    const vm::vec3d& point2,
+    std::string materialName,
+    UvCoordSystem uvCoordSystem,
+    const SurfaceAttributes& surfaceAttributes,
+    bool preservePlanePrecision);
+
+  bool preservesPlanePrecision() const;
 
   BrushFace(
     const BrushFace::Points& points,

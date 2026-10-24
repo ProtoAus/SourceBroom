@@ -49,6 +49,8 @@ enum class MapFormat
    * Valve 220 map format.
    */
   Valve,
+  /** Native Source 1 VMF; never a Valve 220 MAP export. */
+  SourceVMF,
   /**
    * Hexen 2 map format.
    */

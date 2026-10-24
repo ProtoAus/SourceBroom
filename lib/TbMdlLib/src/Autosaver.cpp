@@ -25,6 +25,8 @@
 #include "fs/TraversalMode.h"
 #include "mdl/CommandProcessor.h"
 #include "mdl/Map.h"
+#include "mdl/MapFormat.h"
+#include "mdl/WorldNode.h"
 
 #include "kd/contracts.h"
 #include "kd/path_utils.h"
@@ -57,10 +59,14 @@ Result<std::filesystem::path> ensureAutosaveDirectory(
 }
 
 Result<std::vector<std::filesystem::path>> collectBackups(
-  const std::filesystem::path& autosavePath, const std::filesystem::path& mapBasename)
+  const std::filesystem::path& autosavePath,
+  const std::filesystem::path& mapBasename,
+  const std::filesystem::path& mapExtension)
 {
   return fs::Disk::find(
-           autosavePath, fs::TraversalMode::Flat, makeBackupPathMatcher(mapBasename))
+           autosavePath,
+           fs::TraversalMode::Flat,
+           makeBackupPathMatcher(mapBasename, mapExtension))
          | kdl::transform(
            [](auto backupPaths) { return kdl::vec_sort(std::move(backupPaths)); });
 }
@@ -93,19 +99,23 @@ Result<std::vector<std::filesystem::path>> thinBackups(
 }
 
 std::filesystem::path makeBackupName(
-  const std::filesystem::path& mapBasename, const size_t index)
+  const std::filesystem::path& mapBasename,
+  const size_t index,
+  const std::filesystem::path& mapExtension)
 {
-  return kdl::path_add_extension(mapBasename, fmt::format(".{}.map", index));
+  return kdl::path_add_extension(
+    mapBasename, fmt::format(".{}{}", index, mapExtension.string()));
 }
 
 Result<void> cleanBackups(
   const std::vector<std::filesystem::path>& backups,
   const std::filesystem::path& mapBasename,
-  const std::filesystem::path& autosavePath)
+  const std::filesystem::path& autosavePath,
+  const std::filesystem::path& mapExtension)
 {
   const auto cleanBackup = [&](const auto i, const auto& backup) {
     const auto& oldName = backup.filename();
-    const auto newName = makeBackupName(mapBasename, size_t(i) + 1);
+    const auto newName = makeBackupName(mapBasename, size_t(i) + 1, mapExtension);
 
     return oldName != newName ? fs::Disk::moveFile(backup, autosavePath / newName)
                               : Result<void>{};
@@ -119,20 +129,22 @@ Result<void> cleanBackups(
 
 } // namespace
 
-fs::PathMatcher makeBackupPathMatcher(std::filesystem::path mapBasename_)
+fs::PathMatcher makeBackupPathMatcher(
+  std::filesystem::path mapBasename_, std::filesystem::path mapExtension_)
 {
-  return
-    [mapBasename = std::move(mapBasename_)](const auto& path, const auto& getPathInfo) {
-      const auto backupName = path.stem();
-      const auto backupBasename = backupName.stem();
-      const auto backupExtension = backupName.extension().string();
-      const auto backupNum = backupExtension.empty() ? "" : backupExtension.substr(1);
+  return [mapBasename = std::move(mapBasename_),
+          mapExtension = kdl::path_to_lower(mapExtension_)](
+           const auto& path, const auto& getPathInfo) {
+    const auto backupName = path.stem();
+    const auto backupBasename = backupName.stem();
+    const auto backupExtension = backupName.extension().string();
+    const auto backupNum = backupExtension.empty() ? "" : backupExtension.substr(1);
 
-      return getPathInfo(path) == fs::PathInfo::File
-             && kdl::path_to_lower(path.extension()) == ".map"
-             && backupBasename == mapBasename && kdl::str_is_numeric(backupNum)
-             && kdl::str_to_size(backupNum).value_or(0u) > 0u;
-    };
+    return getPathInfo(path) == fs::PathInfo::File
+           && kdl::path_to_lower(path.extension()) == mapExtension
+           && backupBasename == mapBasename && kdl::str_is_numeric(backupNum)
+           && kdl::str_to_size(backupNum).value_or(0u) > 0u;
+  };
 }
 
 Autosaver::Autosaver(
@@ -161,20 +173,25 @@ void Autosaver::autosave()
   const auto& mapPath = m_map.path();
   contract_assert(fs::Disk::pathInfo(mapPath) == fs::PathInfo::File);
 
-  const auto mapFilename = mapPath.filename();
   const auto mapBasename = mapPath.stem();
+  const auto mapExtension = m_map.worldNode().mapFormat() == MapFormat::SourceVMF
+                              ? std::filesystem::path{".vmf"}
+                              : std::filesystem::path{".map"};
 
   ensureAutosaveDirectory(mapPath) | kdl::and_then([&](const auto& autosavePath) {
-    return collectBackups(autosavePath, mapBasename) | kdl::and_then([&](auto backups) {
-             return thinBackups(m_map.logger(), backups, m_maxBackups);
-           })
+    return collectBackups(autosavePath, mapBasename, mapExtension)
+           | kdl::and_then([&](auto backups) {
+               return thinBackups(m_map.logger(), backups, m_maxBackups);
+             })
            | kdl::and_then([&](auto remainingBackups) {
-               return cleanBackups(remainingBackups, mapBasename, autosavePath)
+               return cleanBackups(
+                        remainingBackups, mapBasename, autosavePath, mapExtension)
                       | kdl::and_then([&]() -> Result<std::filesystem::path> {
                           contract_assert(remainingBackups.size() < m_maxBackups);
 
                           const auto backupNo = remainingBackups.size() + 1;
-                          return autosavePath / makeBackupName(mapBasename, backupNo);
+                          return autosavePath
+                                 / makeBackupName(mapBasename, backupNo, mapExtension);
                         });
              });
   }) | kdl::and_then([&](const auto& backupFilePath) {

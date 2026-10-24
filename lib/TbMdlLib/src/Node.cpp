@@ -126,6 +126,7 @@ void Node::cloneAttributes(Node& node) const
 {
   node.setVisibilityState(m_visibilityState);
   node.setLockState(m_lockState);
+  node.setFilePosition(m_lineNumber, m_lineCount);
 }
 
 std::vector<Node*> Node::clone(

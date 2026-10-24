@@ -30,7 +30,6 @@
 #include <QTimer>
 
 #include "base/Logger.h"
-#include "base/PreferenceManager.h"
 #include "fs/DiskIO.h"
 #include "fs/PathInfo.h"
 #include "gl/FontManager.h"
@@ -40,7 +39,6 @@
 #include "mdl/EnvironmentConfig.h"
 #include "mdl/GameManager.h"
 #include "mdl/MapHeader.h"
-#include "prefs/Preferences.h"
 #include "ui/AboutDialog.h"
 #include "ui/ActionManager.h"
 #include "ui/CrashDialog.h"
@@ -63,6 +61,7 @@
 #include "kd/const_overload.h"
 #include "kd/contracts.h"
 #include "kd/filesystem_utils.h"
+#include "kd/path_utils.h"
 #include "kd/ranges/contains.h"
 #include "kd/ranges/join_with_view.h"
 #include "kd/ranges/to.h"
@@ -142,32 +141,37 @@ std::optional<std::tuple<std::string, mdl::MapFormat>> detectOrQueryGameAndForma
   AppController& appController, const std::filesystem::path& path)
 {
   return kdl::with_istream(path, mdl::readMapHeader)
-         | kdl::transform(kdl::unpack(
-           [&](auto gameName, auto mapFormat)
-             -> std::optional<std::tuple<std::string, mdl::MapFormat>> {
-             const auto& gameManager = appController.gameManager();
-             const auto gameList = gameManager.gameInfos()
-                                   | std::views::transform([](const auto& gameInfo) {
-                                       return gameInfo.gameConfig.name;
-                                     })
-                                   | kdl::ranges::to<std::vector>();
-
-             if (
-               gameName == std::nullopt || !kdl::ranges::contains(gameList, *gameName)
-               || mapFormat == mdl::MapFormat::Unknown)
-             {
-               auto queriedGameNameAndMapFormat =
-                 GameDialog::showOpenDocumentDialog(appController);
-               if (!queriedGameNameAndMapFormat)
+         | kdl::transform(
+           kdl::unpack(
+             [&](auto gameName, auto mapFormat)
+               -> std::optional<std::tuple<std::string, mdl::MapFormat>> {
+               if (kdl::path_to_lower(path.extension()) == ".vmf")
                {
-                 return std::nullopt;
+                 mapFormat = mdl::MapFormat::SourceVMF;
+               }
+               const auto& gameManager = appController.gameManager();
+               const auto gameList = gameManager.gameInfos()
+                                     | std::views::transform([](const auto& gameInfo) {
+                                         return gameInfo.gameConfig.name;
+                                       })
+                                     | kdl::ranges::to<std::vector>();
+
+               if (
+                 gameName == std::nullopt || !kdl::ranges::contains(gameList, *gameName)
+                 || mapFormat == mdl::MapFormat::Unknown)
+               {
+                 auto queriedGameNameAndMapFormat = GameDialog::showOpenDocumentDialog(
+                   appController, nullptr, mapFormat == mdl::MapFormat::SourceVMF);
+                 if (!queriedGameNameAndMapFormat)
+                 {
+                   return std::nullopt;
+                 }
+
+                 std::tie(gameName, mapFormat) = *queriedGameNameAndMapFormat;
                }
 
-               std::tie(gameName, mapFormat) = *queriedGameNameAndMapFormat;
-             }
-
-             return std::tuple{std::move(*gameName), mapFormat};
-           }))
+               return std::tuple{std::move(*gameName), mapFormat};
+             }))
          | kdl::transform_error([](const auto&) { return std::nullopt; }) | kdl::value();
 }
 
@@ -267,32 +271,10 @@ ActionManager& AppController::actionManager()
 
 void AppController::askForAutoUpdates()
 {
-  if (pref(Preferences::AskForAutoUpdates))
-  {
-    auto& prefs = PreferenceManager::instance();
-
-    const auto enableAutoCheck =
-      QMessageBox::question(
-        nullptr,
-        "TrenchBroom",
-        tr(
-          R"(TrenchBroom can check for updates automatically. Would you like to enable this now?)"),
-        QMessageBox::Yes | QMessageBox::No)
-      == QMessageBox::Yes;
-
-    prefs.set(Preferences::AutoCheckForUpdates, enableAutoCheck);
-    prefs.set(Preferences::AskForAutoUpdates, false);
-    prefs.saveChanges();
-  }
+  // No automatic update/install channel exists for SourceBroom alpha.
 }
 
-void AppController::triggerAutoUpdateCheck()
-{
-  if (pref(Preferences::AutoCheckForUpdates))
-  {
-    m_updater->checkForUpdates();
-  }
-}
+void AppController::triggerAutoUpdateCheck() {}
 
 bool AppController::newDocument()
 {
@@ -307,7 +289,10 @@ bool AppController::newDocument()
   contract_assert(gameInfo != nullptr);
 
   return m_mapWindowManager->createDocument(
-           *gameInfo, mapFormat, MapDocument::DefaultWorldBounds)
+           *gameInfo,
+           mapFormat,
+           mapFormat == mdl::MapFormat::SourceVMF ? vm::bbox3d{-65536.0, 65536.0}
+                                                  : MapDocument::DefaultWorldBounds)
          | kdl::transform([&]() {
              m_welcomeWindow->close();
              return true;
@@ -326,7 +311,7 @@ void AppController::openDocument()
     nullptr,
     tr("Open Map"),
     fileDialogDefaultDirectory(FileDialogDir::Map),
-    "Map files (*.map);;Any files (*.*)");
+    "Map files (*.vmf *.map);;Any files (*.*)");
 
   if (const auto path = pathFromQString(pathStr); !path.empty())
   {
@@ -366,7 +351,10 @@ bool AppController::openDocument(const std::filesystem::path& path)
              return m_mapWindowManager->loadDocument(
                       *gameInfo,
                       mapFormat,
-                      MapDocument::DefaultWorldBounds,
+                      (mapFormat == mdl::MapFormat::SourceVMF
+                       || kdl::path_to_lower(absPath.extension()) == ".vmf")
+                        ? vm::bbox3d{-65536.0, 65536.0}
+                        : MapDocument::DefaultWorldBounds,
                       std::move(absPath))
                     | kdl::transform([&]() {
                         m_welcomeWindow->close();

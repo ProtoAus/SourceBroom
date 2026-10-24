@@ -108,7 +108,8 @@ public:
     const vm::mat4x4d& transformation,
     const vm::vec2f& textureSize,
     bool lockTexture,
-    const vm::vec3d& invariant);
+    const vm::vec3d& invariant,
+    bool preserveUnwrappedOffsets = false);
 
   void shear(const vm::vec3d& normal, const vm::vec2f& factors);
 

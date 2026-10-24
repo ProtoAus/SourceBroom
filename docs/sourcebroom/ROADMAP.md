@@ -1,8 +1,12 @@
 # SourceBroom alpha roadmap
 
 SourceBroom is a GPL-3.0-or-later fork of [TrenchBroom](https://github.com/TrenchBroom/TrenchBroom)
-for native Source 1 VMF editing. FTESurf is the first verification target, not the
-only intended destination. Source 2 / VMAP is out of scope.
+for native Source 1 VMF editing across Source games. **Counter-Strike: Source and
+Momentum Mod are the first supported game profiles.** FTESurf/WorldofSurf is an
+additional verification target, never an editor dependency. Content mounts,
+FGDs, compilers, launch settings, and branch limits are profile-configurable.
+Source 2 / VMAP is out of scope; untested Source 1 branches are not presumed
+compatible merely because they also use VMF.
 
 ## Current status
 
@@ -12,9 +16,24 @@ only intended destination. Source 2 / VMAP is out of scope.
   checker. [Validation and limitations](VALIDATION.md): 141 model-library tests
   pass (including 9 VMF cases); all 38 supplied maps pass byte-preservation and
   in-memory mutation checks with original SHA-256 hashes unchanged.
-- **A2 and later not implemented.** The GUI is still upstream TrenchBroom. It does
-  not yet open, render, edit, or save VMFs. There is no SourceBroom editor release.
-- No Source compiler, Valve content, or third-party/user map is bundled.
+- **A2 implemented and verified:** native-backed VMF scene construction, stable
+  bindings, Source UVs, explicit opaque-feature restrictions, and GUI opening.
+  The 38-file supplied corpus remains byte-identical; 32 load as scenes and six
+  are explicitly refused with geometry/UV diagnostics rather than silently pruned.
+- **A3 implemented for the first alpha:** game-configurable loose/VPK content,
+  bounded VTF/VMT base-texture preview, CSS/Momentum/generic Source 1 profiles,
+  and demand-driven pixel loading. Actual CSS and Momentum GUI previews render
+  and close cleanly. This is not full Source shader or MDL rendering.
+- **A4 automated loop verified; manual acceptance pending:** bounded native-backed
+  brush/entity edits, undo/redo, preserving Save As/backup transactions, and an
+  external Compile / Compile & Play dialog. An authored ramp edit saves/reopens
+  natively; classic Source and Strata compilers build BSPs that load in isolated
+  FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
+  in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
+- Windows packaging/install smoke passes. No public binary release is claimed.
+- A5 and later are not implemented. No Source compiler, Valve content, or
+  third-party/user map is bundled. See [alpha instructions](ALPHA.md) and
+  [current validation](VALIDATION.md) for supported operations and limits.
 
 A stage is complete only when its exit criteria have evidence. Parsing is not
 semantic validation; byte preservation is not Hammer compatibility; a build is

@@ -27,9 +27,12 @@
 #include "mdl/LayerNode.h" // IWYU pragma: keep
 #include "mdl/Map.h"
 #include "mdl/MapFixture.h"
+#include "mdl/MapFormat.h"
+#include "mdl/Map_Entities.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/TestFactory.h"
 #include "mdl/Transaction.h"
+#include "mdl/WorldNode.h"
 #include "version/Version.h"
 
 #include "kd/vector_utils.h"
@@ -227,6 +230,41 @@ TEST_CASE("Autosaver")
     CHECK(env.fileExists("autosave/test.2.map"));
   }
 
+  SECTION("Native VMF backups rotate as VMF and reopen without changing the source")
+  {
+    const auto source = std::string{R"(versioninfo { "formatversion" "100" }
+world { "id" "1" "classname" "worldspawn" "message" "original" })"};
+    env.createFile("native.vmf", source);
+    env.createDirectory("autosave");
+    env.createFile("autosave/native.1.map", "unrelated format; retain");
+    auto nativeFixture = MapFixture{};
+    auto& nativeMap = nativeFixture.load(env.dir() / "native.vmf");
+    REQUIRE(nativeMap.worldNode().mapFormat() == MapFormat::SourceVMF);
+    auto nativeAutosaver = Autosaver{nativeMap, 0s, 2};
+    for (auto i = 1; i <= 4; ++i)
+    {
+      REQUIRE(setEntityProperty(nativeMap, "message", std::to_string(i)));
+      nativeAutosaver.triggerAutosave();
+    }
+    REQUIRE(env.fileExists("autosave/native.1.vmf"));
+    REQUIRE(env.fileExists("autosave/native.2.vmf"));
+    CHECK_FALSE(env.fileExists("autosave/native.3.vmf"));
+    CHECK(env.loadFile("autosave/native.1.map") == "unrelated format; retain");
+    CHECK(env.loadFile("native.vmf") == source);
+    CHECK(nativeMap.modified());
+    CHECK(nativeMap.path() == env.dir() / "native.vmf");
+    for (auto i = 1; i <= 2; ++i)
+    {
+      auto recovered = MapFixture{};
+      auto& reopened =
+        recovered.load(env.dir() / fmt::format("autosave/native.{}.vmf", i));
+      CHECK(reopened.worldNode().mapFormat() == MapFormat::SourceVMF);
+      const auto* message = reopened.worldNode().entity().property("message");
+      REQUIRE(message);
+      CHECK(*message == std::to_string(i + 2));
+    }
+  }
+
   SECTION("Cleanup")
   {
     constexpr auto maxBackups = 3u;
@@ -276,10 +314,11 @@ TEST_CASE("Autosaver")
       REQUIRE(env.directoryContents("autosave") == initialPaths);
       REQUIRE_THAT(
         initialPaths | std::views::transform(loadFile),
-        RangeEquals(std::vector{
-          "autosave/test.1.map",
-          "autosave/test.2.map",
-        }));
+        RangeEquals(
+          std::vector{
+            "autosave/test.1.map",
+            "autosave/test.2.map",
+          }));
 
       REQUIRE(map.saveAs(env.dir() / "test.map"));
       REQUIRE(env.fileExists("test.map"));
@@ -298,11 +337,12 @@ TEST_CASE("Autosaver")
       CHECK(env.directoryContents("autosave") == allPaths);
       CHECK_THAT(
         allPaths | std::views::transform(loadFile),
-        RangeEquals(std::vector<std::string>{
-          "autosave/test.1.map",
-          "autosave/test.2.map",
-          savedMapWithOneEntity,
-        }));
+        RangeEquals(
+          std::vector<std::string>{
+            "autosave/test.1.map",
+            "autosave/test.2.map",
+            savedMapWithOneEntity,
+          }));
 
       // modify the map again
       addNodes(map, {{map.editorContext().currentLayer(), {new EntityNode{{}}}}});
@@ -313,11 +353,12 @@ TEST_CASE("Autosaver")
       CHECK(env.directoryContents("autosave") == allPaths);
       CHECK_THAT(
         allPaths | std::views::transform(loadFile),
-        RangeEquals(std::vector<std::string>{
-          "autosave/test.2.map",
-          savedMapWithOneEntity,
-          savedMapWithTwoEntities,
-        }));
+        RangeEquals(
+          std::vector<std::string>{
+            "autosave/test.2.map",
+            savedMapWithOneEntity,
+            savedMapWithTwoEntities,
+          }));
     }
 
     SECTION("Gaps are compacted")
@@ -335,10 +376,11 @@ TEST_CASE("Autosaver")
       REQUIRE(env.directoryContents("autosave") == initialPaths);
       REQUIRE_THAT(
         initialPaths | std::views::transform(loadFile),
-        RangeEquals(std::vector{
-          "autosave/test.1.map",
-          "autosave/test.3.map",
-        }));
+        RangeEquals(
+          std::vector{
+            "autosave/test.1.map",
+            "autosave/test.3.map",
+          }));
 
       REQUIRE(map.saveAs(env.dir() / "test.map"));
       REQUIRE(env.fileExists("test.map"));
@@ -360,11 +402,12 @@ TEST_CASE("Autosaver")
       CHECK(env.directoryContents("autosave") == allPaths);
       CHECK_THAT(
         allPaths | std::views::transform(loadFile),
-        RangeEquals(std::vector<std::string>{
-          "autosave/test.1.map",
-          "autosave/test.3.map",
-          savedMapWithOneEntity,
-        }));
+        RangeEquals(
+          std::vector<std::string>{
+            "autosave/test.1.map",
+            "autosave/test.3.map",
+            savedMapWithOneEntity,
+          }));
     }
 
     SECTION("1 extra backup is deleted")
@@ -405,11 +448,12 @@ TEST_CASE("Autosaver")
       CHECK(env.directoryContents("autosave") == allPaths);
       CHECK_THAT(
         allPaths | std::views::transform(loadFile),
-        RangeEquals(std::vector<std::string>{
-          "autosave/test.3.map",
-          "autosave/test.4.map",
-          savedMapWithOneEntity,
-        }));
+        RangeEquals(
+          std::vector<std::string>{
+            "autosave/test.3.map",
+            "autosave/test.4.map",
+            savedMapWithOneEntity,
+          }));
     }
 
     SECTION("2 extra backups are deleted")
@@ -451,11 +495,12 @@ TEST_CASE("Autosaver")
       CHECK(env.directoryContents("autosave") == allPaths);
       CHECK_THAT(
         allPaths | std::views::transform(loadFile),
-        RangeEquals(std::vector<std::string>{
-          "autosave/test.4.map",
-          "autosave/test.5.map",
-          savedMapWithOneEntity,
-        }));
+        RangeEquals(
+          std::vector<std::string>{
+            "autosave/test.4.map",
+            "autosave/test.5.map",
+            savedMapWithOneEntity,
+          }));
     }
   }
 }

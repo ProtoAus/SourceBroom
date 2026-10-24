@@ -98,6 +98,8 @@ target_sources(TbMdlLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadSkin.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadSpriteModel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadTexture.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadVtfTexture.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SourceContent.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadWalTexture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LockState.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LongPropertyKeyValidator.cpp
@@ -196,6 +198,8 @@ target_sources(TbMdlLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ValidatorRegistry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/VisualEffect.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/VmfDocument.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/VmfFile.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/VmfScene.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/VisibilityState.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WadPropertyUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WorldBoundsValidator.cpp
@@ -206,6 +210,26 @@ target_sources(TbMdlLib
   PUBLIC FILE_SET headers TYPE HEADERS
     BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+# cpptrace already fetches pinned zstd; Windows DbgHelp does not build its decoder.
+if(NOT TARGET libzstd_static AND DEFINED cpptrace-zstd_SOURCE_DIR)
+  function(add_source_vtf_zstd)
+    set(ZSTD_BUILD_PROGRAMS OFF)
+    set(ZSTD_BUILD_TESTS OFF)
+    set(ZSTD_BUILD_SHARED OFF)
+    set(ZSTD_BUILD_STATIC ON)
+    set(ZSTD_BUILD_COMPRESSION OFF)
+    set(ZSTD_BUILD_DECOMPRESSION ON)
+    set(ZSTD_BUILD_DICTBUILDER OFF)
+    add_subdirectory("${cpptrace-zstd_SOURCE_DIR}/build/cmake"
+      "${CMAKE_CURRENT_BINARY_DIR}/source-vtf-zstd" EXCLUDE_FROM_ALL)
+  endfunction()
+  add_source_vtf_zstd()
+endif()
+if(TARGET libzstd_static)
+  target_link_libraries(TbMdlLib PRIVATE libzstd_static)
+  target_compile_definitions(TbMdlLib PRIVATE TB_SOURCE_VTF_ZSTD=1)
+endif()
 
 target_link_libraries(TbMdlLib
   PRIVATE

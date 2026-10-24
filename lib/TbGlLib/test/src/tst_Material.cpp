@@ -62,6 +62,38 @@ TEST_CASE("Material")
     CHECK(std::as_const(material).texture() == material.textureResource().get());
   }
 
+  SECTION("metadata probes do not request deferred textures but activation does")
+  {
+    auto resource = std::make_shared<TextureResource>(
+      []() -> Result<Texture> { return Error{"unused catalog texture"}; });
+    resource->setLoadingPolicy(ResourceLoadingPolicy::OnDemand);
+    auto material = Material{"deferred Source material", resource};
+    for (auto i = 0; i < 100; ++i)
+    {
+      CHECK(material.texture() == nullptr);
+      CHECK(std::as_const(material).texture() == nullptr);
+      CHECK(material.textureResource().get() == nullptr);
+    }
+    CHECK_FALSE(resource->needsProcessing());
+    auto gl = MockGl{};
+    const auto sceneReference = GENERATE(false, true);
+    if (sceneReference)
+    {
+      material.incUsageCount();
+    }
+    else
+    {
+      material.activate(gl, GL_LINEAR, GL_LINEAR);
+    }
+    CHECK(resource->needsProcessing());
+    CHECK(resource->get() == nullptr);
+    material.deactivate(gl);
+    if (sceneReference)
+    {
+      material.decUsageCount();
+    }
+  }
+
   SECTION("usageCount, incUsageCount and decUsageCount")
   {
     auto material = Material{"some material", createTextureResource(Texture{4, 4})};

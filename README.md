@@ -1,13 +1,18 @@
 # SourceBroom
 
 SourceBroom is an early-alpha fork of [TrenchBroom](https://github.com/TrenchBroom/TrenchBroom)
-working toward **native Source 1 VMF editing**, with FTESurf as the first verified
-target and classic Source/Strata profiles planned.
+for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
+and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
+FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** initial native document foundation; the GUI still behaves as upstream
-TrenchBroom and does **not** yet open or edit VMFs. No SourceBroom editor binaries
-have been released. Existing upstream support is described below.
+**Status:** first Windows interactive-alpha candidate: native VMF opening,
+base-texture preview, bounded existing-brush/entity edits, preserving saves,
+and external compile/play. Automated classic Source and Strata compile/runtime
+checks pass; independent Hammer++ visual acceptance is pending. This is not yet
+full Source authoring, displacement editing, prop rendering, or a general release.
 
+- [Try the Windows alpha and understand its limits](docs/sourcebroom/ALPHA.md)
+- [Measured validation and pending acceptance](docs/sourcebroom/VALIDATION.md)
 - [Ordered alpha roadmap and acceptance gates](docs/sourcebroom/ROADMAP.md)
 - [Development, build, and preservation contract](docs/sourcebroom/DEVELOPMENT.md)
 

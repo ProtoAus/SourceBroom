@@ -168,8 +168,9 @@ void loadStyle(QApplication& app)
       // on the text again.
       if (element == QStyle::SE_ComboBoxLayoutItem && rect.isValid())
       {
-        if (const auto* comboBox = qobject_cast<const QComboBox*>(widget);
-            comboBox && !comboBox->isEditable())
+        if (
+          const auto* comboBox = qobject_cast<const QComboBox*>(widget);
+          comboBox && !comboBox->isEditable())
         {
           auto comboBoxOption = QStyleOptionComboBox{};
           comboBoxOption.initFrom(comboBox);
@@ -373,11 +374,11 @@ int main(int argc, char* argv[])
   }
 
   // Needs to be set before creating the preference manager
-  QApplication::setApplicationName("TrenchBroom");
+  QApplication::setApplicationName("SourceBroom");
   // Needs to be "" otherwise Qt adds this to the paths returned by QStandardPaths
   // which would cause preferences to move from where they were with wx
   QApplication::setOrganizationName("");
-  QApplication::setOrganizationDomain("io.github.trenchbroom");
+  QApplication::setOrganizationDomain("io.github.protoaus.sourcebroom");
 
   // QApplication must be created before QPreferenceStore because QPreferenceStore uses
   // QFileSystemWatcher, which requires a QApplication instance

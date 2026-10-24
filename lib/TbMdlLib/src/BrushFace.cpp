@@ -106,6 +106,7 @@ BrushFace::BrushFace(const BrushFace& other)
   , m_lineNumber{other.m_lineNumber}
   , m_lineCount{other.m_lineCount}
   , m_selected{other.m_selected}
+  , m_preservePlanePrecision{other.m_preservePlanePrecision}
 {
 }
 
@@ -123,6 +124,7 @@ BrushFace::BrushFace(BrushFace&& other) noexcept
   , m_lineNumber{other.m_lineNumber}
   , m_lineCount{other.m_lineCount}
   , m_selected{other.m_selected}
+  , m_preservePlanePrecision{other.m_preservePlanePrecision}
 // NOLINTEND(bugprone-use-after-move)
 {
 }
@@ -149,6 +151,7 @@ void swap(BrushFace& lhs, BrushFace& rhs) noexcept
   swap(lhs.m_lineCount, rhs.m_lineCount);
   swap(lhs.m_selected, rhs.m_selected);
   swap(lhs.m_markedToRenderFace, rhs.m_markedToRenderFace);
+  swap(lhs.m_preservePlanePrecision, rhs.m_preservePlanePrecision);
 }
 
 BrushFace::~BrushFace() = default;
@@ -211,6 +214,31 @@ Result<BrushFace> BrushFace::createFromValve(
   const vm::vec3d& vAxis,
   const MapFormat mapFormat)
 {
+  return createFromValve(
+    point1,
+    point2,
+    point3,
+    std::move(materialName),
+    uvAttributes,
+    surfaceAttributes,
+    uAxis,
+    vAxis,
+    mapFormat,
+    false);
+}
+
+Result<BrushFace> BrushFace::createFromValve(
+  const vm::vec3d& point1,
+  const vm::vec3d& point2,
+  const vm::vec3d& point3,
+  std::string materialName,
+  const UvAttributes& uvAttributes,
+  const SurfaceAttributes& surfaceAttributes,
+  const vm::vec3d& uAxis,
+  const vm::vec3d& vAxis,
+  const MapFormat mapFormat,
+  const bool preservePlanePrecision)
+{
   contract_pre(mapFormat != MapFormat::Unknown);
 
   return createUvCoordSystemFromAxes(
@@ -222,7 +250,8 @@ Result<BrushFace> BrushFace::createFromValve(
                point3,
                std::move(materialName),
                std::move(uvCoordSystem),
-               surfaceAttributes);
+               surfaceAttributes,
+               preservePlanePrecision);
            });
 }
 
@@ -234,15 +263,39 @@ Result<BrushFace> BrushFace::create(
   UvCoordSystem uvCoordSystem,
   const SurfaceAttributes& surfaceAttributes)
 {
-  auto points = Points{{vm::correct(point0), vm::correct(point1), vm::correct(point2)}};
+  return create(
+    point0,
+    point1,
+    point2,
+    std::move(materialName),
+    std::move(uvCoordSystem),
+    surfaceAttributes,
+    false);
+}
+
+Result<BrushFace> BrushFace::create(
+  const vm::vec3d& point0,
+  const vm::vec3d& point1,
+  const vm::vec3d& point2,
+  std::string materialName,
+  UvCoordSystem uvCoordSystem,
+  const SurfaceAttributes& surfaceAttributes,
+  const bool preservePlanePrecision)
+{
+  auto points =
+    preservePlanePrecision
+      ? Points{{point0, point1, point2}}
+      : Points{{vm::correct(point0), vm::correct(point1), vm::correct(point2)}};
   if (const auto plane = vm::from_points(points[0], points[1], points[2]))
   {
-    return BrushFace{
+    auto face = BrushFace{
       points,
       *plane,
       std::move(materialName),
       std::move(uvCoordSystem),
       surfaceAttributes};
+    face.m_preservePlanePrecision = preservePlanePrecision;
+    return face;
   }
   return Error{"Brush has invalid face"};
 }
@@ -700,8 +753,22 @@ Result<void> BrushFace::transform(const vm::mat4x4d& transform, const bool lockA
   }
 
   return setPoints(m_points[0], m_points[1], m_points[2]) | kdl::transform([&]() {
-           m_uvCoordSystem.transform(
-             oldBoundary, m_boundary, transform, textureSize(), lockAlignment, invariant);
+           // Native UV axes already define a world-space projection. Translating a
+           // plane with unlocked UVs must not select a different Quake projection.
+           if (
+             !m_preservePlanePrecision || lockAlignment
+             || !vm::is_equal(
+               oldBoundary.normal, m_boundary.normal, vm::Cd::almost_zero()))
+           {
+             m_uvCoordSystem.transform(
+               oldBoundary,
+               m_boundary,
+               transform,
+               textureSize(),
+               lockAlignment,
+               invariant,
+               m_preservePlanePrecision);
+           }
          });
 }
 
@@ -882,8 +949,17 @@ Result<void> BrushFace::setPoints(
   return Error{"Brush has invalid face"};
 }
 
+bool BrushFace::preservesPlanePrecision() const
+{
+  return m_preservePlanePrecision;
+}
+
 void BrushFace::correctPoints()
 {
+  if (m_preservePlanePrecision)
+  {
+    return;
+  }
   for (size_t i = 0; i < 3; ++i)
   {
     m_points[i] = correct(m_points[i]);

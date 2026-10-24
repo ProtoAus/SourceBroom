@@ -66,14 +66,15 @@ std::optional<std::tuple<std::string, mdl::MapFormat>> GameDialog::showNewDocume
 }
 
 std::optional<std::tuple<std::string, mdl::MapFormat>> GameDialog::showOpenDocumentDialog(
-  AppController& appController, QWidget* parent)
+  AppController& appController, QWidget* parent, const bool sourceOnly)
 {
   auto dialog = GameDialog{
     appController,
     "Select Game",
     R"(TrenchBroom was unable to detect the game for the map document. Please choose a game in the game list and click OK.)",
     GameDialog::DialogType::Open,
-    parent};
+    parent,
+    sourceOnly};
 
   if (dialog.exec() == QDialog::Rejected)
   {
@@ -132,13 +133,20 @@ GameDialog::GameDialog(
   const QString& title,
   const QString& infoText,
   const DialogType type,
-  QWidget* parent)
+  QWidget* parent,
+  const bool sourceOnly)
   : QDialog{parent}
   , m_appController{appController}
   , m_dialogType{type}
+  , m_sourceOnly{sourceOnly}
 {
   createGui(title, infoText);
   updateMapFormats("");
+  if (sourceOnly)
+  {
+    m_gameListBox->selectGame(0);
+    currentGameChanged(QString::fromStdString(currentGameName()));
+  }
   connectObservers();
 }
 
@@ -220,7 +228,7 @@ QWidget* GameDialog::createSelectionPanel()
 {
   auto* panel = new QWidget{};
 
-  m_gameListBox = new GameListBox{m_appController};
+  m_gameListBox = new GameListBox{m_appController, nullptr, m_sourceOnly};
   m_gameListBox->setToolTip("Double click on a game to select it");
 
   auto* label = new QLabel{"Map Format"};

@@ -45,6 +45,10 @@ MapFormat formatFromName(const std::string& formatName)
   {
     return MapFormat::Valve;
   }
+  if (formatName == "Source VMF")
+  {
+    return MapFormat::SourceVMF;
+  }
   if (formatName == "Hexen2")
   {
     return MapFormat::Hexen2;
@@ -87,6 +91,9 @@ std::ostream& operator<<(std::ostream& lhs, const MapFormat rhs)
   case MapFormat::Valve:
     lhs << "Valve";
     break;
+  case MapFormat::SourceVMF:
+    lhs << "SourceVMF";
+    break;
   case MapFormat::Hexen2:
     lhs << "Hexen2";
     break;
@@ -118,6 +125,8 @@ std::string formatName(const MapFormat format)
     return "Quake2 (Valve)";
   case MapFormat::Valve:
     return "Valve";
+  case MapFormat::SourceVMF:
+    return "Source VMF";
   case MapFormat::Hexen2:
     return "Hexen2";
   case MapFormat::Daikatana:
@@ -146,6 +155,8 @@ std::vector<MapFormat> compatibleFormats(const MapFormat format)
     return {MapFormat::Quake2, MapFormat::Quake2_Valve};
   case MapFormat::Quake2_Valve:
     return {MapFormat::Quake2_Valve, MapFormat::Quake2};
+  case MapFormat::SourceVMF:
+    return {MapFormat::SourceVMF};
   case MapFormat::Hexen2:
     return {MapFormat::Hexen2};
   case MapFormat::Daikatana:
@@ -167,6 +178,7 @@ bool isParallelUvCoordSystem(const MapFormat format)
   switch (format)
   {
   case MapFormat::Valve:
+  case MapFormat::SourceVMF:
   case MapFormat::Quake2_Valve:
   case MapFormat::Quake3_Valve:
     return true;
@@ -191,6 +203,7 @@ bool hasPatchSupport(const MapFormat format)
   case MapFormat::Quake3:
     return true;
   case MapFormat::Valve:
+  case MapFormat::SourceVMF:
   case MapFormat::Quake2_Valve:
   case MapFormat::Standard:
   case MapFormat::Quake2:

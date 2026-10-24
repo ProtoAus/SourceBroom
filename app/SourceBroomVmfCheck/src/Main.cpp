@@ -17,7 +17,14 @@
  along with SourceBroom. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "mdl/Brush.h"
+#include "mdl/BrushNode.h"
+#include "mdl/Node.h"
 #include "mdl/VmfDocument.h"
+#include "mdl/VmfScene.h"
+#include "mdl/WorldNode.h"
+
+#include "vm/bbox.h"
 
 #include <algorithm>
 #include <array>
@@ -39,9 +46,12 @@ namespace fs = std::filesystem;
 
 void usage()
 {
-  std::cout << "SourceBroomVmfCheck [--probe-edit] [--] <file.vmf|directory>...\n"
-               "Read-only syntax/byte-preservation checker; not a geometry validator.\n"
-               "--probe-edit additionally tests a surgical value edit in memory only.\n";
+  std::cout
+    << "SourceBroomVmfCheck [--probe-edit] [--scene] [--] <file.vmf|directory>...\n"
+       "Read-only native syntax/byte-preservation checker.\n"
+       "--probe-edit tests a surgical value edit in memory only.\n"
+       "--scene also loads the production plain-brush scene (bounds +/-65536)\n"
+       "and checks its unchanged serialization; not a BSP/gameplay validator.\n";
 }
 
 bool isVmf(const fs::path& path)
@@ -56,9 +66,10 @@ bool isVmf(const fs::path& path)
 void probeEdit(const tb::mdl::VmfDocument& document)
 {
   const auto& entries = document.entries();
-  const auto property = std::find_if(entries.begin(), entries.end(), [](const auto& entry) {
-    return entry.value.has_value();
-  });
+  const auto property =
+    std::find_if(entries.begin(), entries.end(), [](const auto& entry) {
+      return entry.value.has_value();
+    });
   if (property == entries.end())
   {
     throw std::runtime_error{"Edit probe needs at least one property"};
@@ -76,10 +87,10 @@ void probeEdit(const tb::mdl::VmfDocument& document)
     throw std::runtime_error{"Surgical edit changed the wrong bytes or did not act"};
   }
   const auto reparsed = tb::mdl::VmfDocument::parse(edited);
-  if (reparsed.entries().size() != entries.size()
-      || reparsed.roots() != document.roots()
-      || !reparsed.entries()[id].value
-      || reparsed.tokenText(*reparsed.entries()[id].value) != replacement)
+  if (
+    reparsed.entries().size() != entries.size() || reparsed.roots() != document.roots()
+    || !reparsed.entries()[id].value
+    || reparsed.tokenText(*reparsed.entries()[id].value) != replacement)
   {
     throw std::runtime_error{"Edited document did not reparse with the expected value"};
   }
@@ -87,24 +98,49 @@ void probeEdit(const tb::mdl::VmfDocument& document)
   {
     const auto& before = entries[i];
     const auto& after = reparsed.entries()[i];
-    if (before.parent != after.parent || before.children != after.children
-        || document.tokenText(before.key) != reparsed.tokenText(after.key)
-        || before.isBlock() != after.isBlock())
+    if (
+      before.parent != after.parent || before.children != after.children
+      || document.tokenText(before.key) != reparsed.tokenText(after.key)
+      || before.isBlock() != after.isBlock())
     {
       throw std::runtime_error{"Edit probe changed document structure"};
     }
   }
 }
 
-size_t checkFile(const fs::path& path, const bool probe)
+std::array<size_t, 3> probeScene(const tb::mdl::VmfDocument& document)
+{
+  const auto scene = tb::mdl::VmfScene::read(document.source(), vm::bbox3d{65536.0});
+  if (scene.serialize(scene.world()) != document.source())
+  {
+    throw std::runtime_error{"Unedited native scene differs from input"};
+  }
+  auto counts = std::array<size_t, 3>{};
+  const auto count = [&](const auto& self, const tb::mdl::Node& node) -> void {
+    ++counts[0];
+    if (const auto* brush = dynamic_cast<const tb::mdl::BrushNode*>(&node))
+    {
+      ++counts[1];
+      counts[2] += brush->brush().faceCount();
+    }
+    for (const auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  count(count, scene.world());
+  return counts;
+}
+
+size_t checkFile(const fs::path& path, const bool probe, const bool sceneCheck)
 {
   auto stream = std::ifstream{path, std::ios::binary};
   if (!stream)
   {
     throw std::runtime_error{"Cannot open input"};
   }
-  auto source = std::string{
-    std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
+  auto source =
+    std::string{std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
   if (stream.bad())
   {
     throw std::runtime_error{"Failed reading input"};
@@ -133,6 +169,7 @@ size_t checkFile(const fs::path& path, const bool probe)
     probeEdit(document);
   }
 
+  const auto sceneCounts = sceneCheck ? probeScene(document) : std::array<size_t, 3>{};
   auto blocks = size_t{0};
   auto solids = size_t{0};
   auto sides = size_t{0};
@@ -148,8 +185,9 @@ size_t checkFile(const fs::path& path, const bool probe)
       sides += key == "side" ? 1u : 0u;
       displacements += key == "dispinfo" ? 1u : 0u;
     }
-    else if (entry.parent
-             && document.tokenContents(document.entries()[*entry.parent].key) == "connections")
+    else if (
+      entry.parent
+      && document.tokenContents(document.entries()[*entry.parent].key) == "connections")
     {
       ++outputs;
     }
@@ -159,7 +197,10 @@ size_t checkFile(const fs::path& path, const bool probe)
             << "\tsolids=" << solids << "\tsides=" << sides
             << "\tdisplacements=" << displacements << "\toutputs=" << outputs
             << "\tedit=" << (probe ? "pass" : "not-run")
-            << '\t' << std::quoted(path.string()) << '\n';
+            << "\tscene=" << (sceneCheck ? "pass" : "not-run")
+            << "\tscene_nodes=" << sceneCounts[0] << "\tscene_brushes=" << sceneCounts[1]
+            << "\tscene_faces=" << sceneCounts[2] << '\t' << std::quoted(path.string())
+            << '\n';
   return document.source().size();
 }
 
@@ -168,6 +209,7 @@ size_t checkFile(const fs::path& path, const bool probe)
 int main(const int argc, char* argv[])
 {
   auto probe = false;
+  auto sceneCheck = false;
   auto options = true;
   auto inputs = std::vector<fs::path>{};
   for (auto i = 1; i < argc; ++i)
@@ -181,6 +223,10 @@ int main(const int argc, char* argv[])
     if (options && arg == "--probe-edit")
     {
       probe = true;
+    }
+    else if (options && arg == "--scene")
+    {
+      sceneCheck = true;
     }
     else if (options && arg == "--")
     {
@@ -245,7 +291,7 @@ int main(const int argc, char* argv[])
   {
     try
     {
-      bytes += checkFile(file, probe);
+      bytes += checkFile(file, probe, sceneCheck);
     }
     catch (const std::exception& e)
     {

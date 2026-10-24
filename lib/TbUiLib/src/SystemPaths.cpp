@@ -86,7 +86,7 @@ std::filesystem::path userDataDirectory()
 
 #if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
   // Compatibility with wxWidgets
-  return pathFromQString(QDir::homePath()) / ".TrenchBroom";
+  return pathFromQString(QDir::homePath()) / ".SourceBroom";
 #else
   return pathFromQString(
     QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
@@ -105,7 +105,7 @@ std::filesystem::path tempDirectory()
 
 std::filesystem::path logFilePath()
 {
-  return userDataDirectory() / "TrenchBroom.log";
+  return userDataDirectory() / "SourceBroom.log";
 }
 
 std::filesystem::path preferenceFilePath()
@@ -137,10 +137,11 @@ std::filesystem::path findResourceFile(const std::filesystem::path& file)
     return inAppImageDir;
   }
 
-  return pathFromQString(QStandardPaths::locate(
-    QStandardPaths::AppDataLocation,
-    pathAsQPath(file),
-    QStandardPaths::LocateOption::LocateFile));
+  return pathFromQString(
+    QStandardPaths::locate(
+      QStandardPaths::AppDataLocation,
+      pathAsQPath(file),
+      QStandardPaths::LocateOption::LocateFile));
 }
 
 std::vector<std::filesystem::path> findResourceDirectories(

@@ -66,6 +66,7 @@ private:
   ObjectNo m_entityNo = 0;
   ObjectNo m_brushNo = 0;
   bool m_exporting = false;
+  bool m_updateFilePositions = true;
   bool m_stripTbProperties = false;
   std::optional<std::string> m_stripEntityPattern;
   std::optional<Entity> m_entityToAdd;
@@ -78,6 +79,10 @@ protected:
   ObjectNo brushNo() const;
 
 public:
+  // Clipboard serialization must not overwrite native VMF binding positions.
+  bool updateFilePositions() const { return m_updateFilePositions; }
+  void setUpdateFilePositions(bool enabled) { m_updateFilePositions = enabled; }
+
   bool exporting() const;
   void setExporting(bool exporting);
 

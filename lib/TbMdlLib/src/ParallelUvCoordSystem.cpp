@@ -225,7 +225,8 @@ void ParallelUvCoordSystem::transform(
   const vm::mat4x4d& transformation,
   const vm::vec2f& textureSize,
   const bool lockAlignment,
-  const vm::vec3d& oldInvariant)
+  const vm::vec3d& oldInvariant,
+  const bool preserveUnwrappedOffsets)
 {
   if (m_uvAttributes.scale.x() == 0.0f || m_uvAttributes.scale.y() == 0.0f)
   {
@@ -291,8 +292,12 @@ void ParallelUvCoordSystem::transform(
 
   // since the center should be invariant, the offsets are determined by the difference of
   // the current and the original texture coordinates of the center
-  const auto newOffset =
-    vm::correct(modOffset(oldInvariantUvCoords - newInvariantUvCoords, textureSize), 4);
+  const auto unwrappedOffset = oldInvariantUvCoords - newInvariantUvCoords;
+  // Native Source offsets must not depend on a missing/unloaded preview texture's
+  // fictitious dimensions, nor acquire Quake's four-decimal normalization.
+  const auto newOffset = preserveUnwrappedOffsets
+                           ? unwrappedOffset
+                           : vm::correct(modOffset(unwrappedOffset, textureSize), 4);
   contract_assert(!vm::is_nan(newOffset));
 
   m_uvAttributes.offset = newOffset;

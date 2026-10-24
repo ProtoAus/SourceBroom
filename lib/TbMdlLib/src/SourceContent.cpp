@@ -1,0 +1,560 @@
+/*
+ Copyright (C) 2026 SourceBroom contributors
+
+ This file is part of TrenchBroom.
+
+ TrenchBroom is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ TrenchBroom is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with TrenchBroom. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "mdl/SourceContent.h"
+
+#include "kd/string_format.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <stdexcept>
+
+namespace tb::mdl
+{
+namespace
+{
+struct Entry
+{
+  std::string key;
+  std::string value;
+  std::vector<Entry> children;
+  bool block;
+};
+class KeyValues
+{
+  std::string_view text;
+  size_t pos = 0;
+  size_t count = 0;
+  bool present = false;
+  std::string token()
+  {
+    present = false;
+    while (pos < text.size())
+    {
+      if (std::isspace(static_cast<unsigned char>(text[pos])))
+      {
+        ++pos;
+        continue;
+      }
+      if (text.substr(pos, 2) == "//")
+      {
+        while (pos < text.size() && text[pos] != '\n')
+        {
+          ++pos;
+        }
+        continue;
+      }
+      break;
+    }
+    if (pos == text.size())
+    {
+      return {};
+    }
+    present = true;
+    if (text[pos] == '{' || text[pos] == '}')
+    {
+      return std::string(1, text[pos++]);
+    }
+    std::string out;
+    if (text[pos] == '"')
+    {
+      ++pos;
+      while (pos < text.size() && text[pos] != '"')
+      {
+        if (
+          text[pos] == '\\' && pos + 1 < text.size()
+          && (text[pos + 1] == '\\' || text[pos + 1] == '"'))
+        {
+          ++pos;
+        }
+        out += text[pos++];
+      }
+      if (pos == text.size())
+      {
+        throw std::runtime_error("Unterminated KeyValues string");
+      }
+      ++pos;
+      return out;
+    }
+    while (pos < text.size() && !std::isspace(static_cast<unsigned char>(text[pos]))
+           && text[pos] != '{' && text[pos] != '}')
+    {
+      out += text[pos++];
+    }
+    return out;
+  }
+  std::vector<Entry> entries(size_t depth)
+  {
+    if (depth > 64)
+    {
+      throw std::runtime_error("KeyValues nesting limit");
+    }
+    std::vector<Entry> out;
+    for (auto key = token(); present; key = token())
+    {
+      if (key == "}")
+      {
+        if (!depth)
+        {
+          throw std::runtime_error("Unexpected KeyValues closing brace");
+        }
+        return out;
+      }
+      if (key.empty() || key == "{" || ++count > 100000)
+      {
+        throw std::runtime_error("Invalid KeyValues entry");
+      }
+      auto value = token();
+      if (!present || value == "}")
+      {
+        throw std::runtime_error("Missing KeyValues value");
+      }
+      const auto block = value == "{";
+      auto children = block ? entries(depth + 1) : std::vector<Entry>{};
+      out.push_back(
+        {kdl::str_to_lower(key), std::move(value), std::move(children), block});
+    }
+    if (depth)
+    {
+      throw std::runtime_error("Unclosed KeyValues block");
+    }
+    return out;
+  }
+
+public:
+  explicit KeyValues(std::string_view input)
+    : text{input}
+  {
+    if (input.size() > 16 * 1024 * 1024 || input.find('\0') != std::string_view::npos)
+    {
+      throw std::runtime_error("Invalid or oversized KeyValues input");
+    }
+  }
+  std::vector<Entry> parse() { return entries(0); }
+};
+const Entry* child(const std::vector<Entry>& entries, const std::string& key)
+{
+  const auto it = std::ranges::find(entries, key, &Entry::key);
+  return it == entries.end() ? nullptr : &*it;
+}
+std::string slashes(std::string value)
+{
+  std::ranges::replace(value, '\\', '/');
+  return value;
+}
+std::string readText(const std::filesystem::path& path)
+{
+  std::ifstream stream{path, std::ios::binary};
+  return {std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
+}
+} // namespace
+Result<std::filesystem::path> sourceBaseTexture(
+  std::string_view vmt, const SourceMaterialMode mode)
+{
+  try
+  {
+    const auto entries = KeyValues{vmt}.parse();
+    if (entries.size() != 1 || !entries.front().block)
+    {
+      return Error{"Invalid VMT shader block"};
+    }
+    const auto& shader = entries.front();
+    if (
+      shader.key != "lightmappedgeneric" && shader.key != "unlitgeneric"
+      && shader.key != "vertexlitgeneric")
+    {
+      return Error{"Unsupported Source shader: " + shader.key};
+    }
+    for (const auto& entry : shader.children)
+    {
+      // Preview explicitly omits these optional effects; it never resolves another
+      // base image, proxies, transforms, conditional blocks, or another shader.
+      const auto previewParameter = mode == SourceMaterialMode::BaseTexturePreview
+        && (entry.key == "$bumpmap" || entry.key == "$bumpmap2"
+            || entry.key == "$normalmapalphaenvmapmask" || entry.key == "$ssbump"
+            || entry.key == "$detail" || entry.key == "$detailscale"
+            || entry.key == "$detailblendfactor" || entry.key == "$detailblendmode"
+            || entry.key == "$detailtint" || entry.key == "$envmap"
+            || entry.key == "$envmapmask" || entry.key == "$envmaptint"
+            || entry.key == "$envmapcontrast" || entry.key == "$envmapsaturation"
+            || entry.key == "$selfillum" || entry.key == "$selfillummask"
+            || entry.key == "$selfillumtint" || entry.key == "$phong"
+            || entry.key == "$phongboost" || entry.key == "$phongexponent"
+            || entry.key == "$phongfresnelranges" || entry.key == "$nocull"
+            || entry.key == "$halflambert" || entry.key == "$nodecal"
+            || entry.key == "$vertexcolor" || entry.key == "$vertexalpha"
+            || entry.key == "$translucent" || entry.key == "$alphatest"
+            || entry.key == "$alphatestreference");
+      if (entry.block || (!previewParameter && entry.key != "$basetexture"
+          && entry.key != "$surfaceprop" && entry.key != "$surfaceprop2"
+          && entry.key != "$keywords" && entry.key != "$model"
+          && !entry.key.starts_with('%') && !entry.key.starts_with("$compile")))
+      {
+        return Error{"Unsupported Source material feature: " + entry.key};
+      }
+    }
+    if (std::ranges::count(shader.children, std::string{"$basetexture"}, &Entry::key) > 1)
+    {
+      return Error{"Repeated Source $basetexture requires explicit resolution"};
+    }
+    const auto* base = child(shader.children, "$basetexture");
+    if (!base || base->value.empty())
+    {
+      return Error{"Missing Source $basetexture"};
+    }
+    auto path = std::filesystem::path{slashes(kdl::str_to_lower(base->value))};
+    if (path.is_absolute() || path.has_root_name())
+    {
+      return Error{"Absolute Source texture path"};
+    }
+    for (const auto& part : path)
+    {
+      if (part == "..")
+      {
+        return Error{"Parent traversal in Source texture path"};
+      }
+    }
+    path.replace_extension(".vtf");
+    return std::filesystem::path{"materials"} / path;
+  }
+  catch (const std::runtime_error& e)
+  {
+    return Error{e.what()};
+  }
+}
+Result<std::vector<std::filesystem::path>> sourceSearchPaths(
+  std::string_view gameInfo,
+  const std::filesystem::path& gameDirectory,
+  const std::vector<std::filesystem::path>& steamRoots)
+{
+  // Joining an empty GameConfig search path adds a trailing separator. It must
+  // not change the engine-relative base from the install root to the mod folder.
+  const auto directory =
+    gameDirectory.filename().empty() ? gameDirectory.parent_path() : gameDirectory;
+  try
+  {
+    const auto entries = KeyValues{gameInfo}.parse();
+    const auto* game = child(entries, "gameinfo");
+    const auto* fs = game ? child(game->children, "filesystem") : nullptr;
+    const auto* search = fs ? child(fs->children, "searchpaths") : nullptr;
+    if (!search)
+    {
+      return Error{"Missing gameinfo FileSystem/SearchPaths"};
+    }
+    std::vector<std::filesystem::path> paths;
+    for (const auto& entry : search->children)
+    {
+      // Game+Mod and Game+Game_Write are also content search paths.
+      auto ids = entry.key;
+      std::ranges::replace(ids, '+', ' ');
+      if ((" " + ids + " ").find(" game ") == std::string::npos)
+      {
+        continue;
+      }
+      auto value = slashes(entry.value);
+      const auto lower = kdl::str_to_lower(value);
+      auto root = directory.parent_path();
+      if (lower.starts_with("|gameinfo_path|"))
+      {
+        root = directory;
+        value.erase(0, 15);
+      }
+      else if (lower.starts_with("|all_source_engine_paths|"))
+      {
+        value.erase(0, 25);
+      }
+      else if (value.find('|') != std::string::npos)
+      {
+        return Error{"Unsupported gameinfo search path token: " + value};
+      }
+      auto path = (root / value).lexically_normal();
+      if (value.find('*') != std::string::npos)
+      {
+        if (path.filename() != "*")
+        {
+          return Error{"Unsupported gameinfo wildcard: " + value};
+        }
+        std::error_code ec;
+        std::vector<std::filesystem::path> matches;
+        for (std::filesystem::directory_iterator it{path.parent_path(), ec}, end;
+             !ec && it != end;
+             it.increment(ec))
+        {
+          const auto stem = it->path().stem().string();
+          const auto numbered = stem.size() >= 4 && stem[stem.size() - 4] == '_'
+                                && std::ranges::all_of(
+                                  stem.substr(stem.size() - 3),
+                                  [](unsigned char c) { return c >= '0' && c <= '9'; });
+          if (it->is_directory(ec) || (it->path().extension() == ".vpk" && !numbered))
+          {
+            matches.push_back(it->path());
+          }
+        }
+        if (ec && ec != std::errc::no_such_file_or_directory)
+        {
+          return Error{ec.message()};
+        }
+        std::ranges::sort(matches);
+        paths.insert(paths.end(), matches.begin(), matches.end());
+      }
+      else
+      {
+        paths.push_back(std::move(path));
+      }
+    }
+    if (const auto* mounts = child(game->children, "mount"))
+    {
+      auto librariesResult = sourceSteamLibraries(steamRoots);
+      if (librariesResult.is_error())
+      {
+        return std::move(librariesResult);
+      }
+      const auto libraries = std::move(librariesResult) | kdl::value();
+      for (const auto& app : mounts->children)
+      {
+        if (
+          !app.block || app.key.empty()
+          || !std::ranges::all_of(
+            app.key, [](unsigned char c) { return std::isdigit(c); }))
+        {
+          return Error{"Invalid Source mount app ID"};
+        }
+        std::filesystem::path install;
+        for (const auto& library : libraries)
+        {
+          const auto manifest =
+            KeyValues{
+              readText(library / "steamapps" / ("appmanifest_" + app.key + ".acf"))}
+              .parse();
+          const auto* state = child(manifest, "appstate");
+          const auto* dir = state ? child(state->children, "installdir") : nullptr;
+          if (!dir)
+          {
+            continue;
+          }
+          const auto relative = std::filesystem::path{slashes(dir->value)};
+          if (relative.has_parent_path() || relative.has_root_path())
+          {
+            return Error{"Invalid Steam install directory"};
+          }
+          install = library / "steamapps/common" / relative;
+          break;
+        }
+        std::vector<std::filesystem::path> mounted;
+        bool head = false;
+        for (const auto& folder : app.children)
+        {
+          if (folder.key == "head")
+          {
+            head = folder.value == "1";
+            continue;
+          }
+          if (folder.key == "fallback")
+          {
+            continue;
+          }
+          if (!folder.block)
+          {
+            return Error{"Unsupported Source mount option: " + folder.key};
+          }
+          if (install.empty())
+          {
+            continue;
+          }
+          for (const auto& entry : folder.children)
+          {
+            auto relative = std::filesystem::path{slashes(folder.key)}
+                            / std::filesystem::path{slashes(entry.value)};
+            if (relative.is_absolute() || relative.has_root_name())
+            {
+              return Error{"Absolute Source mount path"};
+            }
+            for (const auto& part : relative)
+            {
+              if (part == "..")
+              {
+                return Error{"Parent traversal in Source mount path"};
+              }
+            }
+            if (entry.key == "vpk")
+            {
+              relative.replace_extension(".vpk");
+            }
+            else if (entry.key != "dir")
+            {
+              return Error{"Unsupported Source mount entry: " + entry.key};
+            }
+            mounted.push_back(install / relative);
+          }
+        }
+        if (install.empty())
+        {
+          if (const auto* fallback = child(app.children, "fallback"))
+          {
+            mounted.push_back(directory.parent_path() / slashes(fallback->value));
+          }
+        }
+        if (head)
+        {
+          paths.insert(paths.begin(), mounted.begin(), mounted.end());
+        }
+        else
+        {
+          paths.insert(paths.end(), mounted.begin(), mounted.end());
+        }
+      }
+    }
+    return paths;
+  }
+  catch (const std::runtime_error& e)
+  {
+    return Error{e.what()};
+  }
+}
+Result<std::vector<std::filesystem::path>> sourceSteamLibraries(
+  const std::vector<std::filesystem::path>& steamRoots)
+{
+  auto roots = steamRoots;
+  if (roots.empty())
+  {
+    if (const auto* program = std::getenv("ProgramFiles(x86)"))
+    {
+      roots.emplace_back(std::filesystem::path{program} / "Steam");
+    }
+    if (const auto* home = std::getenv("HOME"))
+    {
+      roots.emplace_back(std::filesystem::path{home} / ".steam/steam");
+      roots.emplace_back(std::filesystem::path{home} / ".local/share/Steam");
+      roots.emplace_back(
+        std::filesystem::path{home} / "Library/Application Support/Steam");
+    }
+  }
+  try
+  {
+    std::vector<std::filesystem::path> libraries;
+    const auto add = [&](const std::filesystem::path& path) {
+      if (std::ranges::find(libraries, path) == libraries.end())
+      {
+        libraries.push_back(path);
+      }
+    };
+    for (const auto& root : roots)
+    {
+      std::error_code ec;
+      if (!std::filesystem::is_directory(root / "steamapps", ec))
+      {
+        continue;
+      }
+      add(root);
+      const auto entries =
+        KeyValues{readText(root / "steamapps/libraryfolders.vdf")}.parse();
+      const auto* folders = child(entries, "libraryfolders");
+      if (!folders)
+      {
+        continue;
+      }
+      for (const auto& folder : folders->children)
+      {
+        const auto* path = child(folder.children, "path");
+        if (path)
+        {
+          add(std::filesystem::path{slashes(path->value)});
+        }
+
+        else if (
+          !folder.block && !folder.key.empty()
+          && std::ranges::all_of(
+            folder.key, [](unsigned char c) { return std::isdigit(c); }))
+        {
+          add(std::filesystem::path{slashes(folder.value)});
+        }
+      }
+    }
+    return libraries;
+  }
+  catch (const std::runtime_error& e)
+  {
+    return Error{e.what()};
+  }
+}
+Result<std::vector<std::filesystem::path>> sourceInstalledGames(
+  const std::vector<std::filesystem::path>& steamRoots)
+{
+  return sourceSteamLibraries(steamRoots)
+         | kdl::and_then(
+           [](const auto& libraries) -> Result<std::vector<std::filesystem::path>> {
+             try
+             {
+               std::vector<std::filesystem::path> games;
+               for (const auto& library : libraries)
+               {
+                 const auto apps = library / "steamapps";
+                 std::error_code ec;
+                 for (std::filesystem::directory_iterator it{apps, ec}, end;
+                      !ec && it != end;
+                      it.increment(ec))
+                 {
+                   if (
+                     it->path().extension() != ".acf"
+                     || !it->path().filename().string().starts_with("appmanifest_"))
+                   {
+                     continue;
+                   }
+                   const auto entries = KeyValues{readText(it->path())}.parse();
+                   const auto* app = child(entries, "appstate");
+                   const auto* dir = app ? child(app->children, "installdir") : nullptr;
+                   if (!dir)
+                   {
+                     continue;
+                   }
+                   const auto relative = std::filesystem::path{slashes(dir->value)};
+                   if (relative.has_parent_path() || relative.has_root_path())
+                   {
+                     return Error{"Invalid Steam install directory"};
+                   }
+                   const auto install = apps / "common" / relative;
+                   std::error_code inner;
+                   for (std::filesystem::directory_iterator game{install, inner}, last;
+                        !inner && game != last;
+                        game.increment(inner))
+                   {
+                     if (
+                       game->is_directory(inner)
+                       && std::filesystem::is_regular_file(
+                         game->path() / "gameinfo.txt", inner))
+                     {
+                       games.push_back(game->path());
+                     }
+                   }
+                 }
+               }
+               std::ranges::sort(games);
+               games.erase(std::unique(games.begin(), games.end()), games.end());
+               return games;
+             }
+             catch (const std::runtime_error& e)
+             {
+               return Error{e.what()};
+             }
+           });
+}
+
+} // namespace tb::mdl

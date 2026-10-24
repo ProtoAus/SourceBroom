@@ -27,6 +27,7 @@ target_sources(TbUiLibTest
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_RecentDocuments.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_KeyboardShortcutUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LayerListBox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceBuild.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SystemPaths.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_TextOutputAdapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_UpdateVersion.cpp
@@ -82,3 +83,11 @@ add_custom_command(TARGET TbUiLibTest POST_BUILD
 
 include(Catch)
 catch_discover_tests(TbUiLibTest)
+
+add_executable(SourceBuildTestTool src/SourceBuildTestTool.cpp)
+target_link_libraries(SourceBuildTestTool PRIVATE CompilerConfig Qt6::Core)
+EMBED_UTF8_MANIFEST(SourceBuildTestTool)
+add_dependencies(TbUiLibTest SourceBuildTestTool)
+file(GENERATE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/SourceBuildTestTool.h"
+  CONTENT "#define SOURCE_BUILD_TEST_TOOL_PATH \"$<TARGET_FILE:SourceBuildTestTool>\"")

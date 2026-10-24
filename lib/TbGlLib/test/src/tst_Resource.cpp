@@ -24,6 +24,8 @@
 
 #include "kd/reflection_impl.h"
 
+#include <stdexcept>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
@@ -113,6 +115,34 @@ TEST_CASE("Resource")
     CHECK(std::holds_alternative<ResourceLoaded<MockResource>>(resource.state()));
     CHECK(!resource.isDropped());
     CHECK(mockTaskRunner.tasks.empty());
+  }
+
+  SECTION("throwing loaders become failed resources without escaping their task")
+  {
+    const auto unknown = GENERATE(false, true);
+    auto loader = [&]() -> Result<MockResource> {
+      if (unknown)
+      {
+        throw 7;
+      }
+      throw std::runtime_error{"injected decoder failure"};
+    };
+    auto resource = ResourceT{loader};
+    const auto expected = unknown ? "Resource loader threw an unknown exception"
+                                  : "Resource loader threw: injected decoder failure";
+    SECTION("async worker boundary")
+    {
+      resource.process(taskRunner, processContext);
+      REQUIRE(mockTaskRunner.tasks.size() == 1);
+      REQUIRE_NOTHROW(mockTaskRunner.resolveNextPromise());
+      REQUIRE(resource.process(taskRunner, processContext));
+    }
+    SECTION("explicit synchronous load")
+    {
+      REQUIRE_NOTHROW(resource.loadSync());
+    }
+    REQUIRE(std::holds_alternative<ResourceFailed>(resource.state()));
+    CHECK(std::get<ResourceFailed>(resource.state()).error == expected);
   }
 
   SECTION("Resource loading fails")

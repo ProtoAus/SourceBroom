@@ -288,6 +288,7 @@ std::unique_ptr<NodeSerializer> MapFileSerializer::create(
   case MapFormat::Daikatana:
     return std::make_unique<DaikatanaFileSerializer>(stream);
   case MapFormat::Valve:
+  case MapFormat::SourceVMF: // Internal clipboard only; native files use VmfScene.
     return std::make_unique<ValveFileSerializer>(stream);
   case MapFormat::Hexen2:
     return std::make_unique<Hexen2FileSerializer>(stream);
@@ -406,7 +407,10 @@ void MapFileSerializer::doBrushFace(const BrushFace& face)
 {
   const size_t lines = 1u;
   doWriteBrushFace(m_stream, face);
-  face.setFilePosition(m_line, lines);
+  if (updateFilePositions())
+  {
+    face.setFilePosition(m_line, lines);
+  }
   m_line += lines;
 }
 
@@ -430,7 +434,10 @@ void MapFileSerializer::doPatch(const PatchNode& patchNode)
 void MapFileSerializer::setFilePosition(const Node& node)
 {
   const auto start = startLine();
-  node.setFilePosition(start, m_line - start);
+  if (updateFilePositions())
+  {
+    node.setFilePosition(start, m_line - start);
+  }
 }
 
 size_t MapFileSerializer::startLine()

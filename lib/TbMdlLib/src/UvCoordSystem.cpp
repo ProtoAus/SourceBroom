@@ -168,12 +168,19 @@ void UvCoordSystem::transform(
   const vm::mat4x4d& transformation,
   const vm::vec2f& textureSize,
   const bool lockTexture,
-  const vm::vec3d& invariant)
+  const vm::vec3d& invariant,
+  const bool preserveUnwrappedOffsets)
 {
   std::visit(
     [&](auto& system) {
       system.transform(
-        oldBoundary, newBoundary, transformation, textureSize, lockTexture, invariant);
+        oldBoundary,
+        newBoundary,
+        transformation,
+        textureSize,
+        lockTexture,
+        invariant,
+        preserveUnwrappedOffsets);
     },
     m_system);
 }

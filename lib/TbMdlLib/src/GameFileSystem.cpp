@@ -26,10 +26,12 @@
 #include "fs/IdPakFileSystem.h"
 #include "fs/PathInfo.h"
 #include "fs/TraversalMode.h"
+#include "fs/VpkFileSystem.h"
 #include "fs/WadFileSystem.h"
 #include "fs/ZipFileSystem.h"
 #include "mdl/EnvironmentConfig.h"
 #include "mdl/GameConfig.h"
+#include "mdl/SourceContent.h"
 
 #include "kd/ranges/as_rvalue_view.h"
 #include "kd/result_fold.h"
@@ -51,12 +53,81 @@ void GameFileSystem::initialize(
 {
   unmountAll();
 
+  if (kdl::ci::str_is_equal(gameConfig.fileSystemConfig.packageFormat.format, "vpk"))
+  {
+    addDefaultAssetPaths(environmentConfig, gameConfig, logger);
+    addSourceFileSystems(gamePath / gameConfig.fileSystemConfig.searchPath, logger)
+      | kdl::transform_error(
+        [&](auto e) { logger.error() << "Could not mount Source content: " << e.msg; });
+    for (const auto& path : additionalSearchPaths)
+    {
+      addSearchPath(gameConfig, gamePath, path, logger);
+    }
+    return;
+  }
+
   addDefaultAssetPaths(environmentConfig, gameConfig, logger);
 
   if (!gamePath.empty() && fs::Disk::pathInfo(gamePath) == fs::PathInfo::Directory)
   {
     addGameFileSystems(gameConfig, gamePath, additionalSearchPaths, logger);
   }
+}
+
+Result<void> GameFileSystem::initializeSource(
+  const std::filesystem::path& gameDirectory, Logger& logger)
+{
+  unmountAll();
+  return addSourceFileSystems(gameDirectory, logger);
+}
+
+Result<void> GameFileSystem::addSourceFileSystems(
+  const std::filesystem::path& gameDirectory, Logger& logger)
+{
+  return fs::Disk::openFile(gameDirectory / "gameinfo.txt")
+         | kdl::and_then([&](auto file) {
+             auto reader = file->reader().buffer();
+             return sourceSearchPaths(reader.readString(reader.size()), gameDirectory);
+           })
+         | kdl::and_then([&](auto paths) -> Result<void> {
+             // VirtualFileSystem searches the most recently mounted filesystem first.
+             for (auto it = paths.rbegin(); it != paths.rend(); ++it)
+             {
+               auto path = *it;
+               if (kdl::ci::str_is_equal(path.extension().string(), ".vpk"))
+               {
+                 if (fs::Disk::pathInfo(path) != fs::PathInfo::File)
+                 {
+                   path = path.parent_path() / (path.stem().string() + "_dir.vpk");
+                 }
+                 if (fs::Disk::pathInfo(path) != fs::PathInfo::File)
+                 {
+                   logger.warn() << "Missing Source package " << path;
+                   continue;
+                 }
+                 auto result = fs::Disk::openFile(path) | kdl::and_then([&](auto file) {
+                                 return fs::createImageFileSystem<fs::VpkFileSystem>(
+                                   std::move(file), path);
+                               });
+                 if (result.is_error())
+                 {
+                   return std::move(result) | kdl::transform([](auto) {});
+                 }
+                 auto image = std::move(result) | kdl::value();
+                 image->setMetadata(fs::makeImageFileSystemMetadata(path));
+                 mount("", std::move(image));
+               }
+               else if (fs::Disk::pathInfo(path) == fs::PathInfo::Directory)
+               {
+                 addFileSystemPath(path, logger);
+               }
+               else
+               {
+                 logger.warn() << "Missing Source search path " << path;
+               }
+             }
+             return kdl::void_success;
+           });
 }
 
 void GameFileSystem::reloadWads(
@@ -134,6 +205,13 @@ Result<std::unique_ptr<fs::FileSystem>> createImageFileSystem(
     return std::unique_ptr<fs::FileSystem>{std::move(fs)};
   };
 
+  if (kdl::ci::str_is_equal(packageFormat, "vpk"))
+  {
+    return fs::Disk::openFile(path) | kdl::and_then([&](auto file) {
+             return fs::createImageFileSystem<fs::VpkFileSystem>(std::move(file), path);
+           })
+           | kdl::transform(setMetadataAndCast);
+  }
   if (kdl::ci::str_is_equal(packageFormat, "idpak"))
   {
     return fs::Disk::openFile(path) | kdl::and_then([&](auto file) {
@@ -175,6 +253,16 @@ void GameFileSystem::addFileSystemPackages(
       fs::TraversalMode::Flat,
       fs::makeExtensionPathMatcher(packageExtensions))
       | kdl::and_then([&](auto packagePaths) {
+          if (kdl::ci::str_is_equal(packageFormat, "vpk"))
+          {
+            std::erase_if(packagePaths, [](const auto& path) {
+              const auto stem = path.stem().string();
+              return stem.size() >= 4 && stem[stem.size() - 4] == '_'
+                     && std::ranges::all_of(
+                       stem.substr(stem.size() - 3),
+                       [](unsigned char c) { return c >= '0' && c <= '9'; });
+            });
+          }
           std::ranges::sort(
             packagePaths, kdl::ci::string_less_natural{}, [](const auto& p) {
               return p.string();

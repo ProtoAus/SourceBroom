@@ -1058,4 +1058,54 @@ TEST_CASE("BrushFace")
   }
 }
 
+TEST_CASE("BrushFace native plane precision", "[vmf]")
+{
+  const auto p0 = vm::vec3d{0, 0, 32.0001};
+  const auto p1 = vm::vec3d{0, 64, 32.0001};
+  const auto p2 = vm::vec3d{64, 0, 64.0001};
+  auto legacyResult = BrushFace::createFromValve(
+    p0, p1, p2, "synthetic/grid", {}, {}, {1, 0, 0}, {0, -1, 0}, MapFormat::Valve);
+  auto preciseResult = BrushFace::createFromValve(
+    p0, p1, p2, "synthetic/grid", {}, {}, {1, 0, 0}, {0, -1, 0}, MapFormat::Valve, true);
+  REQUIRE(legacyResult.is_success());
+  REQUIRE(preciseResult.is_success());
+  auto legacy = std::move(legacyResult).value();
+  auto precise = std::move(preciseResult).value();
+  CHECK_FALSE(legacy.preservesPlanePrecision());
+  CHECK(legacy.points()[0].z() == 32.0);
+  CHECK(precise.preservesPlanePrecision());
+  CHECK(precise.points() == BrushFace::Points{p0, p1, p2});
+
+  auto copied = precise;
+  auto moved = std::move(copied);
+  CHECK(moved.preservesPlanePrecision());
+  auto assigned = legacy;
+  assigned = precise;
+  CHECK(assigned.preservesPlanePrecision());
+  swap(legacy, moved);
+  CHECK(legacy.preservesPlanePrecision());
+  CHECK_FALSE(moved.preservesPlanePrecision());
+  const auto translation = vm::translation_matrix(vm::vec3d{16, 8, 4});
+  for (auto* face : {&precise, &legacy, &assigned})
+  {
+    REQUIRE(face->transform(translation, false).is_success());
+    CHECK(
+      face->points()
+      == BrushFace::Points{translation * p0, translation * p1, translation * p2});
+  }
+  auto locked = precise;
+  REQUIRE(locked.transform(translation, true).is_success());
+  CHECK(locked.preservesPlanePrecision());
+  CHECK(
+    locked.points()
+    == BrushFace::Points{
+      translation * translation * p0,
+      translation * translation * p1,
+      translation * translation * p2});
+  // The default path must still correct near-integer results of later transforms.
+  REQUIRE(
+    moved.transform(vm::translation_matrix(vm::vec3d{0, 0, 0.0001}), false).is_success());
+  CHECK(moved.points()[0].z() == 32.0);
+}
+
 } // namespace tb::mdl

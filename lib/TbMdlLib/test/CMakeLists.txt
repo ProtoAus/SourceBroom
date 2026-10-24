@@ -1,5 +1,8 @@
 add_executable(TbMdlLibTest)
 EMBED_UTF8_MANIFEST(TbMdlLibTest)
+if(TARGET libzstd_static)
+  target_compile_definitions(TbMdlLibTest PRIVATE TB_SOURCE_VTF_ZSTD=1)
+endif()
 
 target_sources(TbMdlLibTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_AssetUtils.cpp
@@ -114,6 +117,11 @@ target_sources(TbMdlLibTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_UvUtils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Validation.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfDocument.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfFile.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfScene.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfMap.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceContent.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadVtfTexture.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_WadPropertyUtils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_WorldNode.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_WorldReader.cpp

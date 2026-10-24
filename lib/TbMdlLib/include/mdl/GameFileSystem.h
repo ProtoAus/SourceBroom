@@ -45,6 +45,9 @@ public:
     const std::filesystem::path& gamePath,
     const std::vector<std::filesystem::path>& additionalSearchPaths,
     Logger& logger);
+  // Explicit game directory is the manual override; no install is modified.
+  Result<void> initializeSource(
+    const std::filesystem::path& gameDirectory, Logger& logger);
   void reloadWads(
     const std::filesystem::path& rootPath,
     const std::vector<std::filesystem::path>& wadSearchPaths,
@@ -52,6 +55,8 @@ public:
     Logger& logger);
 
 private:
+  Result<void> addSourceFileSystems(
+    const std::filesystem::path& gameDirectory, Logger& logger);
   void addDefaultAssetPaths(
     const EnvironmentConfig& environmentConfig, const GameConfig& config, Logger& logger);
   void addGameFileSystems(

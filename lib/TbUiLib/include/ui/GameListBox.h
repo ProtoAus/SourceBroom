@@ -50,10 +50,12 @@ class GameListBox : public ImageListBox
   Q_OBJECT
 private:
   AppController& m_appController;
+  bool m_sourceOnly = false;
   std::vector<GameDisplayInfo> m_displayInfos;
 
 public:
-  explicit GameListBox(AppController& appController, QWidget* parent = nullptr);
+  explicit GameListBox(
+    AppController& appController, QWidget* parent = nullptr, bool sourceOnly = false);
   const mdl::GameInfo* selectedGameInfo() const;
   void selectGame(size_t index);
   void reloadGameInfos();

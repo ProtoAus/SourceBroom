@@ -83,6 +83,7 @@ class SmartTag;
 class TagManager;
 class UndoableCommand;
 class WorldNode;
+class VmfScene;
 
 enum class VisualEffect;
 
@@ -100,7 +101,7 @@ private:
   const EnvironmentConfig& m_environmentConfig;
   const GameInfo& m_gameInfo;
   std::filesystem::path m_gamePath;
-  std::unique_ptr<GameFileSystem> m_gameFileSystem;
+  std::shared_ptr<GameFileSystem> m_gameFileSystem;
 
   kdl::task_manager& m_taskManager;
   gl::ResourceManager& m_resourceManager;
@@ -116,6 +117,9 @@ private:
 
   std::unique_ptr<WorldNode> m_worldNode;
   vm::bbox3d m_worldBounds;
+  std::unique_ptr<VmfScene> m_vmfScene;
+  std::filesystem::path m_vmfSavedPath;
+  std::string m_vmfSavedBytes;
 
   std::unique_ptr<NodeIndex> m_nodeIndex;
   std::unique_ptr<EntityLinkManager> m_entityLinkManager;

@@ -88,6 +88,39 @@ TEST_CASE("ResourceManager")
 
   auto resourceManager = ResourceManager{};
 
+  SECTION("unused deferred catalogs queue nothing and only requested entries load")
+  {
+    auto decoded = 0;
+    auto catalog = std::vector<std::shared_ptr<ResourceT>>{};
+    for (auto i = 0; i < 100; ++i)
+    {
+      auto resource = std::make_shared<ResourceT>([&]() -> Result<MockResource> {
+        ++decoded;
+        return MockResource{};
+      });
+      resource->setLoadingPolicy(ResourceLoadingPolicy::OnDemand);
+      resourceManager.addResource(resource);
+      catalog.push_back(std::move(resource));
+    }
+    REQUIRE_FALSE(resourceManager.needsProcessing());
+    resourceManager.process(taskRunner, processContext);
+    CHECK(mockTaskRunner.tasks.empty());
+    CHECK(decoded == 0);
+    catalog[3]->requestLoading();
+    catalog[97]->requestLoading();
+    REQUIRE(resourceManager.needsProcessing());
+    resourceManager.process(taskRunner, processContext);
+    REQUIRE(mockTaskRunner.tasks.size() == 2);
+    mockTaskRunner.resolveNextPromise();
+    mockTaskRunner.resolveNextPromise();
+    resourceManager.process(taskRunner, processContext);
+    CHECK(decoded == 2);
+    CHECK(catalog[3]->isLoaded());
+    CHECK(catalog[97]->isLoaded());
+    CHECK_FALSE(catalog[0]->isLoaded());
+    CHECK_FALSE(catalog[99]->isLoaded());
+  }
+
   SECTION("needsProcessing")
   {
     CHECK(!resourceManager.needsProcessing());

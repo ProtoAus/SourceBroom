@@ -27,9 +27,11 @@
 #include "mdl/LoadM8Texture.h"
 #include "mdl/LoadMipTexture.h"
 #include "mdl/LoadShaders.h"
+#include "mdl/LoadVtfTexture.h"
 #include "mdl/LoadWalTexture.h"
 #include "mdl/MaterialUtils.h"
 #include "mdl/Palette.h"
+#include "mdl/SourceContent.h"
 
 #include "kd/path_utils.h"
 #include "kd/result.h"
@@ -48,6 +50,24 @@ Result<gl::Texture> loadTexture(
   const fs::FileSystem& fs,
   const std::optional<Palette>& palette)
 {
+  if (kdl::path_to_lower(path.extension()) == ".vmt")
+  {
+    return fs.openFile(path) | kdl::and_then([&](auto file) {
+             auto reader = file->reader().buffer();
+             return sourceBaseTexture(
+               reader.readString(reader.size()), SourceMaterialMode::BaseTexturePreview);
+           })
+           | kdl::and_then([&](auto texturePath) {
+               return loadTexture(texturePath, name, fs, palette);
+             });
+  }
+  if (isVtfTexture(path))
+  {
+    return fs.openFile(path) | kdl::and_then([&](auto file) {
+             auto reader = file->reader().buffer();
+             return loadVtfTexture(reader);
+           });
+  }
   if (isIdMipTexture(path))
   {
     if (!palette)

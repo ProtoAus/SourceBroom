@@ -1,7 +1,8 @@
 # SourceBroom development
 
-Read [the ordered alpha roadmap](ROADMAP.md) first. The upstream application and
-build target remain named `TrenchBroom` until there is a real Source editor alpha.
+Read [the ordered alpha roadmap](ROADMAP.md) and [alpha limits](ALPHA.md) first.
+The existing CMake application target remains `TrenchBroom`; the Windows alpha
+output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
 ## Build
@@ -17,8 +18,9 @@ CMake, Git, and Pandoc already installed (substitute local paths):
 cmake -S . -B ../build -G "Visual Studio 18 2026" -A x64 `
   -DCMAKE_PREFIX_PATH=C:/Qt/6.10.3/msvc2022_64 `
   -DCMAKE_CONFIGURATION_TYPES=Release
-cmake --build ../build --config Release --target TbMdlLibTest SourceBroomVmfCheck --parallel 4
-ctest --test-dir ../build/lib/TbMdlLib/test -C Release -R VmfDocument --output-on-failure
+cmake --build ../build --config Release --target TrenchBroom SourceBroomVmfCheck TbFsLibTest TbGlLibTest TbMdlLibTest TbUiLibTest --parallel 1
+ctest --test-dir ../build/lib/TbMdlLib/test -C Release --output-on-failure
+cmake --install ../build --config Release --prefix ../alpha
 ```
 
 The pinned TinyXML2 dependency fails generation with multiple Visual Studio
@@ -37,8 +39,9 @@ Use the build's actual executable location (multi-config builds add `Release`):
 
 The checker reads inputs only. It parses every document, verifies unchanged
 serialization, reports structure counts, and optionally proves an in-memory
-value-token edit took effect without touching any file. It does not invoke
-compilers, write a VMF, decompile BSPs, or validate geometry/material semantics.
+value-token edit took effect without touching any file. `--scene` additionally
+checks the production scene bridge and reports explicitly refused geometry.
+The checker does not invoke compilers, write a VMF, or decompile BSPs.
 
 ## A1 document architecture
 
@@ -62,7 +65,7 @@ uses that same production code.
   nesting with a source location. Unknown well-formed blocks remain opaque.
 - A1 has no file-saving API. Safe Save As/overwrite/backups are an A4 requirement.
 
-The future scene bridge must keep the native document and ID mapping alive;
+The scene bridge keeps the native document and ID mapping alive;
 regenerating a VMF solely from the existing Quake scene would lose information.
 An edit that changes topology must update known references and invalidate or
 block incompatible opaque attachments. Blindly carrying stale metadata through

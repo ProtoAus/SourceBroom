@@ -19,6 +19,8 @@
 
 #include "mdl/GameInfo.h"
 
+#include "mdl/SourceContent.h"
+
 #include "kd/reflection_impl.h"
 
 namespace tb::mdl
@@ -32,9 +34,28 @@ GameInfo makeGameInfo(GameConfig gameConfig)
   const auto defaultEnginePrefPath =
     std::filesystem::path{"Games"} / gameConfig.name / "Default Engine";
 
+  auto defaultPath = std::filesystem::path{};
+  if (gameConfig.fileSystemConfig.packageFormat.format == "vpk")
+  {
+    static const auto installed = sourceInstalledGames();
+    if (installed)
+    {
+      const auto expected = gameConfig.name == "Counter-Strike: Source" ? "cstrike"
+                            : gameConfig.name == "Momentum Mod"         ? "momentum"
+                                                                        : "";
+      for (const auto& path : installed.value())
+      {
+        if (path.filename() == expected && !std::string_view{expected}.empty())
+        {
+          defaultPath = path;
+          break;
+        }
+      }
+    }
+  }
   return GameInfo{
     std::move(gameConfig),
-    Preference<std::filesystem::path>{gamePathPrefPath, {}},
+    Preference<std::filesystem::path>{gamePathPrefPath, std::move(defaultPath)},
     Preference<std::filesystem::path>{defaultEnginePrefPath, {}},
   };
 }

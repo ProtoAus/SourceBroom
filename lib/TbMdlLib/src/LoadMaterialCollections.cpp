@@ -278,7 +278,7 @@ gl::ResourceLoader<gl::Texture> makeTextureResourceLoader(
   const fs::FileSystem& fs,
   const std::optional<Palette>& palette)
 {
-  return [&, path, name, palette]() -> Result<gl::Texture> {
+  return [&, path, name, extensions, palette]() -> Result<gl::Texture> {
     return findAndLoadTexture(path, name, extensions, fs, palette)
            | kdl::or_else([&](auto e) -> Result<gl::Texture> {
                return Error{fmt::format("Could not load texture '{}': {}", path, e.msg)};

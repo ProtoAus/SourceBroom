@@ -1,0 +1,25 @@
+// Minimal, newly authored SourceBroom alpha definitions, GPL-3.0-or-later.
+// Not Valve's SDK FGD. Use the target game's own licensed FGD for full coverage.
+@BaseClass = Named [
+ targetname(string) : "Name"
+ spawnflags(flags) = []
+]
+@SolidClass = worldspawn [
+ skyname(string) : "Sky" : "sky_day01_01"
+]
+@PointClass base(Named) color(0 180 0) size(-16 -16 0, 16 16 72) = info_player_start : "Player start" []
+@PointClass base(Named) color(0 80 220) size(-16 -16 0, 16 16 72) = info_player_counterterrorist : "Counter-terrorist start" []
+@PointClass base(Named) color(220 80 0) size(-16 -16 0, 16 16 72) = info_player_terrorist : "Terrorist start" []
+@PointClass base(Named) color(255 255 80) size(-8 -8 -8, 8 8 8) = light : "Point light" [
+ _light(color255) : "Color and brightness" : "255 255 255 300"
+]
+@PointClass base(Named) color(255 255 80) size(-8 -8 -8, 8 8 8) = light_environment : "Environment light" [
+ _light(color255) : "Sun color and brightness" : "255 255 255 300"
+ _ambient(color255) : "Ambient color and brightness" : "128 128 128 100"
+]
+@SolidClass base(Named) = func_detail : "Detail brush" []
+@SolidClass base(Named) = func_brush : "Brush entity" []
+@SolidClass base(Named) = trigger_multiple : "Multiple trigger" []
+@SolidClass base(Named) = trigger_push : "Push trigger" [
+ speed(float) : "Speed" : 100
+]

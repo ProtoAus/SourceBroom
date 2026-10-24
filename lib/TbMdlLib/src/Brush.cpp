@@ -204,8 +204,13 @@ Result<void> Brush::updateGeometryFromFaces(const vm::bbox3d& worldBounds)
     }
   }
 
-  // Correct vertex positions and heal short edges
-  geometry->correctVertexPositions();
+  // Native planes retain near-integer fractions in both planes and vertices.
+  // Keep the legacy correction for brushes created by the existing map formats.
+  if (!std::ranges::any_of(
+        m_faces, [](const auto& face) { return face.preservesPlanePrecision(); }))
+  {
+    geometry->correctVertexPositions();
+  }
   if (!geometry->healEdges())
   {
     return Error{"Brush is invalid"};
@@ -676,8 +681,9 @@ Result<void> Brush::snapVertices(
   for (const auto* vertex : m_geometry->vertices())
   {
     const auto& origin = vertex->position();
-    if (const auto destination = snapToF * round(origin / snapToF);
-        newGeometry.hasVertex(destination))
+    if (
+      const auto destination = snapToF * round(origin / snapToF);
+      newGeometry.hasVertex(destination))
     {
       vertexMapping.emplace(origin, destination);
     }

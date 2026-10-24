@@ -93,6 +93,8 @@
 #include "mdl/UndoableCommand.h"
 #include "mdl/UpdateLinkedGroupsCommand.h"
 #include "mdl/UpdateLinkedGroupsHelper.h"
+#include "mdl/VmfFile.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WadPropertyUtils.h"
 #include "mdl/WorldBoundsValidator.h"
 #include "mdl/WorldNode.h"
@@ -112,6 +114,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <exception>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -155,10 +158,13 @@ auto createGameFileSystem(
 }
 
 template <typename Resource>
-auto makeCreateResource(gl::ResourceManager& resourceManager)
+auto makeCreateResource(
+  gl::ResourceManager& resourceManager,
+  const gl::ResourceLoadingPolicy policy = gl::ResourceLoadingPolicy::Eager)
 {
-  return [&](auto resourceLoader) {
+  return [&resourceManager, policy](auto resourceLoader) {
     auto resource = std::make_shared<Resource>(std::move(resourceLoader));
+    resource->setLoadingPolicy(policy);
     resourceManager.addResource(resource);
     return resource;
   };
@@ -456,23 +462,24 @@ std::vector<GroupNode*> collectGroupsWithPendingChanges(Node& node)
 {
   auto result = std::vector<GroupNode*>{};
 
-  node.accept(kdl::overload(
-    [](auto&& thisLambda, const WorldNode& worldNode) {
-      worldNode.visitChildren(thisLambda);
-    },
-    [](auto&& thisLambda, const LayerNode& layerNode) {
-      layerNode.visitChildren(thisLambda);
-    },
-    [&](auto&& thisLambda, GroupNode& groupNode) {
-      if (groupNode.hasPendingChanges())
-      {
-        result.push_back(&groupNode);
-      }
-      groupNode.visitChildren(thisLambda);
-    },
-    [](const EntityNode&) {},
-    [](const BrushNode&) {},
-    [](const PatchNode&) {}));
+  node.accept(
+    kdl::overload(
+      [](auto&& thisLambda, const WorldNode& worldNode) {
+        worldNode.visitChildren(thisLambda);
+      },
+      [](auto&& thisLambda, const LayerNode& layerNode) {
+        layerNode.visitChildren(thisLambda);
+      },
+      [&](auto&& thisLambda, GroupNode& groupNode) {
+        if (groupNode.hasPendingChanges())
+        {
+          result.push_back(&groupNode);
+        }
+        groupNode.visitChildren(thisLambda);
+      },
+      [](const EntityNode&) {},
+      [](const BrushNode&) {},
+      [](const PatchNode&) {}));
 
   return result;
 }
@@ -481,9 +488,10 @@ bool updateLinkedGroups(Map& map)
 {
   if (map.isCurrentDocumentStateObservable())
   {
-    if (const auto allChangedLinkedGroups =
-          collectGroupsWithPendingChanges(map.worldNode());
-        !allChangedLinkedGroups.empty())
+    if (
+      const auto allChangedLinkedGroups =
+        collectGroupsWithPendingChanges(map.worldNode());
+      !allChangedLinkedGroups.empty())
     {
       setHasPendingChanges(allChangedLinkedGroups, false);
 
@@ -611,6 +619,33 @@ Result<std::unique_ptr<Map>> Map::createMap(
 {
   logger.info() << "Creating new document";
 
+  if (mapFormat == MapFormat::SourceVMF)
+  {
+    const auto initial = gameInfo.gameConfig.findInitialMap("Source VMF");
+    if (initial.empty())
+    {
+      return Error{
+        "Native VMF alpha: open an existing VMF or the included starter template. New "
+        "object creation is not yet supported"};
+    }
+    return loadMap(
+             environmentConfig,
+             gameInfo,
+             std::move(gamePath),
+             mapFormat,
+             worldBounds,
+             initial,
+             taskManager,
+             resourceManager,
+             logger)
+           | kdl::transform([](auto map) {
+               map->setPath(DefaultDocumentName);
+               map->m_vmfSavedPath.clear();
+               map->m_vmfSavedBytes.clear();
+               return map;
+             });
+  }
+
   return createWorldNode(mapFormat, gameInfo.gameConfig, worldBounds, taskManager, logger)
          | kdl::transform([&](auto worldNode) {
              return std::make_unique<Map>(
@@ -642,6 +677,62 @@ Result<std::unique_ptr<Map>> Map::loadMap(
   }
 
   logger.info() << "Loading document from " << path;
+
+  const auto nativeFormat =
+    mapFormat == MapFormat::SourceVMF
+    || (mapFormat == MapFormat::Unknown && kdl::path_to_lower(path.extension()) == ".vmf");
+  if (nativeFormat)
+  {
+    return fs::Disk::openFile(path)
+           | kdl::and_then([&](auto file) -> Result<std::unique_ptr<Map>> {
+               try
+               {
+                 auto reader = file->reader().buffer();
+                 auto state = std::make_unique<VmfScene>(VmfScene::read(
+                   std::string{reader.stringView()},
+                   worldBounds,
+                   EntityPropertyConfig{
+                     gameInfo.gameConfig.entityConfig.scaleExpression,
+                     gameInfo.gameConfig.entityConfig.setDefaultProperties}));
+                 logger.warn() << "SourceBroom native VMF alpha: existing plain-object "
+                                  "edits only. Displacements are hull previews; "
+                                  "unsupported attachments remain preserved and guarded.";
+                 logger.warn()
+                   << "Source viewport: base-texture preview only. Source lighting, "
+                      "transparency and shader effects are not reproduced.";
+                 const auto& diagnostics = state->diagnostics();
+                 for (size_t i = 0; i < std::min(size_t{12}, diagnostics.size()); ++i)
+                 {
+                   logger.warn() << diagnostics[i].message;
+                 }
+                 if (diagnostics.size() > 12)
+                 {
+                   logger.warn()
+                     << (diagnostics.size() - 12)
+                     << " additional preserved native blocks/capability diagnostics";
+                 }
+                 auto world = state->takeWorld();
+                 auto map = std::make_unique<Map>(
+                   environmentConfig,
+                   gameInfo,
+                   std::move(gamePath),
+                   std::move(world),
+                   worldBounds,
+                   path,
+                   taskManager,
+                   resourceManager,
+                   logger);
+                 map->m_vmfSavedPath = path;
+                 map->m_vmfSavedBytes = state->document().source();
+                 map->m_vmfScene = std::move(state);
+                 return map;
+               }
+               catch (const std::exception& e)
+               {
+                 return Error{std::string{"Native VMF load refused: "} + e.what()};
+               }
+             });
+  }
 
   return loadWorldNode(
            mapFormat, gameInfo.gameConfig, worldBounds, path, taskManager, logger)
@@ -766,7 +857,8 @@ WorldNode& Map::worldNode()
 
 MapTextEncoding Map::encoding() const
 {
-  return MapTextEncoding::Quake;
+  return m_worldNode->mapFormat() == MapFormat::SourceVMF ? MapTextEncoding::Utf8
+                                                          : MapTextEncoding::Quake;
 }
 
 NodeHandleManager& Map::nodeHandles()
@@ -856,6 +948,11 @@ Result<void> Map::save()
 Result<void> Map::saveAs(const std::filesystem::path& path)
 {
   return saveTo(path).transform([&]() {
+    if (m_vmfScene)
+    {
+      m_vmfSavedPath = path;
+      m_vmfSavedBytes = m_vmfScene->serialize(*m_worldNode);
+    }
     setLastSaveModificationCount();
     setPath(path);
     mapWasSavedNotifier();
@@ -870,6 +967,36 @@ Result<void> Map::saveTo(const std::filesystem::path& path) const
   }
 
   m_logger.info() << "Saving document to " << path;
+
+  if (m_vmfScene)
+  {
+    try
+    {
+      const auto bytes = m_vmfScene->serialize(*m_worldNode);
+      auto equivalentError = std::error_code{};
+      const auto sameBackingFile =
+        path.lexically_normal() == m_vmfSavedPath.lexically_normal()
+        || (!m_vmfSavedPath.empty() && std::filesystem::equivalent(path, m_vmfSavedPath, equivalentError));
+      const auto expected =
+        sameBackingFile ? std::optional<std::string_view>{m_vmfSavedBytes} : std::nullopt;
+      return saveVmfFile(path, bytes, expected, true)
+             | kdl::transform([&](const auto& saved) {
+                 if (saved.backupPath)
+                 {
+                   m_logger.info() << "Preserved previous VMF at " << *saved.backupPath;
+                 }
+               });
+    }
+    catch (const std::exception& e)
+    {
+      return Error{
+        std::string{"Native VMF save refused; original unchanged: "} + e.what()};
+    }
+  }
+  if (m_worldNode->mapFormat() == MapFormat::SourceVMF)
+  {
+    return Error{"Native VMF document state missing; refusing MAP fallback"};
+  }
 
   const auto generator =
     fmt::format("TrenchBroom {} (Build {})", VERSION_STR, BUILD_ID_STR);
@@ -890,6 +1017,11 @@ Result<void> Map::saveTo(const std::filesystem::path& path) const
 
 Result<void> Map::exportAs(const ExportOptions& options) const
 {
+  if (m_vmfScene && std::holds_alternative<MapExportOptions>(options))
+  {
+    return Error{
+      "Native VMF maps must use Save As VMF; MAP export would lose Source data"};
+  }
   return std::visit(
     kdl::overload(
       [&](const ObjExportOptions& objOptions) {
@@ -1047,15 +1179,19 @@ void Map::updateFaceTags(const std::vector<BrushFaceHandle>& faceHandles)
 
 void Map::updateAllFaceTags()
 {
-  m_worldNode->accept(kdl::overload(
-    [](auto&& thisLambda, WorldNode& worldNode) { worldNode.visitChildren(thisLambda); },
-    [](auto&& thisLambda, LayerNode& layerNode) { layerNode.visitChildren(thisLambda); },
-    [](auto&& thisLambda, GroupNode& groupNode) { groupNode.visitChildren(thisLambda); },
-    [](auto&& thisLambda, EntityNode& entityNode) {
-      entityNode.visitChildren(thisLambda);
-    },
-    [&](BrushNode& brushNode) { brushNode.initializeTags(*m_tagManager); },
-    [](PatchNode&) {}));
+  m_worldNode->accept(
+    kdl::overload(
+      [](
+        auto&& thisLambda, WorldNode& worldNode) { worldNode.visitChildren(thisLambda); },
+      [](
+        auto&& thisLambda, LayerNode& layerNode) { layerNode.visitChildren(thisLambda); },
+      [](
+        auto&& thisLambda, GroupNode& groupNode) { groupNode.visitChildren(thisLambda); },
+      [](auto&& thisLambda, EntityNode& entityNode) {
+        entityNode.visitChildren(thisLambda);
+      },
+      [&](BrushNode& brushNode) { brushNode.initializeTags(*m_tagManager); },
+      [](PatchNode&) {}));
 }
 
 void Map::updateFaceTagsAfterResourcesWhereProcessed(
@@ -1068,27 +1204,31 @@ void Map::updateFaceTagsAfterResourcesWhereProcessed(
   const auto materialSet =
     std::unordered_set<const gl::Material*>{materials.begin(), materials.end()};
 
-  worldNode().accept(kdl::overload(
-    [](auto&& thisLambda, WorldNode& worldNode) { worldNode.visitChildren(thisLambda); },
-    [](auto&& thisLambda, LayerNode& layerNode) { layerNode.visitChildren(thisLambda); },
-    [](auto&& thisLambda, GroupNode& groupNode) { groupNode.visitChildren(thisLambda); },
-    [](auto&& thisLambda, EntityNode& entityNode) {
-      entityNode.visitChildren(thisLambda);
-    },
-    [&](BrushNode& brushNode) {
-      const auto& faces = brushNode.brush().faces();
-      for (size_t i = 0; i < faces.size(); ++i)
-      {
+  worldNode().accept(
+    kdl::overload(
+      [](
+        auto&& thisLambda, WorldNode& worldNode) { worldNode.visitChildren(thisLambda); },
+      [](
+        auto&& thisLambda, LayerNode& layerNode) { layerNode.visitChildren(thisLambda); },
+      [](
+        auto&& thisLambda, GroupNode& groupNode) { groupNode.visitChildren(thisLambda); },
+      [](auto&& thisLambda, EntityNode& entityNode) {
+        entityNode.visitChildren(thisLambda);
+      },
+      [&](BrushNode& brushNode) {
+        const auto& faces = brushNode.brush().faces();
+        for (size_t i = 0; i < faces.size(); ++i)
         {
-          const auto& face = faces[i];
-          if (materialSet.contains(face.material()))
           {
-            brushNode.updateFaceTags(i, *m_tagManager);
+            const auto& face = faces[i];
+            if (materialSet.contains(face.material()))
+            {
+              brushNode.updateFaceTags(i, *m_tagManager);
+            }
           }
         }
-      }
-    },
-    [](PatchNode&) {}));
+      },
+      [](PatchNode&) {}));
 }
 
 void Map::registerValidators()
@@ -1111,8 +1251,9 @@ void Map::registerValidators()
   m_worldNode->registerValidator(std::make_unique<EmptyPropertyValueValidator>());
   m_worldNode->registerValidator(
     std::make_unique<LongPropertyKeyValidator>(gameInfo().gameConfig.maxPropertyLength));
-  m_worldNode->registerValidator(std::make_unique<LongPropertyValueValidator>(
-    gameInfo().gameConfig.maxPropertyLength));
+  m_worldNode->registerValidator(
+    std::make_unique<LongPropertyValueValidator>(
+      gameInfo().gameConfig.maxPropertyLength));
   m_worldNode->registerValidator(
     std::make_unique<PropertyKeyWithDoubleQuotationMarksValidator>());
   m_worldNode->registerValidator(
@@ -1229,7 +1370,19 @@ void Map::loadMaterials()
   loadMaterialCollections(
     *m_gameFileSystem,
     gameInfo().gameConfig.materialConfig,
-    makeCreateResource<gl::TextureResource>(m_resourceManager),
+    [create = makeCreateResource<gl::TextureResource>(
+       m_resourceManager,
+       m_worldNode->mapFormat() == MapFormat::SourceVMF
+         ? gl::ResourceLoadingPolicy::OnDemand
+         : gl::ResourceLoadingPolicy::Eager),
+     fileSystem = m_gameFileSystem](auto loader) {
+      // A pending texture task may finish after its document/window is closed.
+      auto resource = create([loader = std::move(loader), fileSystem]() {
+        (void)fileSystem;
+        return loader();
+      });
+      return resource;
+    },
     taskManager(),
     m_logger)
     | kdl::transform([&](auto materialCollections) {
@@ -1391,13 +1544,14 @@ void Map::addEntityLinks(const std::vector<Node*>& nodes, const bool recurse)
 {
   for (auto* node : nodes)
   {
-    node->accept(kdl::overload(
-      [&](WorldNode& worldNode) { m_entityLinkManager->addEntityNode(worldNode); },
-      [](LayerNode&) {},
-      [](GroupNode&) {},
-      [&](EntityNode& entityNode) { m_entityLinkManager->addEntityNode(entityNode); },
-      [](BrushNode&) {},
-      [](PatchNode&) {}));
+    node->accept(
+      kdl::overload(
+        [&](WorldNode& worldNode) { m_entityLinkManager->addEntityNode(worldNode); },
+        [](LayerNode&) {},
+        [](GroupNode&) {},
+        [&](EntityNode& entityNode) { m_entityLinkManager->addEntityNode(entityNode); },
+        [](BrushNode&) {},
+        [](PatchNode&) {}));
 
     if (recurse)
     {
@@ -1410,13 +1564,16 @@ void Map::removeEntityLinks(const std::vector<Node*>& nodes, const bool recurse)
 {
   for (auto* node : nodes)
   {
-    node->accept(kdl::overload(
-      [&](WorldNode& worldNode) { m_entityLinkManager->removeEntityNode(worldNode); },
-      [](LayerNode&) {},
-      [](GroupNode&) {},
-      [&](EntityNode& entityNode) { m_entityLinkManager->removeEntityNode(entityNode); },
-      [](BrushNode&) {},
-      [](PatchNode&) {}));
+    node->accept(
+      kdl::overload(
+        [&](WorldNode& worldNode) { m_entityLinkManager->removeEntityNode(worldNode); },
+        [](LayerNode&) {},
+        [](GroupNode&) {},
+        [&](EntityNode& entityNode) {
+          m_entityLinkManager->removeEntityNode(entityNode);
+        },
+        [](BrushNode&) {},
+        [](PatchNode&) {}));
 
 
     if (recurse)

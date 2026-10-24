@@ -210,8 +210,9 @@ std::optional<ParaxialAttribsNoOffset> extractParaxialAttribs(
         const auto clockwise = (degreesToV > 0.0f);
 
         // turn 90 degrees from xVec
-        const auto newVdir = vm::normalize(vm::vec2f{vm::cross(
-          vm::vec3f{0, 0, clockwise ? -1.0f : 1.0f}, vm::vec3f{uVec.xy(), 0.0})});
+        const auto newVdir = vm::normalize(
+          vm::vec2f{vm::cross(
+            vm::vec3f{0, 0, clockwise ? -1.0f : 1.0f}, vm::vec3f{uVec.xy(), 0.0})});
 
         // scalar projection of the old vVec onto newVDir to get the new vScale
         const auto newVscale = vm::dot(vVec, newVdir);
@@ -223,8 +224,9 @@ std::optional<ParaxialAttribsNoOffset> extractParaxialAttribs(
         const auto clockwise = (degreesToU > 0.0f);
 
         // turn 90 degrees from Yvec
-        const auto newUdir = vm::normalize(vm::vec2f{vm::cross(
-          vm::vec3f{0, 0, clockwise ? -1.0f : 1.0f}, vm::vec3f{vVec.xy(), 0.0})});
+        const auto newUdir = vm::normalize(
+          vm::vec2f{vm::cross(
+            vm::vec3f{0, 0, clockwise ? -1.0f : 1.0f}, vm::vec3f{vVec.xy(), 0.0})});
 
         // scalar projection of the old uVec onto newUDir to get the new uScale
         const auto newUscale = vm::dot(uVec, newUdir);
@@ -619,7 +621,8 @@ void ParaxialUvCoordSystem::transform(
   const vm::mat4x4d& transformation,
   const vm::vec2f& textureSize,
   bool lockTexture,
-  const vm::vec3d& oldInvariant)
+  const vm::vec3d& oldInvariant,
+  const bool preserveUnwrappedOffsets)
 {
   const auto offset = transformation * vm::vec3d{0, 0};
   auto newBoundaryNormal = newBoundary.normal;
@@ -738,8 +741,10 @@ void ParaxialUvCoordSystem::transform(
 
     // since the center should be invariant, the offsets are determined by the difference
     // of the current and the original texture coordiknates of the center
-    const auto newOffset =
-      vm::correct(modOffset(oldInvariantUvCoords - newInvariantUvCoords, textureSize), 4);
+    const auto unwrappedOffset = oldInvariantUvCoords - newInvariantUvCoords;
+    const auto newOffset = preserveUnwrappedOffsets
+                             ? unwrappedOffset
+                             : vm::correct(modOffset(unwrappedOffset, textureSize), 4);
 
     contract_assert(!vm::is_nan(newOffset));
     contract_assert(!vm::is_nan(newScale));

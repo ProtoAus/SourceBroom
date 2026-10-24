@@ -1,4 +1,50 @@
-# A1 validation — native VMF document foundation
+# SourceBroom validation
+
+## Current A2–A4 Windows alpha candidate
+
+Verified on 2026-10-24 with Windows x64, MSVC 19.50, Qt 6.10.3 and CMake 4.3.
+External maps, installed assets and local raw logs are not public ship inputs.
+
+| Control / subject | Prediction and observed outcome |
+|---|---|
+| Full production-library tests | Fs 20, Gl 21, Mdl 150, Ui 40: all 231 CTest entries passed. Final first-party build logs contain no warnings/errors. |
+| Native no-op and acted edits | Authored tests cover byte-preserving round trips, actual existing brush/entity changes, UV preservation, undo/redo, unsupported edit refusal, stale bindings and save transactions; silent no-op is not the acted control. |
+| External syntax corpus | All 38 inputs still pass no-edit byte identity and original hash checks. Original files were never write targets. |
+| External scene corpus | 32 scenes accepted; six explicitly refused with geometry/UV diagnostics. No promise those six work in the GUI, and no objects were silently dropped to make them pass. |
+| Content readers | Authored tests exercise loose/VPK precedence, bounds/error handling, VMT includes/fallbacks, VTF byte layouts and preview budgets. Unsupported shader behavior is not called complete Source rendering. |
+| Pixel demand | Unrequested Source resources remain unloaded; metadata lookup does not decode pixels; viewport activation and scene material references request them. Legacy resources retain eager behavior. |
+| Real GUI | CSS and Momentum authored-room previews opened, showed brick textures, and closed with exit 0. Fixture hashes remained unchanged. This is a basic preview/close check, not a latency, FPS or exhaustive library-browsing benchmark. |
+| Native authored edit | Production native scene edit moved a ramp, wrote a new VMF, reopened it, and verified the changed bounds/bytes rather than accepting an unchanged output. |
+| External classic Source compiler | CS:S VBSP/VVIS/VRAD compiled both authored control and native-edited VMFs to version-20 BSPs; tool exits and output existence were checked. |
+| External Strata compiler | Momentum VBSP/VVIS/VRAD compiled the native-edited VMF to a version-25 BSP. VMF format and BSP target version remained separate. |
+| Local runtime | All three compiled BSPs loaded in separately launched, owned FTESurf clients, produced map-specific timer/status logs and screenshots, and exited 0. The classic edited run produced changed server body coordinates and forward speed while approaching the ramp. |
+| Windows install | Existing CMake install entrypoint succeeded; binary, Qt runtime and game resources staged without copying Valve compilers/assets or corpus maps. |
+
+Runtime rigs contained only copied engine/plugins/progs and tracked public game
+assets/configs. They had no owner config/player data, used no lobby connection,
+and never wrote either canonical install. Unknown `ui_close` messages in that
+runtime fixture did not prevent the actual HUD/world screenshots; they are not
+counted as a passed menu-command check. Runtime spawn timing differs between
+arms, so body logs are **not** a controlled numerical collision/prediction
+comparison. Exact ramp joins/feel still need the small owner check below.
+
+### Remaining acceptance and limits
+
+- Independent Hammer++ reopening and room/ramp/texture inspection: **pending
+  actual owner confirmation**, tracked in [lextest.md](../../lextest.md).
+- Owner inspection of the edited ramp joins/collision and first interactive
+  editor feel: pending. Automated compile/load is not that visual acceptance.
+- Six scene refusals remain compatibility findings; see [BACKLOG.md](../../BACKLOG.md).
+- MDL props, full VMT shader fidelity, displacement/instance/overlay authoring,
+  new/deleted geometry, full FGD/I/O tools, packing and broad branch coverage are
+  not implemented. Unsupported changes must not be called safe saves.
+- Long-session cache eviction, broad performance claims, non-Windows packages,
+  an installer and public binary release are not verified.
+
+The automated A4 chain is implemented and exercised. The full A4 exit is not
+claimed until its independent/manual gates have actual evidence.
+
+## Historical A1 validation — native VMF document foundation
 
 Verified on 2026-10-24 using Windows x64, MSVC 19.50 / Visual Studio 18 BuildTools,
 CMake 4.3, and the existing Qt 6.10.3 kit. Upstream base:
@@ -63,7 +109,7 @@ one connection property: request
 an I/O-heavy map before the entity-I/O authoring stage rather than claiming broad
 real-world I/O coverage now.
 
-## Explicitly not verified or implemented
+## Historical A1 exclusions (see current status above)
 
 - VMF scene/brush construction, viewport opening, selection, or GUI saving.
 - Semantic escape decoding, numerical/geometry validity, or float precision after
@@ -74,5 +120,6 @@ real-world I/O coverage now.
 - Source materials/models, game discovery, or compiler profile UI.
 - Linux/macOS builds, performance comparisons, installers, or release packaging.
 
-Next dependency is **A2: read-only VMF-to-scene bridge**, keeping the native
-document/ID mapping authoritative. See [the roadmap](ROADMAP.md).
+At A1 the next dependency was **A2: read-only VMF-to-scene bridge**, keeping the
+native document/ID mapping authoritative. Current results are above; see
+[the roadmap](ROADMAP.md) for the remaining acceptance and later stages.

@@ -229,8 +229,9 @@ std::optional<MaterialAlphaFunc> Material::effectiveAlphaFunc() const
     return m_alphaFunc;
   }
 
-  if (const auto* texture = this->texture();
-      texture && texture->alphaDomain() == img::ImageAlphaDomain::Binary)
+  if (
+    const auto* texture = this->texture();
+    texture && texture->alphaDomain() == img::ImageAlphaDomain::Binary)
   {
     return MaterialAlphaFunc{MaterialAlphaFunc::Compare::GreaterEqual, 0.5f};
   }
@@ -246,8 +247,9 @@ MaterialBlendFunc Material::effectiveBlendFunc() const
   }
 
 
-  if (const auto* texture = this->texture();
-      texture && texture->alphaDomain() == img::ImageAlphaDomain::Graduated)
+  if (
+    const auto* texture = this->texture();
+    texture && texture->alphaDomain() == img::ImageAlphaDomain::Graduated)
   {
     return MaterialBlendFunc{
       MaterialBlendFunc::Enable::UseFactors, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA};
@@ -263,6 +265,9 @@ size_t Material::usageCount() const
 
 void Material::incUsageCount() const
 {
+  // Scene opacity classification can precede activation. References are demand;
+  // catalog/layout metadata probes are not.
+  m_textureResource->requestLoading();
   ++m_usageCount;
 }
 
@@ -274,8 +279,11 @@ void Material::decUsageCount() const
 
 void Material::activate(Gl& gl, const int minFilter, const int magFilter) const
 {
-  if (const auto* texture = m_textureResource->get();
-      texture && texture->activate(gl, minFilter, magFilter))
+  // Layout probes texture() for the entire catalog; only rendering requests data.
+  m_textureResource->requestLoading();
+  if (
+    const auto* texture = m_textureResource->get();
+    texture && texture->activate(gl, minFilter, magFilter))
   {
     switch (m_culling)
     {
@@ -293,8 +301,9 @@ void Material::activate(Gl& gl, const int minFilter, const int magFilter) const
       break;
     }
 
-    if (const auto blendFunc = effectiveBlendFunc();
-        blendFunc.enable != MaterialBlendFunc::Enable::UseDefault)
+    if (
+      const auto blendFunc = effectiveBlendFunc();
+      blendFunc.enable != MaterialBlendFunc::Enable::UseDefault)
     {
       if (blendFunc.enable == MaterialBlendFunc::Enable::UseFactors)
       {

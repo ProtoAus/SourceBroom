@@ -105,6 +105,7 @@
 #include "ui/RenderView.h"
 #include "ui/ReplaceMaterialDialog.h"
 #include "ui/SignalDelayer.h"
+#include "ui/SourceBuildDialog.h"
 #include "ui/Splitter.h"
 #include "ui/SwitchableMapViewContainer.h"
 #include "ui/VertexTool.h"
@@ -294,8 +295,8 @@ QAction* MapWindow::findAction(const std::filesystem::path& path)
   if (const auto iAction = actionsMap.find(path); iAction != std::end(actionsMap))
   {
     const auto& action = iAction->second;
-    if (const auto iQAction = m_actionMap.find(&action);
-        iQAction != std::end(m_actionMap))
+    if (
+      const auto iQAction = m_actionMap.find(&action); iQAction != std::end(m_actionMap))
     {
       return iQAction->second;
     }
@@ -307,7 +308,10 @@ void MapWindow::updateTitle()
 {
   const auto& map = m_document->map();
   setWindowModified(map.modified());
-  setWindowTitle(tr("%1[*] - TrenchBroom").arg(pathAsQString(map.filename())));
+  setWindowTitle((map.worldNode().mapFormat() == mdl::MapFormat::SourceVMF
+                    ? tr("%1[*] - SourceBroom alpha | VMF base-texture preview")
+                    : tr("%1[*] - SourceBroom alpha"))
+                   .arg(pathAsQString(map.filename())));
   setWindowFilePath(pathAsQPath(map.path()));
 }
 
@@ -673,10 +677,10 @@ QString describeSelection(const mdl::Map& map)
   // now, turn `tokens` into a comma-separated string
   if (!tokens.empty())
   {
-    pipeSeparatedSections << QObject::tr("%1%2 selected")
-                               .arg(QString::fromStdString(
-                                 kdl::str_join(tokens, ", ", ", and ", " and ")))
-                               .arg(layersDescription);
+    pipeSeparatedSections
+      << QObject::tr("%1%2 selected")
+           .arg(QString::fromStdString(kdl::str_join(tokens, ", ", ", and ", " and ")))
+           .arg(layersDescription);
   }
 
   // count hidden objects
@@ -685,39 +689,40 @@ QString describeSelection(const mdl::Map& map)
   size_t hiddenBrushes = 0u;
   size_t hiddenPatches = 0u;
 
-  map.worldNode().accept(kdl::overload(
-    [](auto&& thisLambda, const mdl::WorldNode& worldNode) {
-      worldNode.visitChildren(thisLambda);
-    },
-    [](auto&& thisLambda, const mdl::LayerNode& layerNode) {
-      layerNode.visitChildren(thisLambda);
-    },
-    [&](auto&& thisLambda, const mdl::GroupNode& groupNode) {
-      if (!editorContext.visible(groupNode))
-      {
-        ++hiddenGroups;
-      }
-      groupNode.visitChildren(thisLambda);
-    },
-    [&](auto&& thisLambda, const mdl::EntityNode& entityNode) {
-      if (!editorContext.visible(entityNode))
-      {
-        ++hiddenEntities;
-      }
-      entityNode.visitChildren(thisLambda);
-    },
-    [&](const mdl::BrushNode& brushNode) {
-      if (!editorContext.visible(brushNode))
-      {
-        ++hiddenBrushes;
-      }
-    },
-    [&](const mdl::PatchNode& patchNode) {
-      if (!editorContext.visible(patchNode))
-      {
-        ++hiddenPatches;
-      }
-    }));
+  map.worldNode().accept(
+    kdl::overload(
+      [](auto&& thisLambda, const mdl::WorldNode& worldNode) {
+        worldNode.visitChildren(thisLambda);
+      },
+      [](auto&& thisLambda, const mdl::LayerNode& layerNode) {
+        layerNode.visitChildren(thisLambda);
+      },
+      [&](auto&& thisLambda, const mdl::GroupNode& groupNode) {
+        if (!editorContext.visible(groupNode))
+        {
+          ++hiddenGroups;
+        }
+        groupNode.visitChildren(thisLambda);
+      },
+      [&](auto&& thisLambda, const mdl::EntityNode& entityNode) {
+        if (!editorContext.visible(entityNode))
+        {
+          ++hiddenEntities;
+        }
+        entityNode.visitChildren(thisLambda);
+      },
+      [&](const mdl::BrushNode& brushNode) {
+        if (!editorContext.visible(brushNode))
+        {
+          ++hiddenBrushes;
+        }
+      },
+      [&](const mdl::PatchNode& patchNode) {
+        if (!editorContext.visible(patchNode))
+        {
+          ++hiddenPatches;
+        }
+      }));
 
   // print hidden objects
   if (hiddenGroups > 0 || hiddenEntities > 0 || hiddenBrushes > 0)
@@ -742,8 +747,10 @@ QString describeSelection(const mdl::Map& map)
     }
 
     pipeSeparatedSections << QObject::tr("%1 hidden")
-                               .arg(QString::fromStdString(kdl::str_join(
-                                 hiddenDescriptors, ", ", ", and ", " and ")));
+                               .arg(
+                                 QString::fromStdString(
+                                   kdl::str_join(
+                                     hiddenDescriptors, ", ", ", and ", " and ")));
   }
 
   return QString::fromLatin1("   ")
@@ -1028,7 +1035,11 @@ bool MapWindow::saveDocumentAs()
                              : m_appController.environmentConfig().userDataFolderPath;
 
   const auto newFileName = QFileDialog::getSaveFileName(
-    this, tr("Save map file"), pathAsQPath(defaultPath), "Map files (*.map)");
+    this,
+    tr("Save map file"),
+    pathAsQPath(defaultPath),
+    map.worldNode().mapFormat() == mdl::MapFormat::SourceVMF ? "Source VMF (*.vmf)"
+                                                             : "Map files (*.map)");
   if (newFileName.isEmpty())
   {
     return false;
@@ -1111,9 +1122,10 @@ bool MapWindow::exportDocument(const mdl::ExportOptions& options)
     QMessageBox::critical(
       this,
       "",
-      tr("You can't overwrite the current document.\nPlease choose a different file name "
-         "to export "
-         "to."));
+      tr(
+        "You can't overwrite the current document.\nPlease choose a different file name "
+        "to export "
+        "to."));
     return false;
   }
 
@@ -2083,6 +2095,14 @@ bool MapWindow::currentViewMaximized() const
 
 void MapWindow::showCompileDialog()
 {
+  if (m_document->map().worldNode().mapFormat() == mdl::MapFormat::SourceVMF)
+  {
+    if (saveDocument())
+    {
+      showSourceBuildDialog(this, pathAsQString(m_document->map().path()), false);
+    }
+    return;
+  }
   if (!m_compilationDialog)
   {
     const auto& camera = m_mapView->perspectiveCamera();
@@ -2136,12 +2156,13 @@ const mdl::CompilationProfile* MapWindow::lastCompilationProfile() const
     const auto& compilationProfiles =
       m_document->map().gameInfo().compilationConfig.profiles;
 
-    if (const auto iLastCompilationProfile = std::ranges::find_if(
-          compilationProfiles,
-          [&](const auto& profile) {
-            return profile.name == *m_lastCompilationProfileName;
-          });
-        iLastCompilationProfile != compilationProfiles.end())
+    if (
+      const auto iLastCompilationProfile = std::ranges::find_if(
+        compilationProfiles,
+        [&](const auto& profile) {
+          return profile.name == *m_lastCompilationProfileName;
+        });
+      iLastCompilationProfile != compilationProfiles.end())
     {
       return &*iLastCompilationProfile;
     }

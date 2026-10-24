@@ -56,6 +56,7 @@ private:
 protected:
   AppController& m_appController;
   DialogType m_dialogType;
+  bool m_sourceOnly = false;
   GameListBox* m_gameListBox = nullptr;
   QComboBox* m_mapFormatComboBox = nullptr;
   QPushButton* m_openPreferencesButton = nullptr;
@@ -67,7 +68,7 @@ public:
   static std::optional<std::tuple<std::string, mdl::MapFormat>> showNewDocumentDialog(
     AppController& appController, QWidget* parent = nullptr);
   static std::optional<std::tuple<std::string, mdl::MapFormat>> showOpenDocumentDialog(
-    AppController& appController, QWidget* parent = nullptr);
+    AppController& appController, QWidget* parent = nullptr, bool sourceOnly = false);
 
   std::string currentGameName() const;
   mdl::MapFormat currentMapFormat() const;
@@ -82,7 +83,8 @@ protected:
     const QString& title,
     const QString& infoText,
     DialogType type,
-    QWidget* parent = nullptr);
+    QWidget* parent = nullptr,
+    bool sourceOnly = false);
 
   void createGui(const QString& title, const QString& infoText);
   QWidget* createInfoPanel(const QString& title, const QString& infoText);

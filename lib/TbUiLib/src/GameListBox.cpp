@@ -63,9 +63,11 @@ auto makeGameDisplayInfo(const mdl::GameInfo& gameInfo)
 }
 } // namespace
 
-GameListBox::GameListBox(AppController& appController, QWidget* parent)
+GameListBox::GameListBox(
+  AppController& appController, QWidget* parent, const bool sourceOnly)
   : ImageListBox{"No Games Found", true, parent}
   , m_appController{appController}
+  , m_sourceOnly{sourceOnly}
 {
   reloadGameInfos();
 }
@@ -73,11 +75,9 @@ GameListBox::GameListBox(AppController& appController, QWidget* parent)
 const mdl::GameInfo* GameListBox::selectedGameInfo() const
 {
   const auto& gameManager = m_appController.gameManager();
-  const auto& gameInfos = gameManager.gameInfos();
-
   const auto index = selectedRow();
-  return index >= 0 && index < static_cast<int>(gameInfos.size())
-           ? &gameInfos[static_cast<size_t>(index)]
+  return index >= 0 && index < static_cast<int>(m_displayInfos.size())
+           ? gameManager.gameInfo(m_displayInfos[static_cast<size_t>(index)].name)
            : nullptr;
 }
 
@@ -93,15 +93,24 @@ void GameListBox::reloadGameInfos()
   const auto* currentGameInfo = selectedGameInfo();
   m_displayInfos.clear();
 
-  std::ranges::transform(
-    gameManager.gameInfos(), std::back_inserter(m_displayInfos), makeGameDisplayInfo);
+  for (const auto& game : gameManager.gameInfos())
+  {
+    const auto supportsSource = std::ranges::any_of(
+      game.gameConfig.fileFormats,
+      [](const auto& format) { return format.format == "Source VMF"; });
+    if (!m_sourceOnly || supportsSource)
+    {
+      m_displayInfos.push_back(makeGameDisplayInfo(game));
+    }
+  }
 
   reload();
 
   if (
-    const auto selectedGameIndex = kdl::index_of(
-      gameManager.gameInfos(),
-      [&](const auto& gameInfo) { return &gameInfo == currentGameInfo; }))
+    const auto selectedGameIndex =
+      kdl::index_of(m_displayInfos, [&](const auto& display) {
+        return currentGameInfo && display.name == currentGameInfo->gameConfig.name;
+      }))
   {
     selectGame(*selectedGameIndex);
   }

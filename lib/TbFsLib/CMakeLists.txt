@@ -15,6 +15,7 @@ target_sources(TbFsLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Reader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/TraversalMode.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/VirtualFileSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/VpkFileSystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WadFileSystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ZipFileSystem.cpp
 

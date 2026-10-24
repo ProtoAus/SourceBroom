@@ -112,6 +112,7 @@ get_build_platform(APP_PLATFORM_NAME)
 
 # Create the executable target and link with libraries
 add_executable(TrenchBroom WIN32 MACOSX_BUNDLE)
+set_target_properties(TrenchBroom PROPERTIES OUTPUT_NAME SourceBroom)
 target_sources(TrenchBroom PRIVATE ${APP_SOURCE} ${INDEX_OUTPUT_PATH} ${DOC_MANUAL_TARGET_FILES_ABSOLUTE} ${DOC_MANUAL_SHORTCUTS_JS_TARGET_ABSOLUTE} ${DOC_MANUAL_TARGET_IMAGE_FILES_ABSOLUTE})
 
 if(WIN32 AND COMPILER_IS_MSVC)
@@ -243,7 +244,8 @@ endif()
 
 # Generate a small stripped PDB for release builds so we get stack traces with symbols
 if(COMPILER_IS_MSVC)
-    set_target_properties(TrenchBroom PROPERTIES LINK_FLAGS_RELEASE "/DEBUG /PDBSTRIPPED:app/TrenchBroom/TrenchBroom-stripped.pdb /PDBALTPATH:TrenchBroom-stripped.pdb")
+    set(TB_STRIPPED_PDB "${CMAKE_CURRENT_BINARY_DIR}/SourceBroom-stripped.pdb")
+    target_link_options(TrenchBroom PRIVATE "$<$<CONFIG:Release>:/DEBUG>" "$<$<CONFIG:Release>:/PDBSTRIPPED:${TB_STRIPPED_PDB}>" "$<$<CONFIG:Release>:/PDBALTPATH:SourceBroom-stripped.pdb>")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux|FreeBSD")
@@ -333,10 +335,11 @@ if(WIN32 OR ${CMAKE_SYSTEM_NAME} MATCHES "Linux|FreeBSD")
 endif()
 
 # Common CPack configuration
-set(APP_PACKAGE_FILE_NAME "TrenchBroom-${APP_PLATFORM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${GIT_DESCRIBE}-${CMAKE_BUILD_TYPE}")
+set(APP_PACKAGE_FILE_NAME "SourceBroom-${APP_PLATFORM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${GIT_DESCRIBE}-alpha")
 set(CPACK_PACKAGE_FILE_NAME ${APP_PACKAGE_FILE_NAME})
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "TrenchBroom Level Editor")
-set(CPACK_PACKAGE_VENDOR "TrenchBroom")
+set(CPACK_PACKAGE_NAME "SourceBroom")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SourceBroom native Source 1 VMF editor alpha")
+set(CPACK_PACKAGE_VENDOR "SourceBroom contributors")
 # We want stack trace symbols even in our release builds, so don't strip.
 set(CPACK_STRIP_FILES FALSE)
 
@@ -345,11 +348,11 @@ if(WIN32)
     # Copy PDB files (msvc debug symbols)
     if(COMPILER_IS_MSVC)
         install(FILES
-            "$<TARGET_FILE_DIR:TrenchBroom>/TrenchBroom.pdb"
+            "$<TARGET_PDB_FILE:TrenchBroom>"
             DESTINATION . COMPONENT TrenchBroom
             CONFIGURATIONS Debug RelWithDebInfo)
         install(FILES
-            "$<TARGET_FILE_DIR:TrenchBroom>/TrenchBroom-stripped.pdb"
+            "${TB_STRIPPED_PDB}"
             DESTINATION . COMPONENT TrenchBroom
             CONFIGURATIONS Release)
     endif()

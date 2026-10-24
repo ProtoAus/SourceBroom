@@ -27,6 +27,8 @@
 #include "kd/reflection_impl.h"
 #include "kd/result.h"
 
+#include <atomic>
+#include <exception>
 #include <functional>
 #include <future>
 #include <iostream>
@@ -39,6 +41,12 @@ class Gl;
 
 template <typename T>
 using ResourceLoader = std::function<Result<T>()>;
+
+enum class ResourceLoadingPolicy
+{
+  Eager,
+  OnDemand
+};
 
 using ErrorHandler = std::function<void(const ResourceId&, const std::string&)>;
 
@@ -145,10 +153,27 @@ namespace detail
 {
 
 template <typename T>
+Result<T> loadResource(const ResourceLoader<T>& loader)
+{
+  try
+  {
+    return loader();
+  }
+  catch (const std::exception& e)
+  {
+    return Error{"Resource loader threw: " + std::string{e.what()}};
+  }
+  catch (...)
+  {
+    return Error{"Resource loader threw an unknown exception"};
+  }
+}
+
+template <typename T>
 ResourceState<T> triggerLoading(ResourceUnloaded<T> state, TaskRunner taskRunner)
 {
   auto future = taskRunner([loader = std::move(state.loader)]() {
-    return std::make_unique<LoaderTaskResult<T>>(loader());
+    return std::make_unique<LoaderTaskResult<T>>(loadResource<T>(loader));
   });
   return ResourceLoading<T>{std::move(future)};
 }
@@ -228,6 +253,8 @@ class Resource
 private:
   ResourceId m_id;
   ResourceState<T> m_state;
+  ResourceLoadingPolicy m_loadingPolicy = ResourceLoadingPolicy::Eager;
+  std::shared_ptr<std::atomic_bool> m_loadingRequested;
 
   kdl_reflect_inline(Resource, m_state);
 
@@ -247,6 +274,23 @@ public:
   const ResourceId& id() const { return m_id; }
 
   const ResourceState<T>& state() const { return m_state; }
+
+  // Set before publishing a resource. Requests may also come from scene references.
+  void setLoadingPolicy(const ResourceLoadingPolicy policy)
+  {
+    if (policy == ResourceLoadingPolicy::OnDemand && !m_loadingRequested)
+    {
+      m_loadingRequested = std::make_shared<std::atomic_bool>(false);
+    }
+    m_loadingPolicy = policy;
+  }
+  void requestLoading()
+  {
+    if (m_loadingRequested)
+    {
+      m_loadingRequested->store(true, std::memory_order_relaxed);
+    }
+  }
 
   const T* get() const
   {
@@ -286,6 +330,11 @@ public:
 
   bool needsProcessing() const
   {
+    if (std::holds_alternative<ResourceUnloaded<T>>(m_state))
+    {
+      return m_loadingPolicy == ResourceLoadingPolicy::Eager
+             || (m_loadingRequested && m_loadingRequested->load(std::memory_order_relaxed));
+    }
     return !std::holds_alternative<ResourceReady<T>>(m_state)
            && !std::holds_alternative<ResourceFailed>(m_state);
   }
@@ -296,6 +345,10 @@ public:
     m_state = std::visit(
       kdl::overload(
         [&](ResourceUnloaded<T> state) -> ResourceState<T> {
+          if (!needsProcessing())
+          {
+            return state;
+          }
           return detail::triggerLoading(std::move(state), taskRunner);
         },
         [&](ResourceLoading<T> state) -> ResourceState<T> {
@@ -340,9 +393,10 @@ public:
     m_state = std::visit(
       kdl::overload(
         [&](ResourceUnloaded<T> state) -> ResourceState<T> {
-          return state.loader() | kdl::transform([](auto value) -> ResourceState<T> {
-                   return ResourceLoaded<T>{std::move(value)};
-                 })
+          return detail::loadResource<T>(state.loader)
+                 | kdl::transform([](auto value) -> ResourceState<T> {
+                     return ResourceLoaded<T>{std::move(value)};
+                   })
                  | kdl::transform_error([](auto error) -> ResourceState<T> {
                      return ResourceFailed{std::move(error.msg)};
                    })

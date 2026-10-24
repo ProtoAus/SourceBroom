@@ -454,6 +454,7 @@ void StandardMapParser::parseFace(ParserStatus& status, const bool primitive)
     parseDaikatanaFace(status);
     break;
   case MapFormat::Valve:
+  case MapFormat::SourceVMF: // Internal clipboard representation only.
     parseValveFace(status);
     break;
   case MapFormat::Quake3:
@@ -827,8 +828,9 @@ UvAttributes StandardMapParser::parseUvAttributes(const vm::vec2f& offset)
 
 std::optional<RgbB> StandardMapParser::parseColor(ParserStatus& status)
 {
-  if (const auto firstColorToken = m_tokenizer.peekToken();
-      firstColorToken.hasType(QuakeMapToken::Integer))
+  if (
+    const auto firstColorToken = m_tokenizer.peekToken();
+    firstColorToken.hasType(QuakeMapToken::Integer))
   {
     // red, green, blue
     const auto r = parseInteger();

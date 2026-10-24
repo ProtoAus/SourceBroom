@@ -47,18 +47,7 @@ namespace
 
 bool shouldEnableUpdating()
 {
-  if (SystemPaths::isPortable())
-  {
-    return false;
-  }
-
-#if defined(Q_OS_WIN)
-  return SystemPaths::appFile().filename() == "TrenchBroom.exe";
-#elif defined(Q_OS_MACOS)
-  return SystemPaths::appFile().filename() == "TrenchBroom";
-#else
-  return SystemPaths::appImageFile() != std::nullopt;
-#endif
+  return false; // Never install an upstream TrenchBroom release over this fork.
 }
 
 auto getScriptPath()

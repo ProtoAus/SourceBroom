@@ -25,6 +25,7 @@
 #include "mdl/GroupNode.h"
 #include "mdl/LayerNode.h"
 #include "mdl/MapFileSerializer.h"
+#include "mdl/MapFormat.h"
 #include "mdl/Node.h"
 #include "mdl/NodeSerializer.h"
 #include "mdl/PatchNode.h"
@@ -58,35 +59,36 @@ void doWriteNodes(
 
   for (const auto* node : nodes)
   {
-    node->accept(kdl::overload(
-      [](const WorldNode&) {},
-      [](const LayerNode&) {},
-      [&](auto&& thisLambda, const GroupNode& groupNode) {
-        serializer.group(groupNode, parentProperties());
+    node->accept(
+      kdl::overload(
+        [](const WorldNode&) {},
+        [](const LayerNode&) {},
+        [&](auto&& thisLambda, const GroupNode& groupNode) {
+          serializer.group(groupNode, parentProperties());
 
-        parentStack.push_back(&groupNode);
-        groupNode.visitChildren(thisLambda);
-        parentStack.pop_back();
-      },
-      [&](const EntityNode& entityNode) {
-        auto extraProperties = parentProperties();
-        const auto& protectedProperties = entityNode.entity().protectedProperties();
-        if (!protectedProperties.empty())
-        {
-          const auto escapedProperties = protectedProperties
-                                         | std::views::transform([](const auto& key) {
-                                             return kdl::str_escape(key, ";");
-                                           })
-                                         | kdl::ranges::to<std::vector>();
-          extraProperties.emplace_back(
-            EntityPropertyKeys::TbProtectedEntityProperties,
-            kdl::str_join(escapedProperties, ";"));
-        }
-        serializer.entity(
-          entityNode, entityNode.entity().properties(), extraProperties, entityNode);
-      },
-      [](const BrushNode&) {},
-      [](const PatchNode&) {}));
+          parentStack.push_back(&groupNode);
+          groupNode.visitChildren(thisLambda);
+          parentStack.pop_back();
+        },
+        [&](const EntityNode& entityNode) {
+          auto extraProperties = parentProperties();
+          const auto& protectedProperties = entityNode.entity().protectedProperties();
+          if (!protectedProperties.empty())
+          {
+            const auto escapedProperties = protectedProperties
+                                           | std::views::transform([](const auto& key) {
+                                               return kdl::str_escape(key, ";");
+                                             })
+                                           | kdl::ranges::to<std::vector>();
+            extraProperties.emplace_back(
+              EntityPropertyKeys::TbProtectedEntityProperties,
+              kdl::str_join(escapedProperties, ";"));
+          }
+          serializer.entity(
+            entityNode, entityNode.entity().properties(), extraProperties, entityNode);
+        },
+        [](const BrushNode&) {},
+        [](const PatchNode&) {}));
   }
 }
 
@@ -101,6 +103,10 @@ NodeWriter::NodeWriter(const WorldNode& world, std::unique_ptr<NodeSerializer> s
   : m_world{world}
   , m_serializer{std::move(serializer)}
 {
+  if (world.mapFormat() == MapFormat::SourceVMF)
+  {
+    m_serializer->setUpdateFilePositions(false);
+  }
 }
 
 NodeWriter::~NodeWriter() = default;
@@ -176,31 +182,32 @@ void NodeWriter::writeNodes(
 
   for (auto* node : nodes)
   {
-    node->accept(kdl::overload(
-      [](WorldNode&) {},
-      [](LayerNode&) {},
-      [&](GroupNode& groupNode) { groups.push_back(&groupNode); },
-      [&](EntityNode& entityNode) { entities.push_back(&entityNode); },
-      [&](BrushNode& brushNode) {
-        if (auto* entityNode = dynamic_cast<EntityNode*>(brushNode.parent()))
-        {
-          entityChildNodes[entityNode].push_back(&brushNode);
-        }
-        else
-        {
-          worldChildren.push_back(&brushNode);
-        }
-      },
-      [&](PatchNode& patchNode) {
-        if (auto* entityNode = dynamic_cast<EntityNode*>(patchNode.parent()))
-        {
-          entityChildNodes[entityNode].push_back(&patchNode);
-        }
-        else
-        {
-          worldChildren.push_back(&patchNode);
-        }
-      }));
+    node->accept(
+      kdl::overload(
+        [](WorldNode&) {},
+        [](LayerNode&) {},
+        [&](GroupNode& groupNode) { groups.push_back(&groupNode); },
+        [&](EntityNode& entityNode) { entities.push_back(&entityNode); },
+        [&](BrushNode& brushNode) {
+          if (auto* entityNode = dynamic_cast<EntityNode*>(brushNode.parent()))
+          {
+            entityChildNodes[entityNode].push_back(&brushNode);
+          }
+          else
+          {
+            worldChildren.push_back(&brushNode);
+          }
+        },
+        [&](PatchNode& patchNode) {
+          if (auto* entityNode = dynamic_cast<EntityNode*>(patchNode.parent()))
+          {
+            entityChildNodes[entityNode].push_back(&patchNode);
+          }
+          else
+          {
+            worldChildren.push_back(&patchNode);
+          }
+        }));
   }
 
   writeWorldNode(worldChildren);

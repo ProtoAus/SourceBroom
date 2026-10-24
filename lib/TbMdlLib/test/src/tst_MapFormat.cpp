@@ -45,6 +45,12 @@ std::string toString(const MapFormat format)
 
 TEST_CASE("MapFormat")
 {
+  CHECK(formatFromName("Source VMF") == MapFormat::SourceVMF);
+  CHECK(formatName(MapFormat::SourceVMF) == "Source VMF");
+  CHECK(toString(MapFormat::SourceVMF) == "SourceVMF");
+  CHECK(compatibleFormats(MapFormat::SourceVMF) == std::vector{MapFormat::SourceVMF});
+  CHECK(isParallelUvCoordSystem(MapFormat::SourceVMF));
+  CHECK_FALSE(hasPatchSupport(MapFormat::SourceVMF));
   SECTION("formatFromName")
   {
     using T = std::tuple<std::string, MapFormat>;
