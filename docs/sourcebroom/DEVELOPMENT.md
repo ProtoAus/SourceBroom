@@ -52,8 +52,10 @@ uses that same production code.
 - Treat values as raw lexical tokens at this stage. Semantic escape decoding,
   geometry parsing, and typed entity values belong to later layers.
 - Surgical edits replace an existing property value with exactly one explicitly
-  supplied VMF token. Validate the replacement before producing output. A raw
-  token API is deliberately not a user-facing text-field API.
+  supplied, quoted VMF token. Quotes prevent lexical merging with adjacent tokens
+  or comments. Unedited bare tokens remain unchanged. Validate the replacement
+  before producing output. A raw token API is deliberately not a user-facing
+  text-field API.
 - Never retain string_views into a movable source string. Accessors derive views
   from numeric spans when requested; callers must not outlive the document.
 - Reject malformed quoting/braces/comments, NUL/binary input, UTF-16, and excessive

@@ -8,7 +8,10 @@ only intended destination. Source 2 / VMAP is out of scope.
 
 - Fork established from upstream `6e9185edd35e614f96864cd20a7abe4fed23e408`.
 - **A0 complete:** repository and ordered plan.
-- **A1 in progress:** native, lossless VMF document foundation and read-only corpus checker.
+- **A1 complete:** native, lossless VMF document foundation and read-only corpus
+  checker. [Validation and limitations](VALIDATION.md): 141 model-library tests
+  pass (including 9 VMF cases); all 38 supplied maps pass byte-preservation and
+  in-memory mutation checks with original SHA-256 hashes unchanged.
 - **A2 and later not implemented.** The GUI is still upstream TrenchBroom. It does
   not yet open, render, edit, or save VMFs. There is no SourceBroom editor release.
 - No Source compiler, Valve content, or third-party/user map is bundled.
