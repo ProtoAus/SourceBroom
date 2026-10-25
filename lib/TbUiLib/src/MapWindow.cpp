@@ -1357,7 +1357,11 @@ void MapWindow::cutSelection()
 
     copyToClipboard();
     auto transaction = mdl::Transaction{map, "Cut"};
-    removeSelectedNodes(map);
+    if (!removeSelectedNodes(map))
+    {
+      transaction.cancel();
+      return;
+    }
     transaction.commit();
   }
 }
@@ -1386,7 +1390,9 @@ bool MapWindow::canCutSelection() const
 {
   const auto& map = m_document->map();
   const auto& selection = map.selection();
-  return widgetOrChildHasFocus(m_mapView) && selection.hasNodes()
+  // Native clipboard node paste is deliberately closed. Do not turn Cut into
+  // an irreversible-to-paste deletion; Copy and native Delete remain available.
+  return !map.vmfScene() && widgetOrChildHasFocus(m_mapView) && selection.hasNodes()
          && !m_mapView->toolBox().anyModalToolActive();
 }
 
@@ -1541,7 +1547,9 @@ bool MapWindow::canDeleteSelection() const
   {
     return toolBox.faceTool().canRemoveSelection();
   }
-  return canCutSelection();
+  const auto& map = m_document->map();
+  return widgetOrChildHasFocus(m_mapView) && map.selection().hasNodes()
+         && !toolBox.anyModalToolActive();
 }
 
 void MapWindow::selectAll()

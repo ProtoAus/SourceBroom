@@ -49,8 +49,11 @@ DrawShapeTool::DrawShapeTool(MapDocument& document)
     {
       auto transaction = mdl::Transaction{map, "Apply shape parameters"};
       update(*bounds);
-      mdl::removeSelectedNodes(map);
-      createBrushes(groupNameForCreatedBrushes());
+      if (!mdl::removeSelectedNodes(map) || !createBrushes(groupNameForCreatedBrushes()))
+      {
+        transaction.cancel();
+        return;
+      }
       transaction.commit();
     }
   });
@@ -88,7 +91,8 @@ DrawShapeToolExtensionManager& DrawShapeTool::extensionManager()
 
 std::optional<std::string> DrawShapeTool::groupNameForCreatedBrushes() const
 {
-  return pref(Preferences::GroupBrushesCreatedByShapeTool)
+  // Native editor groups are not authorable yet; new Source shapes are plain solids.
+  return !m_document.map().vmfScene() && pref(Preferences::GroupBrushesCreatedByShapeTool)
            ? std::optional{m_extensionManager.currentExtension().name()}
            : std::nullopt;
 }
@@ -106,7 +110,11 @@ void DrawShapeTool::applyExtensionParameters()
     }) | kdl::transform([&](auto brushNodes) {
       auto transaction = mdl::Transaction{map, "Update Brushes"};
 
-      removeSelectedNodes(map);
+      if (!removeSelectedNodes(map))
+      {
+        transaction.cancel();
+        return;
+      }
       const auto addedNodes = addNodes(
         map,
         {
@@ -114,6 +122,11 @@ void DrawShapeTool::applyExtensionParameters()
                                    return static_cast<mdl::Node*>(node.release());
                                  }) | kdl::ranges::to<std::vector>()},
         });
+      if (addedNodes.empty())
+      {
+        transaction.cancel();
+        return;
+      }
       selectNodes(map, addedNodes);
 
       transaction.commit();

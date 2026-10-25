@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom A4/A5 candidates
+# Human acceptance — SourceBroom A4/A5/A5.2 candidates
 
 No owner confirmation has been received for the following checks. Do not turn
 an automated build/screenshot into a human pass. Use newly authored maps/copies;
@@ -33,6 +33,19 @@ remain pending until actually observed and confirmed.
 - [ ] Open the material browser, scroll briefly and select a familiar material.
   Report whether startup/map opening and browser responsiveness feel improved;
   this observation does not establish a measured speedup or visual parity.
+
+## A5.2 basic native authoring — pending
+
+- [ ] Create a new CSS or Momentum map from its native starter (or use a copy).
+  Draw a small closed brush, move it, duplicate it, delete the duplicate and
+  undo/redo. Add a simple point entity from the configured game's definitions.
+  Save As a new `.vmf`, reopen in SourceBroom and matching Hammer++, and confirm
+  both objects, placement and texture orientation. Do not overwrite an original.
+- [ ] On a copy, make a plain brush entity such as `func_detail`, duplicate the
+  whole entity and then one selected brush within it. Delete/undo a last brush.
+  Confirm native ownership and unrelated metadata survive independent reopening.
+  Refusal for opaque/unsupported data is intentional; report the exact action
+  and message rather than attempting a MAP export to bypass it.
 
 ## A5 authoring-tools candidate — also pending
 

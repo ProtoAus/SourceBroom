@@ -54,7 +54,7 @@ const mdl::Grid& CreateBrushesToolBase::grid() const
   return m_document.map().grid();
 }
 
-void CreateBrushesToolBase::createBrushes(std::optional<std::string> groupName)
+bool CreateBrushesToolBase::createBrushes(std::optional<std::string> groupName)
 {
   if (!m_brushNodes.empty())
   {
@@ -68,15 +68,29 @@ void CreateBrushesToolBase::createBrushes(std::optional<std::string> groupName)
     deselectAll(m_document.map());
     auto addedNodes =
       addNodes(m_document.map(), {{&parentForNodes(m_document.map()), nodesToAdd}});
+    if (addedNodes.empty())
+    {
+      transaction.cancel();
+      return false;
+    }
     selectNodes(m_document.map(), addedNodes);
     if (groupName && addedNodes.size() > 1)
     {
-      groupSelectedNodes(m_document.map(), *groupName);
+      if (!groupSelectedNodes(m_document.map(), *groupName))
+      {
+        transaction.cancel();
+        return false;
+      }
     }
-    transaction.commit();
+    if (!transaction.commit())
+    {
+      return false;
+    }
 
     doBrushesWereCreated();
+    return true;
   }
+  return false;
 }
 
 void CreateBrushesToolBase::clearBrushes()
@@ -100,9 +114,10 @@ void CreateBrushesToolBase::render(
     m_brushRenderer->setEdgeColor(pref(Preferences::SelectedEdgeColor));
     m_brushRenderer->setShowEdges(true);
     m_brushRenderer->setShowOccludedEdges(true);
-    m_brushRenderer->setOccludedEdgeColor(RgbaF{
-      pref(Preferences::SelectedEdgeColor).to<RgbF>(),
-      pref(Preferences::OccludedSelectedEdgeAlpha)});
+    m_brushRenderer->setOccludedEdgeColor(
+      RgbaF{
+        pref(Preferences::SelectedEdgeColor).to<RgbF>(),
+        pref(Preferences::OccludedSelectedEdgeAlpha)});
     m_brushRenderer->setTint(true);
     m_brushRenderer->setTintColor(pref(Preferences::SelectedFaceColor));
     m_brushRenderer->setForceTransparent(true);

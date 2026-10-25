@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.1 usability candidate
+# Try the Windows SourceBroom A5.2 native-authoring candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,19 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## Usability follow-up
+## Basic native authoring to try
+
+Create a **new map** from the profile's native VMF starter, or use an owned copy.
+Draw a small closed brush, move it, duplicate it, delete the duplicate and try
+undo/redo. Add a simple point entity from your game's definitions. Save As a new
+`.vmf` and reopen it in SourceBroom and matching Hammer++. Plain brush-to-entity
+creation and whole/partial brush-entity duplication are also enabled.
+
+Native IDs remain stable across save and undo/redo; no MAP conversion is used.
+Unknown metadata is not permission to guess: opaque attachments or references
+can make an otherwise ordinary operation unsafe and require refusal.
+
+## Retained usability follow-up
 
 Source startup no longer repeats its just-completed content scan, and enabled
 material-folder selection uses a hashed lookup instead of repeatedly walking the
@@ -82,10 +94,11 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 
 ## Important limits
 
-- Existing plain brush/entity edits are the safe native surface. Arbitrary new
-  geometry/entities, deletion, topology, hierarchy, displacements, overlays and
-  instances are not supported authoring features. Some upstream controls remain
-  visible; a refusing save is not a successful export.
+- Basic plain-brush/point-entity creation, duplication, deletion and limited
+  brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
+  CSG/clipping, native editor-group/layer authoring, displacements, overlays and
+  instances remain unsupported. Common unsafe paths refuse before mutation;
+  some upstream controls can remain visible and save guards stay authoritative.
 - Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
   does not apply cordon clipping itself; unchanged VMF is passed to external tools
   whose behavior must be checked.
@@ -93,14 +106,14 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 - All 38 supplied maps pass lossless syntax/no-edit checks; **35/38** construct
   scenes. Three still refuse for duplicate IDs, invalid UV scale or an incomplete
   brush; the editor does not silently discard those objects.
-- Current four-suite regression evidence is **248/248 passed**: Fs20, Gl21,
-  Mdl165 and Ui42. A prior untouched Windows preference replacement failure
+- Current four-suite regression evidence is **250/250 passed**: Fs20, Gl21,
+  Mdl167 and Ui42. A prior untouched Windows preference replacement failure
   passed in this run but remains a known intermittent finding, not a claimed fix.
   Details and prior A4 evidence are in [VALIDATION.md](VALIDATION.md).
 - The package includes no Valve assets, Source compilers or external user maps.
   Keep the older A4 package as recovery; do not merge different package DLL sets.
 
-For the quickest feedback, check one native output edit in Hammer++ and the
-appearance of one familiar prop-containing map. Report the game/profile and the
+For the quickest feedback, try the new-map brush/point workflow above and reopen
+its saved copy in Hammer++. Also retry one familiar prop-containing map. Report the game/profile and the
 exact observation, not a blanket compatibility verdict. No performance advantage
 over Hammer++ or all-branch compatibility has been measured.

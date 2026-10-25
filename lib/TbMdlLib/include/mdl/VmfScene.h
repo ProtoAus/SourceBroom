@@ -7,12 +7,16 @@
 #include "mdl/VmfDocument.h"
 #include "mdl/WorldNode.h"
 
+#include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace tb::mdl
 {
+class NodeContents;
+
 struct VmfSceneDiagnostic
 {
   VmfEntryId entry;
@@ -31,7 +35,41 @@ private:
   std::unique_ptr<WorldNode> m_original;
   std::vector<VmfSceneDiagnostic> m_diagnostics;
 
+  enum class GeneratedKind
+  {
+    Entity,
+    Solid,
+    Side
+  };
+  struct GeneratedBinding
+  {
+    GeneratedKind kind;
+    std::string nativeId;
+    std::optional<VmfEntryId> prototype;
+    size_t owner = 0;
+    /** Solid: immutable admitted side count; side ownership + uniqueness makes
+     * a count match the exact registered binding set without scanning history. */
+    size_t sideCount = 0;
+  };
+  std::map<size_t, GeneratedBinding> m_generated;
+  size_t m_nextBinding = 0;
+  size_t m_generatedIdBytes = 0;
+  std::optional<std::string> m_geometryReferenceProblem;
+  std::string m_nextObjectId = "1";
+  std::string m_nextSideId = "1";
+
   explicit VmfScene(VmfDocument document);
+  std::optional<VmfEntryId> prototype(size_t binding) const;
+  void checkGeometryReferences(VmfEntryId object) const;
+  void nodeEdits(
+    const Node& before,
+    const Node& after,
+    std::vector<VmfValueEdit>& values,
+    std::vector<VmfStructuralEdit>& structure,
+    std::map<VmfEntryId, std::string>& appended,
+    bool protectExistingGeometry) const;
+  std::string emitNode(
+    const Node& node, const std::map<size_t, const Node*>& original) const;
 
 public:
   // Finite editor preview envelope, not an engine/branch compatibility claim.
@@ -54,10 +92,20 @@ public:
   const std::vector<VmfSceneDiagnostic>& diagnostics() const;
   std::string nativeId(const Node& node) const;
 
-  /** No-op is byte-identical. Refuses additions/deletions, reparenting, lost or
-   * duplicate bindings, and edits to opaque attachments. Existing plain entity
-   * values, face planes/materials/UVs can change. Throws std::invalid_argument.
-   */
+  /** Admission precedes command mutation. Generated bindings/IDs survive undo,
+   * redo and repeated saves; serialization never allocates identities. */
+  void validateAdditions(
+    const Node& parent, const std::vector<Node*>& nodes, bool duplication) const;
+  void registerAdditions(const std::vector<Node*>& nodes, bool duplication);
+  void validateDuplication(const std::vector<Node*>& nodes) const;
+  void validateRemoval(const std::vector<Node*>& removalClosure) const;
+  void validateReparent(const Node& parent, const std::vector<Node*>& nodes) const;
+  void validateContents(
+    const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const;
+
+  /** Immutable-source delta. Plain native additions/deletions and brush-entity
+   * wrapping retain unrelated bytes and opaque payloads. Unsupported edits fail
+   * closed with std::invalid_argument; no MAP re-export or filesystem writes. */
   std::string serialize(const WorldNode& world) const;
 };
 } // namespace tb::mdl

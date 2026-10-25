@@ -38,8 +38,11 @@ compatible merely because they also use VMF.
   custom-only distribution ZIPs. These are [bounded tools](SOURCE_TOOLS.md), not
   native metadata authoring, complete dependency discovery or all-branch support.
   The A5.1 usability follow-up removes duplicate initial Source indexing and
-  quadratic enabled-folder selection. Current [validation](VALIDATION.md) records
-  Fs20/Gl21/Mdl165/Ui42 passing (248 entries). The earlier preference-test failure
+  quadratic enabled-folder selection. A5.2 adds bounded native new-map/brush/point
+  creation, plain-object duplication/deletion and brush-entity ownership, with
+  side-identity admission, stable ID allocation and preserving undo/save.
+  Current [validation](VALIDATION.md) records
+  Fs20/Gl21/Mdl167/Ui42 passing (250 entries). The earlier preference-test failure
   passed this run but remains an unresolved intermittent finding, not a fix.
   Independent Hammer++/owner checks remain pending.
 - A6 is not implemented. No Source compiler, Valve content, or third-party/user
@@ -139,8 +142,11 @@ This is the first interactive alpha, **not** a claim of complete Source support.
 
 ### A5 — Everyday Source authoring
 
-**Candidate boundary:** existing native entities have typed FGD hints and an
-ordered output table; supported props have a static root/default-pose preview.
+**Candidate boundary:** basic native brushes/points can be created, duplicated,
+deleted and placed in supported plain brush-entity ownership, without a Quake
+MAP round trip. Arbitrary topology and opaque-reference mutations remain gated.
+Existing native entities have typed FGD hints and an ordered output table;
+supported props have a static root/default-pose preview.
 Groups, visgroups, hidden state and cordons are interpreted/validated read-only,
 not scene-parent or visibility authoring. A camera action moves the eye only.
 Custom dependency discovery is incomplete and writes an explicitly reviewed
@@ -148,6 +154,8 @@ new distribution ZIP, not a BSP pak lump. Generic Source remains configurable
 without certifying arbitrary branches. [Tool limits](SOURCE_TOOLS.md) and
 [human gates](../../lextest.md) remain part of the full A5 exit.
 
+- Basic native object creation, stable object/side IDs, duplication/deletion,
+  limited brush-entity ownership and preserving command history/save.
 - Entity FGD integration and Source input/output editing, including repeated
   outputs and both documented output separators.
 - Source MDL/VVD/VTX props and branch-specific model variants.

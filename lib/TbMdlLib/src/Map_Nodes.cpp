@@ -45,6 +45,7 @@
 #include "mdl/TagManager.h"
 #include "mdl/Transaction.h"
 #include "mdl/VisualEffect.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 
 #include "kd/contracts.h"
@@ -56,6 +57,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <set>
 
 namespace tb::mdl
 {
@@ -111,13 +113,14 @@ void copyAndSetLinkIds(
  */
 bool shouldCloneParentWhenCloningNode(const Node* node)
 {
-  return node->parent()->accept(kdl::overload(
-    [](const WorldNode&) { return false; },
-    [](const LayerNode&) { return false; },
-    [](const GroupNode&) { return false; },
-    [&](const EntityNode&) { return true; },
-    [](const BrushNode&) { return false; },
-    [](const PatchNode&) { return false; }));
+  return node->parent()->accept(
+    kdl::overload(
+      [](const WorldNode&) { return false; },
+      [](const LayerNode&) { return false; },
+      [](const GroupNode&) { return false; },
+      [&](const EntityNode&) { return true; },
+      [](const BrushNode&) { return false; },
+      [](const PatchNode&) { return false; }));
 }
 
 void resetLinkIdsOfNonGroupedNodes(const kdl::flat_map<Node*, std::vector<Node*>>& nodes)
@@ -249,31 +252,82 @@ auto collectRemovableParents(const kdl::flat_map<Node*, std::vector<Node*>>& nod
   return result;
 }
 
+bool admitNativeRemoval(Map& map, const std::vector<Node*>& nodes)
+{
+  if (auto* scene = map.vmfScene())
+  {
+    // Simulate the same complete closure as the command loop, before deselection
+    // or child removal makes an opaque empty owner disappear from consideration.
+    auto closure = std::set<Node*>{};
+    const auto include = [&](auto&& self, Node& node) -> void {
+      if (closure.insert(&node).second)
+      {
+        for (auto* child : node.children())
+        {
+          self(self, *child);
+        }
+      }
+    };
+    for (auto* node : nodes)
+    {
+      include(include, *node);
+    }
+    auto changed = true;
+    while (changed)
+    {
+      changed = false;
+      for (auto* node : closure)
+      {
+        auto* parent = node->parent();
+        if (
+          parent && parent->removeIfEmpty()
+          && std::ranges::all_of(
+            parent->children(), [&](auto* child) { return closure.contains(child); }))
+        {
+          changed = closure.insert(parent).second || changed;
+        }
+      }
+    }
+    try
+    {
+      scene->validateRemoval(std::vector<Node*>{closure.begin(), closure.end()});
+    }
+    catch (const std::exception& e)
+    {
+      map.logger().error() << "Native VMF removal refused: " << e.what();
+      return false;
+    }
+  }
+  return true;
+}
+
 bool isGeometryNode(const Node& node)
 {
-  return node.accept(kdl::overload(
-    [](const WorldNode&) { return false; },
-    [](const LayerNode&) { return false; },
-    [](const GroupNode&) { return false; },
-    [](const EntityNode&) { return false; },
-    [](const BrushNode&) { return true; },
-    [](const PatchNode&) { return true; }));
+  return node.accept(
+    kdl::overload(
+      [](const WorldNode&) { return false; },
+      [](const LayerNode&) { return false; },
+      [](const GroupNode&) { return false; },
+      [](const EntityNode&) { return false; },
+      [](const BrushNode&) { return true; },
+      [](const PatchNode&) { return true; }));
 }
 
 bool isStructural(const Map& map, const Node& node)
 {
-  return node.accept(kdl::overload(
-    [](const WorldNode&) { return false; },
-    [](const LayerNode&) { return false; },
-    [](const GroupNode&) { return false; },
-    [](const EntityNode&) { return false; },
-    [&](const BrushNode& brushNode) {
-      return brushNode.entity() == &map.worldNode() && !brushNode.hasAnyTag()
-             && !brushNode.anyFaceHasAnyTag();
-    },
-    [&](const PatchNode& patchNode) {
-      return patchNode.entity() == &map.worldNode() && !patchNode.hasAnyTag();
-    }));
+  return node.accept(
+    kdl::overload(
+      [](const WorldNode&) { return false; },
+      [](const LayerNode&) { return false; },
+      [](const GroupNode&) { return false; },
+      [](const EntityNode&) { return false; },
+      [&](const BrushNode& brushNode) {
+        return brushNode.entity() == &map.worldNode() && !brushNode.hasAnyTag()
+               && !brushNode.anyFaceHasAnyTag();
+      },
+      [&](const PatchNode& patchNode) {
+        return patchNode.entity() == &map.worldNode() && !patchNode.hasAnyTag();
+      }));
 }
 
 } // namespace
@@ -305,13 +359,54 @@ Node& parentForNodes(const Map& map, const std::vector<Node*>& nodes)
   return *parentLayer;
 }
 
-std::vector<Node*> addNodes(
-  Map& map, const kdl::flat_map<Node*, std::vector<Node*>>& nodes)
+namespace
+{
+std::vector<Node*> addNodesImpl(
+  Map& map,
+  const kdl::flat_map<Node*, std::vector<Node*>>& nodes,
+  const bool nativeDuplication)
 {
   contract_assert(std::ranges::all_of(nodes, [&](const auto& parentAndChildren) {
     const auto& [parent, children] = parentAndChildren;
     return parent == &map.worldNode() || parent->isDescendantOf(map.worldNode());
   }));
+
+  if (auto* scene = map.vmfScene())
+  {
+    try
+    {
+      for (const auto& [parent, children] : nodes)
+      {
+        scene->validateAdditions(*parent, children, nativeDuplication);
+      }
+      for (const auto& [parent, children] : nodes)
+      {
+        scene->registerAdditions(children, nativeDuplication);
+      }
+    }
+    catch (const std::exception& e)
+    {
+      map.logger().error() << "Native VMF addition refused: " << e.what();
+      // addNodes takes detached-root ownership even when admission fails. Do not
+      // destroy an already-parented object if an invalid caller supplied one.
+      auto detached = std::set<Node*>{};
+      for (const auto& [parent, children] : nodes)
+      {
+        for (auto* child : children)
+        {
+          if (!child->parent())
+          {
+            detached.insert(child);
+          }
+        }
+      }
+      for (auto* child : detached)
+      {
+        delete child;
+      }
+      return {};
+    }
+  }
 
   auto transaction = Transaction{map, "Add Objects"};
   if (!map.executeAndStore(AddRemoveNodesCommand::add(nodes)))
@@ -335,9 +430,34 @@ std::vector<Node*> addNodes(
 
   return addedNodes;
 }
+} // namespace
+
+std::vector<Node*> addNodes(
+  Map& map, const kdl::flat_map<Node*, std::vector<Node*>>& nodes)
+{
+  return addNodesImpl(map, nodes, false);
+}
 
 void duplicateSelectedNodes(Map& map)
 {
+  if (auto* scene = map.vmfScene())
+  {
+    auto toValidate = std::vector<Node*>{};
+    for (auto* node : map.selection().nodes)
+    {
+      toValidate.push_back(
+        node->parent() && shouldCloneParentWhenCloningNode(node) ? node->parent() : node);
+    }
+    try
+    {
+      scene->validateDuplication(toValidate);
+    }
+    catch (const std::exception& e)
+    {
+      map.logger().error() << "Native VMF duplication refused: " << e.what();
+      return;
+    }
+  }
   auto nodesToAdd = kdl::flat_map<Node*, std::vector<Node*>>{};
   auto nodesToSelect = std::vector<Node*>{};
   auto newParentMap = std::map<Node*, Node*>{};
@@ -384,7 +504,7 @@ void duplicateSelectedNodes(Map& map)
     auto transaction = Transaction{map, "Duplicate Objects"};
     deselectAll(map);
 
-    if (addNodes(map, nodesToAdd).empty())
+    if (addNodesImpl(map, nodesToAdd, true).empty())
     {
       transaction.cancel();
       return;
@@ -404,6 +524,43 @@ void duplicateSelectedNodes(Map& map)
 
 bool reparentNodes(Map& map, const kdl::flat_map<Node*, std::vector<Node*>>& nodesToAdd)
 {
+  if (auto* scene = map.vmfScene())
+  {
+    // A selected child re-added to its current parent must not be detached:
+    // the generic reparent notification path assumes an actual parent change.
+    auto changes = kdl::flat_map<Node*, std::vector<Node*>>{};
+    auto hasNoOp = false;
+    for (const auto& [parent, children] : nodesToAdd)
+    {
+      for (auto* child : children)
+      {
+        if (child->parent() == parent)
+        {
+          hasNoOp = true;
+        }
+        else
+        {
+          changes[parent].push_back(child);
+        }
+      }
+    }
+    if (hasNoOp)
+    {
+      return changes.empty() || reparentNodes(map, changes);
+    }
+    try
+    {
+      for (const auto& [parent, children] : nodesToAdd)
+      {
+        scene->validateReparent(*parent, children);
+      }
+    }
+    catch (const std::exception& e)
+    {
+      map.logger().error() << "Native VMF reparenting refused: " << e.what();
+      return false;
+    }
+  }
   if (!checkReparenting(nodesToAdd))
   {
     return false;
@@ -441,8 +598,9 @@ bool reparentNodes(Map& map, const kdl::flat_map<Node*, std::vector<Node*>>& nod
   }
 
   // Reset link IDs of nodes being reparented, but don't recurse into nested groups
-  map.executeAndStore(std::make_unique<mdl::SetLinkIdsCommand>(
-    "Set Link ID", setLinkIdsForReparentingNodes(nodesToAdd)));
+  map.executeAndStore(
+    std::make_unique<mdl::SetLinkIdsCommand>(
+      "Set Link ID", setLinkIdsForReparentingNodes(nodesToAdd)));
 
   if (!map.executeAndStore(ReparentNodesCommand::reparent(nodesToAdd, nodesToRemove)))
   {
@@ -517,22 +675,24 @@ bool makeStructural(
   selectNodes(map, geometryNodes);
 
   const auto hasTag = [&](const Node* node, const SmartTag& tag) {
-    return node->accept(kdl::overload(
-      [](const WorldNode&) { return false; },
-      [](const LayerNode&) { return false; },
-      [](const GroupNode&) { return false; },
-      [](const EntityNode&) { return false; },
-      [&](const BrushNode& brushNode) {
-        return brushNode.hasTag(tag) || brushNode.anyFacesHaveAnyTagInMask(tag.type());
-      },
-      [&](const PatchNode& patchNode) { return patchNode.hasTag(tag); }));
+    return node->accept(
+      kdl::overload(
+        [](const WorldNode&) { return false; },
+        [](const LayerNode&) { return false; },
+        [](const GroupNode&) { return false; },
+        [](const EntityNode&) { return false; },
+        [&](const BrushNode& brushNode) {
+          return brushNode.hasTag(tag) || brushNode.anyFacesHaveAnyTagInMask(tag.type());
+        },
+        [&](const PatchNode& patchNode) { return patchNode.hasTag(tag); }));
   };
 
   auto anyTagDisabled = false;
   for (const auto& tag : map.tagManager().smartTags())
   {
-    if (std::ranges::any_of(
-          geometryNodes, [&](const Node* node) { return hasTag(node, tag); }))
+    if (std::ranges::any_of(geometryNodes, [&](const Node* node) {
+          return hasTag(node, tag);
+        }))
     {
       anyTagDisabled = true;
       tag.disable(callback, map);
@@ -576,8 +736,12 @@ bool moveToEntity(Map& map, const std::vector<Node*>& nodes, Node& newParent)
   return transaction.commit();
 }
 
-void removeNodes(Map& map, const std::vector<Node*>& nodes)
+bool removeNodes(Map& map, const std::vector<Node*>& nodes)
 {
+  if (!admitNativeRemoval(map, nodes))
+  {
+    return false;
+  }
   auto removableNodes = parentChildrenMap(removeImplicitelyRemovedNodes(nodes));
 
   auto transaction = Transaction{map, "Remove Objects"};
@@ -588,22 +752,34 @@ void removeNodes(Map& map, const std::vector<Node*>& nodes)
       true);
 
     closeRemovedGroups(map, removableNodes);
-    map.executeAndStore(AddRemoveNodesCommand::remove(removableNodes));
+    if (!map.executeAndStore(AddRemoveNodesCommand::remove(removableNodes)))
+    {
+      transaction.cancel();
+      return false;
+    }
 
     removableNodes = collectRemovableParents(removableNodes);
   }
 
-  assertResult(transaction.commit());
+  return transaction.commit();
 }
 
-void removeSelectedNodes(Map& map)
+bool removeSelectedNodes(Map& map)
 {
   const auto nodes = map.selection().nodes;
+  if (!admitNativeRemoval(map, nodes))
+  {
+    return false;
+  }
 
   auto transaction = Transaction{map, "Delete Objects"};
   deselectAll(map);
-  removeNodes(map, nodes);
-  assertResult(transaction.commit());
+  if (!removeNodes(map, nodes))
+  {
+    transaction.cancel();
+    return false;
+  }
+  return transaction.commit();
 }
 
 bool updateNodeContents(

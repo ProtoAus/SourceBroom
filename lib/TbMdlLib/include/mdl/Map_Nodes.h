@@ -80,8 +80,9 @@ bool makeStructural(
  */
 bool moveToEntity(Map& map, const std::vector<Node*>& nodes, Node& newParent);
 
-void removeNodes(Map& map, const std::vector<Node*>& nodes);
-void removeSelectedNodes(Map& map);
+/** Includes implicit empty-parent removal. Refusal leaves selection/history intact. */
+bool removeNodes(Map& map, const std::vector<Node*>& nodes);
+bool removeSelectedNodes(Map& map);
 
 bool updateNodeContents(
   Map& map,

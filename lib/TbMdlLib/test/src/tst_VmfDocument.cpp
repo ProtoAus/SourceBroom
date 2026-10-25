@@ -302,6 +302,65 @@ TEST_CASE("VmfDocument spans survive copies moves and entry growth", "[vmf]")
   CHECK(large.serialize() == source);
 }
 
+TEST_CASE(
+  "VmfDocument root additions preserve trailing comments and native fragments", "[vmf]")
+{
+  const auto source = std::string{"\xEF\xBB\xBF// header\r\nworld { id 1 } // tail"};
+  const auto document = VmfDocument::parse(source);
+  const auto entity = std::string{
+    "entity { id 2 connections { OnUser1 first OnUser1 second } future { raw keep } }"};
+  const auto append = std::array{VmfStructuralEdit{
+    VmfStructuralEdit::Type::AppendRoot, VmfStructuralEdit::Root, entity}};
+  const auto saved = document.serialize({}, append);
+  CHECK(saved == source + "\n" + entity + "\n");
+  const auto parsed = VmfDocument::parse(saved);
+  REQUIRE(parsed.roots().size() == 2);
+  CHECK(parsed.serializeEntry(parsed.roots()[1]) == entity);
+  CHECK(document.serialize() == source);
+  for (const auto& text :
+       {std::string{},
+        std::string{"// no entries"},
+        std::string{"entity {"},
+        std::string{"\xEF\xBB\xBF"
+                    "entity {}"}})
+  {
+    const auto invalid = std::array{VmfStructuralEdit{
+      VmfStructuralEdit::Type::AppendRoot, VmfStructuralEdit::Root, text}};
+    CHECK_THROWS_AS(document.serialize({}, invalid), std::invalid_argument);
+  }
+  const auto wrongTarget =
+    std::array{VmfStructuralEdit{VmfStructuralEdit::Type::AppendRoot, 0, entity}};
+  CHECK_THROWS_AS(document.serialize({}, wrongTarget), std::invalid_argument);
+}
+
+TEST_CASE(
+  "VmfDocument native subtree edits retain provenance and reject outside edits", "[vmf]")
+{
+  const auto document = VmfDocument::parse(
+    "world { id 1 } entity { id 7 connections { OnUser1 first /*keep*/ OnUser1 second } "
+    "editor { color unchanged } } future { raw untouched }");
+  const auto original = document.source();
+  const auto entity = document.roots()[1];
+  REQUIRE(entity == 2);
+  const auto values =
+    std::array{VmfValueEdit{3, "\"9\""}, VmfValueEdit{6, "\"changed\""}};
+  const auto add = std::array{
+    VmfStructuralEdit{VmfStructuralEdit::Type::Append, entity, "spawnflags 0"}};
+  const auto saved = document.serializeEntry(entity, values, add);
+  CHECK(saved == "entity { id \"9\" connections { OnUser1 first /*keep*/ OnUser1 \"changed\" } "
+                 "editor { color unchanged } \nspawnflags 0\n}");
+  CHECK(document.source() == original);
+  const auto outside = std::array{VmfValueEdit{1, "\"wrong world\""}};
+  CHECK_THROWS_AS(document.serializeEntry(entity, outside), std::invalid_argument);
+  const auto wrongStructure = std::array{
+    VmfStructuralEdit{VmfStructuralEdit::Type::Remove, document.roots()[2], {}}};
+  CHECK_THROWS_AS(
+    document.serializeEntry(entity, {}, wrongStructure), std::invalid_argument);
+  const auto rootAppend = std::array{VmfStructuralEdit{
+    VmfStructuralEdit::Type::AppendRoot, VmfStructuralEdit::Root, "entity {}"}};
+  CHECK_THROWS_AS(document.serializeEntry(entity, {}, rootAppend), std::invalid_argument);
+}
+
 TEST_CASE("VmfDocument accepts empty documents and checks token spans", "[vmf]")
 {
   CHECK(VmfDocument::parse("// comments only").entries().empty());

@@ -625,8 +625,8 @@ Result<std::unique_ptr<Map>> Map::createMap(
     if (initial.empty())
     {
       return Error{
-        "Native VMF alpha: open an existing VMF or the included starter template. New "
-        "object creation is not yet supported"};
+        "Native VMF new map requires a profile starter template. Configure the initial "
+        "VMF or open the included Source-common/starter.vmf"};
     }
     return loadMap(
              environmentConfig,
@@ -1594,7 +1594,7 @@ bool Map::canUndoCommand() const
 
 bool Map::canRedoCommand() const
 {
-  return m_commandProcessor->undoCommandName() != nullptr;
+  return m_commandProcessor->redoCommandName() != nullptr;
 }
 
 const std::string* Map::undoCommandName() const
@@ -1679,6 +1679,20 @@ bool Map::commitTransaction()
   {
     cancelTransaction();
     return false;
+  }
+
+  if (m_vmfScene)
+  {
+    try
+    {
+      static_cast<void>(m_vmfScene->serialize(worldNode()));
+    }
+    catch (const std::exception& e)
+    {
+      logger().error() << "Native VMF edit refused: " << e.what();
+      cancelTransaction();
+      return false;
+    }
   }
 
   m_commandProcessor->commitTransaction();

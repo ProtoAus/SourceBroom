@@ -559,9 +559,10 @@ void ClipTool::renderBrushes(
   m_remainingBrushRenderer->setEdgeColor(pref(Preferences::SelectedEdgeColor));
   m_remainingBrushRenderer->setShowEdges(true);
   m_remainingBrushRenderer->setShowOccludedEdges(true);
-  m_remainingBrushRenderer->setOccludedEdgeColor(RgbaF{
-    pref(Preferences::SelectedEdgeColor).to<RgbF>(),
-    pref(Preferences::OccludedSelectedEdgeAlpha)});
+  m_remainingBrushRenderer->setOccludedEdgeColor(
+    RgbaF{
+      pref(Preferences::SelectedEdgeColor).to<RgbF>(),
+      pref(Preferences::OccludedSelectedEdgeAlpha)});
   m_remainingBrushRenderer->setTint(true);
   m_remainingBrushRenderer->setTintColor(pref(Preferences::SelectedFaceColor));
   m_remainingBrushRenderer->render(renderContext, renderBatch);
@@ -609,7 +610,7 @@ bool ClipTool::hasBrushes() const
 
 bool ClipTool::canClip() const
 {
-  return m_strategy && m_strategy->canClip();
+  return !m_document.map().vmfScene() && m_strategy && m_strategy->canClip();
 }
 
 void ClipTool::performClip()
@@ -625,9 +626,20 @@ void ClipTool::performClip()
     const auto toAdd = clipBrushes();
     const auto toRemove = map.selection().nodes;
     const auto addedNodes = addNodes(map, toAdd);
+    if (!toAdd.empty() && addedNodes.empty())
+    {
+      transaction.cancel();
+      update();
+      return;
+    }
 
     deselectAll(map);
-    removeNodes(map, toRemove);
+    if (!removeNodes(map, toRemove))
+    {
+      transaction.cancel();
+      update();
+      return;
+    }
     selectNodes(map, addedNodes);
     transaction.commit();
 
@@ -936,13 +948,14 @@ void ClipTool::addBrushesToRenderer(
   {
     for (auto* node : nodes)
     {
-      node->accept(kdl::overload(
-        [](const mdl::WorldNode&) {},
-        [](const mdl::LayerNode&) {},
-        [](const mdl::GroupNode&) {},
-        [](const mdl::EntityNode&) {},
-        [&](mdl::BrushNode& brushNode) { renderer.addBrush(brushNode); },
-        [](mdl::PatchNode&) {}));
+      node->accept(
+        kdl::overload(
+          [](const mdl::WorldNode&) {},
+          [](const mdl::LayerNode&) {},
+          [](const mdl::GroupNode&) {},
+          [](const mdl::EntityNode&) {},
+          [&](mdl::BrushNode& brushNode) { renderer.addBrush(brushNode); },
+          [](mdl::PatchNode&) {}));
     }
   }
 }

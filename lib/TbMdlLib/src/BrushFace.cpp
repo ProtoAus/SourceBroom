@@ -175,7 +175,8 @@ Result<BrushFace> BrushFace::create(
                point2,
                std::move(materialName),
                std::move(uvCoordSystem),
-               surfaceAttributes);
+               surfaceAttributes,
+               mapFormat == MapFormat::SourceVMF);
            });
 }
 
@@ -199,7 +200,8 @@ Result<BrushFace> BrushFace::createFromStandard(
                point2,
                std::move(materialName),
                std::move(uvCoordSystem),
-               surfaceAttributes);
+               surfaceAttributes,
+               mapFormat == MapFormat::SourceVMF);
            });
 }
 
@@ -224,7 +226,7 @@ Result<BrushFace> BrushFace::createFromValve(
     uAxis,
     vAxis,
     mapFormat,
-    false);
+    mapFormat == MapFormat::SourceVMF);
 }
 
 Result<BrushFace> BrushFace::createFromValve(

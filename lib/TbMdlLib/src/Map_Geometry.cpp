@@ -80,33 +80,36 @@ bool transformSelection(
 
   for (auto* node : map.selection().nodes)
   {
-    node->accept(kdl::overload(
-      [&](
-        auto&& thisLambda, WorldNode& worldNode) { worldNode.visitChildren(thisLambda); },
-      [&](
-        auto&& thisLambda, LayerNode& layerNode) { layerNode.visitChildren(thisLambda); },
-      [&](auto&& thisLambda, GroupNode& groupNode) {
-        nodesToTransform.push_back(&groupNode);
-        groupNode.visitChildren(thisLambda);
-      },
-      [&](auto&& thisLambda, EntityNode& entityNode) {
-        if (!entityNode.hasChildren())
-        {
-          nodesToTransform.push_back(&entityNode);
-        }
-        else
-        {
-          entityNode.visitChildren(thisLambda);
-        }
-      },
-      [&](BrushNode& brushNode) {
-        nodesToTransform.push_back(&brushNode);
-        entitiesToTransform[brushNode.entity()]++;
-      },
-      [&](PatchNode& patchNode) {
-        nodesToTransform.push_back(&patchNode);
-        entitiesToTransform[patchNode.entity()]++;
-      }));
+    node->accept(
+      kdl::overload(
+        [&](auto&& thisLambda, WorldNode& worldNode) {
+          worldNode.visitChildren(thisLambda);
+        },
+        [&](auto&& thisLambda, LayerNode& layerNode) {
+          layerNode.visitChildren(thisLambda);
+        },
+        [&](auto&& thisLambda, GroupNode& groupNode) {
+          nodesToTransform.push_back(&groupNode);
+          groupNode.visitChildren(thisLambda);
+        },
+        [&](auto&& thisLambda, EntityNode& entityNode) {
+          if (!entityNode.hasChildren())
+          {
+            nodesToTransform.push_back(&entityNode);
+          }
+          else
+          {
+            entityNode.visitChildren(thisLambda);
+          }
+        },
+        [&](BrushNode& brushNode) {
+          nodesToTransform.push_back(&brushNode);
+          entitiesToTransform[brushNode.entity()]++;
+        },
+        [&](PatchNode& patchNode) {
+          nodesToTransform.push_back(&patchNode);
+          entitiesToTransform[patchNode.entity()]++;
+        }));
   }
 
   // add entities if all of their children are transformed
@@ -129,36 +132,38 @@ bool transformSelection(
   auto tasks =
     nodesToTransform | std::views::transform([&](auto& node) {
       return std::function{[&]() {
-        return node->accept(kdl::overload(
-          [&](WorldNode&) -> TransformResult { contract_assert(false); },
-          [&](LayerNode&) -> TransformResult { contract_assert(false); },
-          [&](GroupNode& groupNode) -> TransformResult {
-            auto group = groupNode.group();
-            group.transform(transformation);
-            return std::make_pair(&groupNode, NodeContents{std::move(group)});
-          },
-          [&](EntityNode& entityNode) -> TransformResult {
-            auto entity = entityNode.entity();
-            entity.transform(transformation, updateAngleProperty);
-            return std::make_pair(&entityNode, NodeContents{std::move(entity)});
-          },
-          [&](BrushNode& brushNode) -> TransformResult {
-            const auto* containingGroup = brushNode.containingGroup();
-            const bool lockAlignment =
+        return node->accept(
+          kdl::overload(
+            [&](WorldNode&) -> TransformResult { contract_assert(false); },
+            [&](LayerNode&) -> TransformResult { contract_assert(false); },
+            [&](GroupNode& groupNode) -> TransformResult {
+              auto group = groupNode.group();
+              group.transform(transformation);
+              return std::make_pair(&groupNode, NodeContents{std::move(group)});
+            },
+            [&](EntityNode& entityNode) -> TransformResult {
+              auto entity = entityNode.entity();
+              entity.transform(transformation, updateAngleProperty);
+              return std::make_pair(&entityNode, NodeContents{std::move(entity)});
+            },
+            [&](BrushNode& brushNode) -> TransformResult {
+              const auto* containingGroup = brushNode.containingGroup();
+              const bool lockAlignment =
             alignmentLock
             || (containingGroup && containingGroup->closed() && collectLinkedNodes({&map.worldNode()}, brushNode).size() > 1);
 
-            auto brush = brushNode.brush();
-            return brush.transform(map.worldBounds(), transformation, lockAlignment)
-                   | kdl::and_then([&]() -> TransformResult {
-                       return std::make_pair(&brushNode, NodeContents{std::move(brush)});
-                     });
-          },
-          [&](PatchNode& patchNode) -> TransformResult {
-            auto patch = patchNode.patch();
-            patch.transform(transformation);
-            return std::make_pair(&patchNode, NodeContents{std::move(patch)});
-          }));
+              auto brush = brushNode.brush();
+              return brush.transform(map.worldBounds(), transformation, lockAlignment)
+                     | kdl::and_then([&]() -> TransformResult {
+                         return std::make_pair(
+                           &brushNode, NodeContents{std::move(brush)});
+                       });
+            },
+            [&](PatchNode& patchNode) -> TransformResult {
+              auto patch = patchNode.patch();
+              patch.transform(transformation);
+              return std::make_pair(&patchNode, NodeContents{std::move(patch)});
+            }));
       }};
     });
 
@@ -359,8 +364,9 @@ bool transformEdges(
     const auto changedLinkedGroups = collectContainingGroups(
       *newNodes | std::views::keys | kdl::ranges::to<std::vector>());
 
-    const auto result = map.executeAndStore(std::make_unique<BrushEdgeCommand>(
-      commandName, std::move(*newNodes), edgePositions, newEdgePositions));
+    const auto result = map.executeAndStore(
+      std::make_unique<BrushEdgeCommand>(
+        commandName, std::move(*newNodes), edgePositions, newEdgePositions));
 
     if (!result)
     {
@@ -428,8 +434,9 @@ bool transformFaces(
     auto changedLinkedGroups = collectContainingGroups(
       *newNodes | std::views::keys | kdl::ranges::to<std::vector>());
 
-    const auto result = map.executeAndStore(std::make_unique<BrushFaceCommand>(
-      commandName, std::move(*newNodes), facePositions, newFacePositions));
+    const auto result = map.executeAndStore(
+      std::make_unique<BrushFaceCommand>(
+        commandName, std::move(*newNodes), facePositions, newFacePositions));
 
     if (!result)
     {
@@ -474,11 +481,12 @@ bool addVertex(Map& map, const vm::vec3d& vertexPosition)
     const auto changedLinkedGroups = collectContainingGroups(
       *newNodes | std::views::keys | kdl::ranges::to<std::vector>());
 
-    const auto result = map.executeAndStore(std::make_unique<BrushVertexCommand>(
-      commandName,
-      std::move(*newNodes),
-      std::vector<vm::vec3d>{},
-      std::vector<vm::vec3d>{vertexPosition}));
+    const auto result = map.executeAndStore(
+      std::make_unique<BrushVertexCommand>(
+        commandName,
+        std::move(*newNodes),
+        std::vector<vm::vec3d>{},
+        std::vector<vm::vec3d>{vertexPosition}));
 
     if (!result)
     {
@@ -533,8 +541,9 @@ bool removeVertices(
     auto changedLinkedGroups = collectContainingGroups(
       *newNodes | std::views::keys | kdl::ranges::to<std::vector>());
 
-    const auto result = map.executeAndStore(std::make_unique<BrushVertexCommand>(
-      commandName, std::move(*newNodes), vertexPositions, std::vector<vm::vec3d>{}));
+    const auto result = map.executeAndStore(
+      std::make_unique<BrushVertexCommand>(
+        commandName, std::move(*newNodes), vertexPositions, std::vector<vm::vec3d>{}));
 
     if (!result)
     {
@@ -607,6 +616,11 @@ bool snapVertices(Map& map, const double snapTo)
 
 bool csgConvexMerge(Map& map)
 {
+  if (map.vmfScene())
+  {
+    map.logger().error() << "Native VMF CSG/topology reconstruction is not supported yet";
+    return false;
+  }
   if (!map.selection().hasBrushFaces() && !map.selection().hasOnlyBrushes())
   {
     return false;
@@ -647,7 +661,7 @@ bool csgConvexMerge(Map& map)
     map.gameInfo().gameConfig.faceAttribsConfig.defaultUvAttributes,
     map.gameInfo().gameConfig.faceAttribsConfig.defaultSurfaceAttributes};
   return builder.createBrush(polyhedron, map.currentMaterialName())
-         | kdl::transform([&](auto b) {
+         | kdl::and_then([&](auto b) -> Result<void> {
              b.cloneFaceAttributesFrom(
                map.selection().brushes | std::views::transform([](const auto* brushNode) {
                  return &brushNode->brush();
@@ -672,11 +686,19 @@ bool csgConvexMerge(Map& map)
              if (addNodes(map, {{&parentNode, {brushNode}}}).empty())
              {
                transaction.cancel();
-               return;
+               return Error{"Could not add merged brush"};
              }
-             removeNodes(map, toRemove);
+             if (!removeNodes(map, toRemove))
+             {
+               transaction.cancel();
+               return Error{"Could not remove merged source brushes"};
+             }
              selectNodes(map, {brushNode});
-             transaction.commit();
+             if (!transaction.commit())
+             {
+               return Error{"Could not commit merged brush"};
+             }
+             return {};
            })
          | kdl::if_error(
            [&](auto e) { map.logger().error() << "Could not create brush: " << e.msg; })
@@ -685,6 +707,11 @@ bool csgConvexMerge(Map& map)
 
 bool csgSubtract(Map& map)
 {
+  if (map.vmfScene())
+  {
+    map.logger().error() << "Native VMF CSG/topology reconstruction is not supported yet";
+    return false;
+  }
   const auto subtrahendNodes = std::vector<BrushNode*>{map.selection().brushes};
   if (subtrahendNodes.empty())
   {
@@ -735,7 +762,11 @@ bool csgSubtract(Map& map)
          | kdl::fold | kdl::transform([&]() {
              deselectAll(map);
              const auto added = addNodes(map, toAdd);
-             removeNodes(map, toRemove);
+             if ((!toAdd.empty() && added.empty()) || !removeNodes(map, toRemove))
+             {
+               transaction.cancel();
+               return false;
+             }
              selectNodes(map, added);
 
              return transaction.commit();
@@ -750,6 +781,11 @@ bool csgSubtract(Map& map)
 
 bool csgIntersect(Map& map)
 {
+  if (map.vmfScene())
+  {
+    map.logger().error() << "Native VMF CSG/topology reconstruction is not supported yet";
+    return false;
+  }
   const auto brushes = map.selection().brushes;
   if (brushes.size() < 2u)
   {
@@ -784,12 +820,17 @@ bool csgIntersect(Map& map)
       transaction.cancel();
       return false;
     }
-    removeNodes(map, toRemove);
+    if (!removeNodes(map, toRemove))
+    {
+      transaction.cancel();
+      return false;
+    }
     selectNodes(map, {intersectionNode});
   }
-  else
+  else if (!removeNodes(map, toRemove))
   {
-    removeNodes(map, toRemove);
+    transaction.cancel();
+    return false;
   }
 
   return transaction.commit();
@@ -797,6 +838,11 @@ bool csgIntersect(Map& map)
 
 bool csgHollow(Map& map)
 {
+  if (map.vmfScene())
+  {
+    map.logger().error() << "Native VMF CSG/topology reconstruction is not supported yet";
+    return false;
+  }
   const auto brushNodes = map.selection().brushes;
   if (brushNodes.empty())
   {
@@ -851,7 +897,11 @@ bool csgHollow(Map& map)
     transaction.cancel();
     return false;
   }
-  removeNodes(map, toRemove);
+  if (!removeNodes(map, toRemove))
+  {
+    transaction.cancel();
+    return false;
+  }
   selectNodes(map, added);
 
   return transaction.commit();

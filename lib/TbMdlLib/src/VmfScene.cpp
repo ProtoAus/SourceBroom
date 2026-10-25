@@ -10,6 +10,7 @@
 #include "mdl/EntityNode.h"
 #include "mdl/LayerNode.h"
 #include "mdl/MapFormat.h"
+#include "mdl/NodeContents.h"
 
 #include <algorithm>
 #include <cmath>
@@ -174,6 +175,11 @@ Entity entity(const VmfDocument& d, VmfEntryId id)
   result.setSourceConnections(std::move(connections));
   return result;
 }
+bool unsafeClass(const std::string_view name)
+{
+  return name == "info_overlay" || name == "info_overlay_transition"
+         || name == "func_instance" || name == "func_instance_parms";
+}
 bool referencesGeometry(const VmfDocument& d, VmfEntryId id)
 {
   if (key(d, id) == "entity")
@@ -182,9 +188,7 @@ bool referencesGeometry(const VmfDocument& d, VmfEntryId id)
     if (classname)
     {
       const auto name = text(d, *d.entries()[*classname].value);
-      if (
-        name == "info_overlay" || name == "info_overlay_transition"
-        || name == "func_instance" || name == "func_instance_parms")
+      if (unsafeClass(name))
       {
         return true;
       }
@@ -296,11 +300,199 @@ std::string axisText(const vm::vec3d& axis, float offset, float scale)
   return '[' + number(axis.x()) + ' ' + number(axis.y()) + ' ' + number(axis.z()) + ' '
          + number(offset) + "] " + number(scale);
 }
+void requireEditableVersion(const VmfDocument& document)
+{
+  for (const auto root : document.roots())
+  {
+    if (document.entries()[root].isBlock() && key(document, root) == "versioninfo")
+    {
+      const auto format = property(document, root, "formatversion");
+      if (!format || text(document, *document.entries()[*format].value) != "100")
+      {
+        refuse(root, "native edits require recognized VMF formatversion 100");
+      }
+    }
+  }
+}
+std::string freshSideText(const BrushFace& face, const std::string& id)
+{
+  const auto uv = face.uvAttributes();
+  const auto axes = face.takeUvCoordSystemSnapshot();
+  if (
+    !axes || uv.scale.x() == 0.0f || uv.scale.y() == 0.0f
+    || face.surfaceAttributes() != SurfaceAttributes{})
+  {
+    refuse(0, "new native sides require Valve UVs and default surface attributes");
+  }
+  return "side\n{\n\"id\" " + quote(id) + "\n\"plane\" " + quote(planeText(face))
+         + "\n\"material\" " + quote(face.materialName()) + "\n\"uaxis\" "
+         + quote(axisText(axes->uAxis, uv.offset.x(), uv.scale.x())) + "\n\"vaxis\" "
+         + quote(axisText(axes->vAxis, uv.offset.y(), uv.scale.y())) + "\n\"rotation\" "
+         + quote(number(uv.rotation))
+         + "\n\"lightmapscale\" \"16\"\n\"smoothing_groups\" \"0\"\n}\n";
+}
+std::string freshEntityPrefix(const Entity& entity, const std::string& id)
+{
+  if (
+    !entity.hasProperty("classname") || entity.classname().empty()
+    || unsafeClass(entity.classname()))
+  {
+    refuse(
+      0, "new native entities require a supported non-instance/non-overlay classname");
+  }
+  auto result = "entity\n{\n\"id\" " + quote(id) + "\n";
+  auto names = std::set<std::string>{};
+  for (const auto& property : entity.properties())
+  {
+    if (property.key() == "id" || !names.insert(property.key()).second)
+    {
+      refuse(0, "reserved native id or duplicate entity property");
+    }
+    result += quote(property.key()) + " " + quote(property.value()) + "\n";
+  }
+  if (!entity.sourceConnections().empty())
+  {
+    result += "connections\n{\n";
+    for (const auto& row : entity.sourceConnections())
+    {
+      if (row.sourceEntry || !validSourceConnection(row))
+      {
+        refuse(0, "new native output has invalid or foreign source provenance");
+      }
+      result += quote(row.event) + " " + quote(row.value) + "\n";
+    }
+    result += "}\n";
+  }
+  return result;
+}
+void validateFreshData(const Node& node)
+{
+  if (const auto* entity = dynamic_cast<const EntityNode*>(&node))
+  {
+    static_cast<void>(
+      VmfDocument::parse(freshEntityPrefix(entity->entity(), "1") + "}\n"));
+  }
+  else if (const auto* brush = dynamic_cast<const BrushNode*>(&node))
+  {
+    if (!brush->brush().closed() || !brush->brush().fullySpecified())
+    {
+      refuse(0, "new native brush is not a closed, fully specified convex solid");
+    }
+    for (const auto& face : brush->brush().faces())
+    {
+      static_cast<void>(VmfDocument::parse(freshSideText(face, "1")));
+    }
+  }
+  else
+  {
+    refuse(0, "native creation only supports plain entities and convex brushes");
+  }
+}
+std::string normalizedId(std::string id)
+{
+  if (id.empty() || id.find_first_not_of("0123456789") != std::string::npos)
+  {
+    return {};
+  }
+  const auto first = id.find_first_not_of('0');
+  return first == std::string::npos ? "0" : id.substr(first);
+}
+std::string incrementId(std::string id)
+{
+  for (auto i = id.size(); i > 0; --i)
+  {
+    if (id[i - 1] != '9')
+    {
+      ++id[i - 1];
+      return id;
+    }
+    id[i - 1] = '0';
+  }
+  return '1' + id;
+}
+std::optional<std::string> geometryProblem(const VmfDocument& d, const WorldNode& world)
+{
+  for (const auto child : d.entries()[world.lineNumber() - 1].children)
+  {
+    if (d.entries()[child].isBlock())
+    {
+      const auto name = key(d, child);
+      if (name != "solid" && name != "hidden" && name != "editor")
+      {
+        return "unknown world attachment prevents safe brush edit/removal";
+      }
+    }
+  }
+  auto nodes = NodeMap{};
+  collect(world, nodes);
+  for (const auto& [binding, node] : nodes)
+  {
+    if (dynamic_cast<const EntityNode*>(node))
+    {
+      const auto id = binding - 1;
+      if (referencesGeometry(d, id))
+      {
+        return "overlay/instance references prevent safe brush edit/removal";
+      }
+      for (const auto child : d.entries()[id].children)
+      {
+        if (d.entries()[child].isBlock())
+        {
+          const auto name = key(d, child);
+          if (name != "solid" && name != "editor" && !supportedConnections(d, id, child))
+          {
+            return "unknown entity attachment may reference this brush";
+          }
+        }
+      }
+    }
+  }
+  for (const auto root : d.roots())
+  {
+    if (d.entries()[root].isBlock())
+    {
+      const auto name = key(d, root);
+      if (
+        name != "world" && name != "entity" && name != "hidden" && name != "versioninfo"
+        && name != "visgroups" && name != "viewsettings" && name != "cameras"
+        && name != "cordons")
+      {
+        return "unknown root block prevents safe brush edit/removal";
+      }
+    }
+  }
+  return std::nullopt;
+}
 } // namespace
 
 VmfScene::VmfScene(VmfDocument document)
   : m_document{std::move(document)}
+  , m_nextBinding{m_document.entries().size() + 1}
 {
+  // Reserve IDs even in unprojected groups/opaque blocks. Object and side IDs
+  // have separate Source namespaces; never narrow loaded decimal IDs to C++ ints.
+  for (VmfEntryId id = 0; id < m_document.entries().size(); ++id)
+  {
+    if (!m_document.entries()[id].isBlock())
+    {
+      continue;
+    }
+    auto& next = key(m_document, id) == "side" ? m_nextSideId : m_nextObjectId;
+    for (const auto child : m_document.entries()[id].children)
+    {
+      const auto& entry = m_document.entries()[child];
+      if (entry.value && key(m_document, child) == "id")
+      {
+        const auto used = normalizedId(text(m_document, *entry.value));
+        if (
+          !used.empty()
+          && (used.size() > next.size() || (used.size() == next.size() && used >= next)))
+        {
+          next = incrementId(used);
+        }
+      }
+    }
+  }
 }
 VmfScene::VmfScene(VmfScene&&) noexcept = default;
 VmfScene& VmfScene::operator=(VmfScene&&) noexcept = default;
@@ -506,6 +698,18 @@ VmfScene VmfScene::read(
   }
   scene.m_original.reset(
     static_cast<WorldNode*>(scene.m_world->cloneRecursively(bounds)));
+  try
+  {
+    scene.m_geometryReferenceProblem = geometryProblem(d, *scene.m_original);
+  }
+  catch (const std::invalid_argument& e)
+  {
+    // Ambiguous native metadata is preservable on no-edit loads, but cannot
+    // justify geometry/ownership edits. Cache a closed guard, not a load error.
+    scene.m_geometryReferenceProblem =
+      "ambiguous native references prevent safe geometry edits: " + std::string{e.what()};
+    scene.m_diagnostics.push_back({*worldId, *scene.m_geometryReferenceProblem});
+  }
   return scene;
 }
 WorldNode& VmfScene::world()
@@ -528,29 +732,374 @@ const std::vector<VmfSceneDiagnostic>& VmfScene::diagnostics() const
 {
   return m_diagnostics;
 }
-std::string VmfScene::nativeId(const Node& node) const
+std::optional<VmfEntryId> VmfScene::prototype(const size_t binding) const
 {
-  if (!node.lineNumber() || node.lineNumber() > m_document.entries().size())
+  if (binding && binding <= m_document.entries().size())
+  {
+    return binding - 1;
+  }
+  const auto it = m_generated.find(binding);
+  if (it == m_generated.end())
   {
     refuse(0, "missing native binding");
   }
-  return value(m_document, node.lineNumber() - 1, "id");
+  return it->second.prototype;
 }
-
-std::string VmfScene::serialize(const WorldNode& world) const
+std::string VmfScene::nativeId(const Node& node) const
+{
+  if (const auto it = m_generated.find(node.lineNumber()); it != m_generated.end())
+  {
+    return it->second.nativeId;
+  }
+  const auto source = prototype(node.lineNumber());
+  if (!source)
+  {
+    refuse(0, "missing native ID");
+  }
+  return value(m_document, *source, "id");
+}
+void VmfScene::checkGeometryReferences(const VmfEntryId object) const
+{
+  if (m_geometryReferenceProblem)
+  {
+    refuse(object, *m_geometryReferenceProblem);
+  }
+}
+void VmfScene::validateDuplication(const std::vector<Node*>& nodes) const
+{
+  if (!nodes.empty())
+  {
+    requireEditableVersion(m_document);
+  }
+  auto original = NodeMap{};
+  collect(*m_original, original);
+  const auto check = [&](auto&& self, const Node& node) -> void {
+    if (
+      (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node))
+      || node.visibilityState() != VisibilityState::Inherited)
+    {
+      refuse(0, "native duplication does not support groups/layers/hidden objects");
+    }
+    const auto source = prototype(node.lineNumber());
+    if (source && opaque(m_document, *source))
+    {
+      refuse(
+        *source, "opaque/displacement/instance attachments prevent native duplication");
+    }
+    static_cast<void>(emitNode(node, original));
+    for (const auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  for (const auto* node : nodes)
+  {
+    check(check, *node);
+  }
+}
+void VmfScene::validateAdditions(
+  const Node& parent, const std::vector<Node*>& nodes, const bool duplication) const
+{
+  if (!nodes.empty())
+  {
+    requireEditableVersion(m_document);
+  }
+  const auto* owner = &parent;
+  if (const auto* layer = dynamic_cast<const LayerNode*>(owner))
+  {
+    const auto* world = dynamic_cast<const WorldNode*>(layer->parent());
+    if (!world || layer != world->defaultLayer())
+    {
+      refuse(0, "native groups/layers are not authorable");
+    }
+    owner = world;
+  }
+  if (!dynamic_cast<const WorldNode*>(owner) && !dynamic_cast<const EntityNode*>(owner))
+  {
+    refuse(0, "unsupported native addition parent");
+  }
+  const auto source = prototype(owner->lineNumber());
+  if (dynamic_cast<const EntityNode*>(owner))
+  {
+    if (
+      (source && opaque(m_document, *source))
+      || (!m_generated.contains(owner->lineNumber()) && owner->childCount() == 0))
+    {
+      refuse(0, "opaque or point entity cannot acquire native brush ownership");
+    }
+  }
+  for (const auto* node : nodes)
+  {
+    if (node->parent())
+    {
+      refuse(0, "native additions must transfer detached roots");
+    }
+    if (dynamic_cast<const EntityNode*>(node) && !dynamic_cast<const WorldNode*>(owner))
+    {
+      refuse(0, "native entities must be added at world level");
+    }
+  }
+  if (duplication)
+  {
+    validateDuplication(nodes);
+    return;
+  }
+  const auto check = [&](auto&& self, const Node& node) -> void {
+    if (node.lineNumber() || node.visibilityState() != VisibilityState::Inherited)
+    {
+      refuse(0, "fresh native nodes carry foreign provenance or hidden state");
+    }
+    validateFreshData(node);
+    if (const auto* brush = dynamic_cast<const BrushNode*>(&node))
+    {
+      for (const auto& face : brush->brush().faces())
+      {
+        if (face.lineNumber())
+        {
+          refuse(
+            0,
+            "fresh native side carries foreign provenance; topology/paste unsupported");
+        }
+      }
+    }
+    for (const auto* child : node.children())
+    {
+      if (
+        !dynamic_cast<const BrushNode*>(child) || !dynamic_cast<const EntityNode*>(&node))
+      {
+        refuse(0, "unsupported fresh native hierarchy");
+      }
+      self(self, *child);
+    }
+  };
+  for (const auto* node : nodes)
+  {
+    check(check, *node);
+  }
+}
+void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool duplication)
+{
+  struct Assignment
+  {
+    Node* node;
+    const BrushFace* face;
+    size_t binding;
+  };
+  auto additions = std::map<size_t, GeneratedBinding>{};
+  auto assignments = std::vector<Assignment>{};
+  auto binding = m_nextBinding;
+  auto objectId = m_nextObjectId;
+  auto sideId = m_nextSideId;
+  auto idBytes = m_generatedIdBytes;
+  const auto allocate =
+    [&](const GeneratedKind kind, std::optional<VmfEntryId> source, const size_t owner) {
+      auto& id = kind == GeneratedKind::Side ? sideId : objectId;
+      if (
+        binding == std::numeric_limits<size_t>::max()
+        || m_generated.size() + additions.size() >= 1'000'000 || id.size() > 4096
+        || id.size() > 16 * 1024 * 1024 - idBytes)
+      {
+        refuse(
+          0, "native identity budget exhausted; save/reopen before further creation");
+      }
+      const auto allocated = binding++;
+      idBytes += id.size();
+      additions.emplace(allocated, GeneratedBinding{kind, id, source, owner});
+      id = incrementId(id);
+      return allocated;
+    };
+  const auto registerNode = [&](auto&& self, Node& node) -> void {
+    const auto source = duplication ? prototype(node.lineNumber()) : std::nullopt;
+    const auto kind =
+      dynamic_cast<EntityNode*>(&node) ? GeneratedKind::Entity : GeneratedKind::Solid;
+    const auto allocated = allocate(kind, source, 0);
+    assignments.push_back({&node, nullptr, allocated});
+    if (const auto* brush = dynamic_cast<const BrushNode*>(&node))
+    {
+      additions.at(allocated).sideCount = brush->brush().faceCount();
+      for (const auto& face : brush->brush().faces())
+      {
+        const auto originalSide =
+          duplication ? prototype(face.lineNumber()) : std::nullopt;
+        if (
+          source
+          && (!originalSide || m_document.entries()[*originalSide].parent != source))
+        {
+          refuse(*source, "duplicate side provenance does not belong to native solid");
+        }
+        const auto side = allocate(GeneratedKind::Side, originalSide, allocated);
+        assignments.push_back({nullptr, &face, side});
+      }
+    }
+    for (auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  for (auto* node : nodes)
+  {
+    registerNode(registerNode, *node);
+  }
+  // All fallible validation/allocation precedes identity publication. Detached
+  // command-owned nodes keep these bindings when undo/redo parks/restores them.
+  m_generated.merge(additions);
+  m_nextBinding = binding;
+  m_nextObjectId = std::move(objectId);
+  m_nextSideId = std::move(sideId);
+  m_generatedIdBytes = idBytes;
+  for (const auto& assignment : assignments)
+  {
+    if (assignment.node)
+    {
+      assignment.node->setFilePosition(assignment.binding, 1);
+    }
+    else
+    {
+      assignment.face->setFilePosition(assignment.binding, 1);
+    }
+  }
+}
+void VmfScene::validateRemoval(const std::vector<Node*>& removalClosure) const
+{
+  if (!removalClosure.empty())
+  {
+    requireEditableVersion(m_document);
+  }
+  const auto check = [&](auto&& self, const Node& node) -> void {
+    if (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node))
+    {
+      refuse(0, "native world/groups/layers cannot be removed");
+    }
+    const auto source = prototype(node.lineNumber());
+    if (source && opaque(m_document, *source))
+    {
+      refuse(*source, "opaque/displacement/instance attachments prevent native removal");
+    }
+    if (dynamic_cast<const BrushNode*>(&node) && !m_generated.contains(node.lineNumber()))
+    {
+      checkGeometryReferences(*source);
+    }
+    for (const auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  for (const auto* node : removalClosure)
+  {
+    check(check, *node);
+  }
+}
+void VmfScene::validateReparent(const Node& parent, const std::vector<Node*>& nodes) const
+{
+  if (!nodes.empty())
+  {
+    requireEditableVersion(m_document);
+  }
+  const auto target = m_generated.find(parent.lineNumber());
+  if (
+    !dynamic_cast<const EntityNode*>(&parent) || target == m_generated.end()
+    || target->second.kind != GeneratedKind::Entity)
+  {
+    refuse(
+      0, "native reparenting only supports wrapping plain brushes in a new brush entity");
+  }
+  if (target->second.prototype && opaque(m_document, *target->second.prototype))
+  {
+    refuse(*target->second.prototype, "opaque new owner prevents native wrapping");
+  }
+  auto original = NodeMap{};
+  collect(*m_original, original);
+  for (const auto* node : nodes)
+  {
+    if (
+      !dynamic_cast<const BrushNode*>(node)
+      || node->visibilityState() != VisibilityState::Inherited)
+    {
+      refuse(0, "native wrapping only supports visible plain brushes");
+    }
+    const auto source = prototype(node->lineNumber());
+    if (source && opaque(m_document, *source))
+    {
+      refuse(*source, "opaque/displacement attachment prevents native wrapping");
+    }
+    if (!m_generated.contains(node->lineNumber()))
+    {
+      const auto found = original.find(node->lineNumber());
+      if (
+        found == original.end()
+        || parentBinding(*found->second) != m_original->lineNumber())
+      {
+        refuse(0, "native wrapping currently requires world-owned brushes");
+      }
+      checkGeometryReferences(*source);
+    }
+  }
+}
+void VmfScene::validateContents(
+  const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const
+{
+  requireEditableVersion(m_document);
+  auto copy = std::unique_ptr<Node>{node.clone(worldBounds)};
+  if (const auto* entity = std::get_if<Entity>(&contents.get()))
+  {
+    auto* target = dynamic_cast<EntityNodeBase*>(copy.get());
+    if (!target)
+    {
+      refuse(0, "native content type changed");
+    }
+    static_cast<void>(target->setEntity(*entity));
+  }
+  else if (const auto* brush = std::get_if<Brush>(&contents.get()))
+  {
+    auto* target = dynamic_cast<BrushNode*>(copy.get());
+    if (!target)
+    {
+      refuse(0, "native content type changed");
+    }
+    static_cast<void>(target->setBrush(*brush));
+  }
+  else
+  {
+    refuse(0, "native group/layer/patch content editing unsupported");
+  }
+  auto original = NodeMap{};
+  collect(*m_original, original);
+  const auto source = prototype(node.lineNumber());
+  if (source)
+  {
+    const auto found = original.find(*source + 1);
+    if (found == original.end())
+    {
+      refuse(*source, "native content provenance is not a projected object");
+    }
+    auto values = std::vector<VmfValueEdit>{};
+    auto structure = std::vector<VmfStructuralEdit>{};
+    auto appended = std::map<VmfEntryId, std::string>{};
+    nodeEdits(
+      *found->second,
+      *copy,
+      values,
+      structure,
+      appended,
+      !m_generated.contains(node.lineNumber()));
+  }
+  else
+  {
+    static_cast<void>(emitNode(*copy, original));
+  }
+}
+void VmfScene::nodeEdits(
+  const Node& beforeNode,
+  const Node& afterNode,
+  std::vector<VmfValueEdit>& edits,
+  std::vector<VmfStructuralEdit>& structural,
+  std::map<VmfEntryId, std::string>& appended,
+  const bool protectExistingGeometry) const
 {
   const auto& d = m_document;
-  auto original = NodeMap{};
-  auto current = NodeMap{};
-  collect(*m_original, original);
-  collect(world, current);
-  if (original.size() != current.size())
-  {
-    refuse(0, "object addition/deletion unsupported");
-  }
-  auto edits = std::vector<VmfValueEdit>{};
-  auto structural = std::vector<VmfStructuralEdit>{};
-  auto appended = std::map<VmfEntryId, std::string>{};
+  const auto* before = &beforeNode;
+  const auto* after = &afterNode;
+  const auto id = before->lineNumber() - 1;
   const auto edit =
     [&](VmfEntryId block, const std::string& name, std::string replacement) {
       const auto id = property(d, block, name);
@@ -560,296 +1109,545 @@ std::string VmfScene::serialize(const WorldNode& world) const
       }
       edits.push_back({*id, quote(replacement)});
     };
+  if (const auto* eb = dynamic_cast<const EntityNodeBase*>(before))
+  {
+    const auto* ea = dynamic_cast<const EntityNodeBase*>(after);
+    if (!ea)
+    {
+      refuse(id, "object type changed");
+    }
+    if (
+      eb->entity().classname() != ea->entity().classname()
+      && unsafeClass(ea->entity().classname()))
+    {
+      refuse(id, "creating overlay/instance semantics is unsupported");
+    }
+    const auto& bp = eb->entity().properties();
+    const auto& ap = ea->entity().properties();
+    auto names = std::set<std::string>{};
+    for (const auto& p : ap)
+    {
+      if (p.key() == "id" || !names.insert(p.key()).second)
+      {
+        refuse(id, "reserved native id or duplicate entity property");
+      }
+    }
+    for (const auto& p : bp)
+    {
+      const auto* v = ea->entity().property(p.key());
+      if (!v || *v != p.value())
+      {
+        if (opaque(d, id))
+        {
+          refuse(id, "entity has opaque attachments; edit refused");
+        }
+        if (!v)
+        {
+          const auto entry = property(d, id, p.key());
+          if (!entry)
+          {
+            refuse(id, "stale property binding");
+          }
+          structural.push_back({VmfStructuralEdit::Type::Remove, *entry, {}});
+        }
+        else
+        {
+          edit(id, p.key(), *v);
+        }
+      }
+    }
+    for (const auto& p : ap)
+    {
+      if (!eb->entity().hasProperty(p.key()))
+      {
+        if (opaque(d, id) || property(d, id, p.key()))
+        {
+          refuse(id, "opaque attachment or stale property addition");
+        }
+        appended[id] += quote(p.key()) + " " + quote(p.value()) + "\n";
+      }
+    }
+    const auto& bc = eb->entity().sourceConnections();
+    const auto& ac = ea->entity().sourceConnections();
+    if (bc != ac)
+    {
+      auto blocks = std::vector<VmfEntryId>{};
+      for (const auto child : d.entries()[id].children)
+      {
+        if (d.entries()[child].isBlock() && key(d, child) == "connections")
+        {
+          blocks.push_back(child);
+        }
+      }
+      if (blocks.size() > 1 || key(d, id) != "entity")
+      {
+        refuse(id, "ambiguous connections block or non-entity outputs");
+      }
+      auto retained = std::set<VmfEntryId>{};
+      auto last = std::optional<VmfEntryId>{};
+      auto adding = false;
+      auto newRows = std::string{};
+      for (const auto& row : ac)
+      {
+        if (row.sourceEntry)
+        {
+          const auto it = std::find_if(bc.begin(), bc.end(), [&](const auto& old) {
+            return old.sourceEntry == row.sourceEntry;
+          });
+          if (
+            it == bc.end() || !retained.insert(*row.sourceEntry).second
+            || (last && *row.sourceEntry <= *last) || adding)
+          {
+            refuse(id, "stale, duplicate or reordered connection binding");
+          }
+          last = row.sourceEntry;
+          if (it->event != row.event || it->value != row.value)
+          {
+            if (!validSourceConnection(row))
+            {
+              refuse(id, "invalid edited connection");
+            }
+            if (it->event != row.event)
+            {
+              structural.push_back(
+                {VmfStructuralEdit::Type::Key, *row.sourceEntry, quote(row.event)});
+            }
+            if (it->value != row.value)
+            {
+              edits.push_back({*row.sourceEntry, quote(row.value)});
+            }
+          }
+        }
+        else
+        {
+          adding = true;
+          if (!validSourceConnection(row))
+          {
+            refuse(id, "invalid new connection");
+          }
+          newRows += quote(row.event) + " " + quote(row.value) + "\n";
+        }
+      }
+      for (const auto& row : bc)
+      {
+        if (!retained.contains(*row.sourceEntry))
+        {
+          if (!validSourceConnection(row))
+          {
+            refuse(id, "malformed native connection cannot be removed");
+          }
+          structural.push_back({VmfStructuralEdit::Type::Remove, *row.sourceEntry, {}});
+        }
+      }
+      if (!newRows.empty())
+      {
+        if (blocks.empty())
+        {
+          appended[id] += "connections\n{\n" + newRows + "}\n";
+        }
+        else
+        {
+          appended[blocks.front()] += newRows;
+        }
+      }
+    }
+  }
+  else if (const auto* bb = dynamic_cast<const BrushNode*>(before))
+  {
+    const auto* ba = dynamic_cast<const BrushNode*>(after);
+    if (!ba)
+    {
+      refuse(id, "object type changed");
+    }
+    const auto& b = bb->brush();
+    const auto& a = ba->brush();
+    if (b.faceCount() != a.faceCount())
+    {
+      refuse(id, "brush topology changed");
+    }
+    auto sides = std::map<size_t, const BrushFace*>{};
+    for (const auto& f : a.faces())
+    {
+      const auto source = prototype(f.lineNumber());
+      const auto generatedNode = m_generated.find(after->lineNumber());
+      const auto generatedSide = m_generated.find(f.lineNumber());
+      if (generatedNode != m_generated.end())
+      {
+        if (
+          generatedSide == m_generated.end()
+          || generatedSide->second.kind != GeneratedKind::Side
+          || generatedSide->second.owner != after->lineNumber())
+        {
+          refuse(id, "foreign generated side identity");
+        }
+      }
+      else if (generatedSide != m_generated.end())
+      {
+        refuse(id, "existing native solid acquired generated side identity");
+      }
+      if (!source || !sides.emplace(*source + 1, &f).second)
+      {
+        refuse(id, "duplicate face binding");
+      }
+    }
+    for (const auto& f : b.faces())
+    {
+      const auto it = sides.find(f.lineNumber());
+      if (it == sides.end())
+      {
+        refuse(id, "face topology/binding changed");
+      }
+      const auto& g = *it->second;
+      const auto side = f.lineNumber() - 1;
+      const auto fu = f.takeUvCoordSystemSnapshot();
+      const auto gu = g.takeUvCoordSystemSnapshot();
+      if (!fu || !gu)
+      {
+        refuse(side, "non-Valve UV projection");
+      }
+      const auto uv = f.uvAttributes();
+      const auto gv = g.uvAttributes();
+      if (gv.scale.x() == 0.0f || gv.scale.y() == 0.0f)
+      {
+        refuse(side, "zero native UV scale");
+      }
+      if (f.surfaceAttributes() != g.surfaceAttributes())
+      {
+        refuse(side, "surface attribute editing unsupported");
+      }
+      const auto changed = f.points() != g.points()
+                           || f.materialName() != g.materialName() || uv != gv
+                           || fu->uAxis != gu->uAxis || fu->vAxis != gu->vAxis;
+      if (!changed)
+      {
+        continue;
+      }
+      if (opaque(d, id))
+      {
+        refuse(id, "opaque/displacement attachment prevents safe brush edit");
+      }
+      if (protectExistingGeometry)
+      {
+        checkGeometryReferences(id);
+      }
+      if (f.points() != g.points())
+      {
+        edit(side, "plane", planeText(g));
+      }
+      if (f.materialName() != g.materialName())
+      {
+        edit(side, "material", g.materialName());
+      }
+      if (
+        uv.offset.x() != gv.offset.x() || uv.scale.x() != gv.scale.x()
+        || fu->uAxis != gu->uAxis)
+      {
+        edit(side, "uaxis", axisText(gu->uAxis, gv.offset.x(), gv.scale.x()));
+      }
+      if (
+        uv.offset.y() != gv.offset.y() || uv.scale.y() != gv.scale.y()
+        || fu->vAxis != gu->vAxis)
+      {
+        edit(side, "vaxis", axisText(gu->vAxis, gv.offset.y(), gv.scale.y()));
+      }
+      if (uv.rotation != gv.rotation)
+      {
+        edit(side, "rotation", number(gv.rotation));
+      }
+    }
+  }
+  else
+  {
+    refuse(id, "unsupported scene object");
+  }
+}
+
+std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
+{
+  const auto& d = m_document;
+  const auto source = prototype(node.lineNumber());
+  const auto generated = m_generated.find(node.lineNumber());
+  const auto* entity = dynamic_cast<const EntityNode*>(&node);
+  const auto* brush = dynamic_cast<const BrushNode*>(&node);
+  if (!entity && !brush)
+  {
+    refuse(0, "unsupported emitted native node");
+  }
+  if (
+    generated != m_generated.end()
+    && generated->second.kind != (entity ? GeneratedKind::Entity : GeneratedKind::Solid))
+  {
+    refuse(0, "generated native node kind mismatch");
+  }
+  const auto sideId = [&](const BrushFace& face) {
+    const auto record = m_generated.find(face.lineNumber());
+    if (generated != m_generated.end())
+    {
+      if (
+        record == m_generated.end() || record->second.kind != GeneratedKind::Side
+        || record->second.owner != node.lineNumber())
+      {
+        refuse(0, "foreign or missing generated side identity");
+      }
+      return record->second.nativeId;
+    }
+    if (record != m_generated.end())
+    {
+      refuse(0, "existing native solid acquired generated side identity");
+    }
+    const auto side = prototype(face.lineNumber());
+    if (!side || !source || d.entries()[*side].parent != source)
+    {
+      refuse(0, "native side provenance does not belong to emitted solid");
+    }
+    return value(d, *side, "id");
+  };
+  if (!source)
+  {
+    auto result = std::string{};
+    if (entity)
+    {
+      result = freshEntityPrefix(entity->entity(), nativeId(node));
+      for (const auto* child : node.children())
+      {
+        if (!dynamic_cast<const BrushNode*>(child))
+        {
+          refuse(0, "native entity contains unsupported child");
+        }
+        result += emitNode(*child, original);
+      }
+    }
+    else
+    {
+      validateFreshData(node);
+      if (
+        generated == m_generated.end()
+        || brush->brush().faceCount() != generated->second.sideCount)
+      {
+        refuse(0, "fresh native brush topology changed");
+      }
+      auto sides = std::set<size_t>{};
+      result = "solid\n{\n\"id\" " + quote(nativeId(node)) + "\n";
+      for (const auto& face : brush->brush().faces())
+      {
+        if (!sides.insert(face.lineNumber()).second)
+        {
+          refuse(0, "duplicate fresh native side identity");
+        }
+        result += freshSideText(face, sideId(face));
+      }
+    }
+    result += "}\n";
+    static_cast<void>(VmfDocument::parse(result));
+    return result;
+  }
+  if (opaque(d, *source))
+  {
+    refuse(*source, "opaque native source template cannot be duplicated/detached");
+  }
+  const auto before = original.find(*source + 1);
+  if (before == original.end())
+  {
+    refuse(*source, "native template is not a projected object");
+  }
+  auto values = std::vector<VmfValueEdit>{};
+  auto structure = std::vector<VmfStructuralEdit>{};
+  auto appended = std::map<VmfEntryId, std::string>{};
+  nodeEdits(
+    *before->second, node, values, structure, appended, generated == m_generated.end());
+  if (generated != m_generated.end())
+  {
+    values.push_back({*property(d, *source, "id"), quote(generated->second.nativeId)});
+  }
+  if (entity)
+  {
+    // A partial brush-entity duplicate keeps the native owner payload, not its
+    // unselected solids. Hidden wrappers remain lossless but lose copied solids.
+    const auto removeOldSolids = [&](auto&& self, const VmfEntryId block) -> void {
+      for (const auto child : d.entries()[block].children)
+      {
+        if (d.entries()[child].isBlock())
+        {
+          const auto name = key(d, child);
+          if (name == "solid")
+          {
+            structure.push_back({VmfStructuralEdit::Type::Remove, child, {}});
+          }
+          else if (name == "hidden")
+          {
+            self(self, child);
+          }
+        }
+      }
+    };
+    removeOldSolids(removeOldSolids, *source);
+    for (const auto* child : node.children())
+    {
+      if (!dynamic_cast<const BrushNode*>(child))
+      {
+        refuse(*source, "unsupported duplicated entity child");
+      }
+      appended[*source] += emitNode(*child, original) + "\n";
+    }
+  }
+  else
+  {
+    for (const auto& face : brush->brush().faces())
+    {
+      const auto id = sideId(face);
+      if (generated != m_generated.end())
+      {
+        const auto side = prototype(face.lineNumber());
+        if (!side || d.entries()[*side].parent != source)
+        {
+          refuse(*source, "generated side lost its native template");
+        }
+        values.push_back({*property(d, *side, "id"), quote(id)});
+      }
+    }
+  }
+  for (const auto& [block, entries] : appended)
+  {
+    if (!entries.empty())
+    {
+      structure.push_back({VmfStructuralEdit::Type::Append, block, entries});
+    }
+  }
+  return d.serializeEntry(*source, values, structure);
+}
+
+std::string VmfScene::serialize(const WorldNode& world) const
+{
+  const auto& d = m_document;
+  auto original = NodeMap{};
+  auto current = NodeMap{};
+  collect(*m_original, original);
+  collect(world, current);
+  if (
+    world.lineNumber() != m_original->lineNumber() || world.childCount() != 1
+    || world.children().front() != world.defaultLayer()
+    || world.defaultLayer()->visibilityState()
+         != m_original->defaultLayer()->visibilityState())
+  {
+    refuse(0, "native world/layer structure changed");
+  }
+  auto edits = std::vector<VmfValueEdit>{};
+  auto structural = std::vector<VmfStructuralEdit>{};
+  auto appended = std::map<VmfEntryId, std::string>{};
+  auto removed = std::set<VmfEntryId>{};
+  auto removalClosure = std::vector<Node*>{};
+  for (const auto& [binding, before] : original)
+  {
+    if (!current.contains(binding))
+    {
+      removed.insert(binding - 1);
+      removalClosure.push_back(const_cast<Node*>(before));
+    }
+  }
+  validateRemoval(removalClosure);
+  for (const auto id : removed)
+  {
+    auto ancestorRemoved = false;
+    for (auto parent = d.entries()[id].parent; parent;
+         parent = d.entries()[*parent].parent)
+    {
+      ancestorRemoved = ancestorRemoved || removed.contains(*parent);
+    }
+    if (!ancestorRemoved)
+    {
+      structural.push_back({VmfStructuralEdit::Type::Remove, id, {}});
+    }
+  }
   for (const auto& [binding, before] : original)
   {
     const auto found = current.find(binding);
     if (found == current.end())
     {
-      refuse(binding - 1, "lost native binding");
+      continue;
     }
     const auto* after = found->second;
     const auto id = binding - 1;
-    if (parentBinding(*before) != parentBinding(*after))
-    {
-      refuse(id, "reparenting unsupported");
-    }
     if (before->visibilityState() != after->visibilityState())
     {
       refuse(id, "changing native hidden state unsupported");
     }
-    if (const auto* eb = dynamic_cast<const EntityNodeBase*>(before))
+    if (parentBinding(*before) != parentBinding(*after))
     {
-      const auto* ea = dynamic_cast<const EntityNodeBase*>(after);
-      if (!ea)
+      if (!after->parent())
       {
-        refuse(id, "object type changed");
+        refuse(id, "missing native parent");
       }
-      const auto& bp = eb->entity().properties();
-      const auto& ap = ea->entity().properties();
-      auto names = std::set<std::string>{};
-      for (const auto& p : ap)
-      {
-        if (p.key() == "id" || !names.insert(p.key()).second)
-        {
-          refuse(id, "reserved native id or duplicate entity property");
-        }
-      }
-      for (const auto& p : bp)
-      {
-        const auto* v = ea->entity().property(p.key());
-        if (!v || *v != p.value())
-        {
-          if (opaque(d, id))
-          {
-            refuse(id, "entity has opaque attachments; edit refused");
-          }
-          if (!v)
-          {
-            const auto entry = property(d, id, p.key());
-            if (!entry)
-            {
-              refuse(id, "stale property binding");
-            }
-            structural.push_back({VmfStructuralEdit::Type::Remove, *entry, {}});
-          }
-          else
-          {
-            edit(id, p.key(), *v);
-          }
-        }
-      }
-      for (const auto& p : ap)
-      {
-        if (!eb->entity().hasProperty(p.key()))
-        {
-          if (opaque(d, id) || property(d, id, p.key()))
-          {
-            refuse(id, "opaque attachment or stale property addition");
-          }
-          appended[id] += quote(p.key()) + " " + quote(p.value()) + "\n";
-        }
-      }
-      const auto& bc = eb->entity().sourceConnections();
-      const auto& ac = ea->entity().sourceConnections();
-      if (bc != ac)
-      {
-        auto blocks = std::vector<VmfEntryId>{};
-        for (const auto child : d.entries()[id].children)
-        {
-          if (d.entries()[child].isBlock() && key(d, child) == "connections")
-          {
-            blocks.push_back(child);
-          }
-        }
-        if (blocks.size() > 1 || key(d, id) != "entity")
-        {
-          refuse(id, "ambiguous connections block or non-entity outputs");
-        }
-        auto retained = std::set<VmfEntryId>{};
-        auto last = std::optional<VmfEntryId>{};
-        auto adding = false;
-        auto newRows = std::string{};
-        for (const auto& row : ac)
-        {
-          if (row.sourceEntry)
-          {
-            const auto it = std::find_if(bc.begin(), bc.end(), [&](const auto& old) {
-              return old.sourceEntry == row.sourceEntry;
-            });
-            if (
-              it == bc.end() || !retained.insert(*row.sourceEntry).second
-              || (last && *row.sourceEntry <= *last) || adding)
-            {
-              refuse(id, "stale, duplicate or reordered connection binding");
-            }
-            last = row.sourceEntry;
-            if (it->event != row.event || it->value != row.value)
-            {
-              if (!validSourceConnection(row))
-              {
-                refuse(id, "invalid edited connection");
-              }
-              if (it->event != row.event)
-              {
-                structural.push_back(
-                  {VmfStructuralEdit::Type::Key, *row.sourceEntry, quote(row.event)});
-              }
-              if (it->value != row.value)
-              {
-                edits.push_back({*row.sourceEntry, quote(row.value)});
-              }
-            }
-          }
-          else
-          {
-            adding = true;
-            if (!validSourceConnection(row))
-            {
-              refuse(id, "invalid new connection");
-            }
-            newRows += quote(row.event) + " " + quote(row.value) + "\n";
-          }
-        }
-        for (const auto& row : bc)
-        {
-          if (!retained.contains(*row.sourceEntry))
-          {
-            if (!validSourceConnection(row))
-            {
-              refuse(id, "malformed native connection cannot be removed");
-            }
-            structural.push_back({VmfStructuralEdit::Type::Remove, *row.sourceEntry, {}});
-          }
-        }
-        if (!newRows.empty())
-        {
-          if (blocks.empty())
-          {
-            appended[id] += "connections\n{\n" + newRows + "}\n";
-          }
-          else
-          {
-            appended[blocks.front()] += newRows;
-          }
-        }
-      }
+      validateReparent(*after->parent(), {const_cast<Node*>(after)});
+      structural.push_back({VmfStructuralEdit::Type::Remove, id, {}});
+      // The new generated entity emits this same native solid (same side IDs)
+      // from its source template. Do not leave overlapping edits at the old span.
+      continue;
     }
-    else if (const auto* bb = dynamic_cast<const BrushNode*>(before))
+    nodeEdits(*before, *after, edits, structural, appended, true);
+  }
+  auto roots = std::string{};
+  for (const auto& [binding, node] : current)
+  {
+    if (original.contains(binding))
     {
-      const auto* ba = dynamic_cast<const BrushNode*>(after);
-      if (!ba)
+      continue;
+    }
+    const auto record = m_generated.find(binding);
+    if (record == m_generated.end() || record->second.kind == GeneratedKind::Side)
+    {
+      refuse(0, "unregistered native object");
+    }
+    if (node->visibilityState() != VisibilityState::Inherited)
+    {
+      refuse(0, "authoring native hidden state unsupported");
+    }
+    const auto parent = parentBinding(*node);
+    if (!current.contains(parent))
+    {
+      refuse(0, "unknown generated native parent");
+    }
+    if (m_generated.contains(parent))
+    {
+      if (
+        !dynamic_cast<const EntityNode*>(current.at(parent))
+        || !dynamic_cast<const BrushNode*>(node))
       {
-        refuse(id, "object type changed");
+        refuse(0, "unsupported generated hierarchy");
       }
-      const auto& b = bb->brush();
-      const auto& a = ba->brush();
-      if (b.faceCount() != a.faceCount())
+      continue;
+    }
+    const auto text = emitNode(*node, original);
+    if (dynamic_cast<const EntityNode*>(node))
+    {
+      if (parent != world.lineNumber())
       {
-        refuse(id, "brush topology changed");
+        refuse(0, "native entities must remain at world level");
       }
-      auto sides = std::map<size_t, const BrushFace*>{};
-      for (const auto& f : a.faces())
+      roots += text + "\n";
+    }
+    else if (dynamic_cast<const BrushNode*>(node))
+    {
+      const auto* owner = current.at(parent);
+      if (
+        !dynamic_cast<const WorldNode*>(owner) && !dynamic_cast<const EntityNode*>(owner))
       {
-        if (!sides.emplace(f.lineNumber(), &f).second)
-        {
-          refuse(id, "duplicate face binding");
-        }
+        refuse(0, "unsupported native brush owner");
       }
-      for (const auto& f : b.faces())
+      if (dynamic_cast<const EntityNode*>(owner) && opaque(d, parent - 1))
       {
-        const auto it = sides.find(f.lineNumber());
-        if (it == sides.end())
-        {
-          refuse(id, "face topology/binding changed");
-        }
-        const auto& g = *it->second;
-        const auto side = f.lineNumber() - 1;
-        const auto fu = f.takeUvCoordSystemSnapshot();
-        const auto gu = g.takeUvCoordSystemSnapshot();
-        if (!fu || !gu)
-        {
-          refuse(side, "non-Valve UV projection");
-        }
-        const auto uv = f.uvAttributes();
-        const auto gv = g.uvAttributes();
-        if (f.surfaceAttributes() != g.surfaceAttributes())
-        {
-          refuse(side, "surface attribute editing unsupported");
-        }
-        const auto changed = f.points() != g.points()
-                             || f.materialName() != g.materialName() || uv != gv
-                             || fu->uAxis != gu->uAxis || fu->vAxis != gu->vAxis;
-        if (!changed)
-        {
-          continue;
-        }
-        if (opaque(d, id))
-        {
-          refuse(id, "opaque/displacement attachment prevents safe brush edit");
-        }
-        // Other solids' displacement/vertices data and standard entity I/O do
-        // not move with this brush. IDs/target names remain unchanged. Unknown
-        // global attachments still fail closed because their references are unknown.
-        for (const auto child : d.entries()[m_original->lineNumber() - 1].children)
-        {
-          if (d.entries()[child].isBlock())
-          {
-            const auto name = key(d, child);
-            if (name != "solid" && name != "hidden" && name != "editor")
-            {
-              refuse(id, "unknown world attachment prevents safe brush edit");
-            }
-          }
-        }
-        for (const auto& [otherBinding, other] : original)
-        {
-          if (dynamic_cast<const EntityNode*>(other))
-          {
-            if (referencesGeometry(d, otherBinding - 1))
-            {
-              refuse(id, "overlay/instance references prevent safe brush edit");
-            }
-            for (const auto child : d.entries()[otherBinding - 1].children)
-            {
-              if (d.entries()[child].isBlock())
-              {
-                const auto name = key(d, child);
-                if (
-                  name != "solid" && name != "editor"
-                  && !supportedConnections(d, otherBinding - 1, child))
-                {
-                  refuse(
-                    id,
-                    "unknown entity attachment may reference this brush; edit refused");
-                }
-              }
-            }
-          }
-        }
-        for (const auto root : d.roots())
-        {
-          if (d.entries()[root].isBlock())
-          {
-            const auto name = key(d, root);
-            if (
-              name != "world" && name != "entity" && name != "hidden"
-              && name != "versioninfo" && name != "visgroups" && name != "viewsettings"
-              && name != "cameras" && name != "cordons")
-            {
-              refuse(id, "unknown root block prevents safe brush edit");
-            }
-          }
-        }
-        if (f.points() != g.points())
-        {
-          edit(side, "plane", planeText(g));
-        }
-        if (f.materialName() != g.materialName())
-        {
-          edit(side, "material", g.materialName());
-        }
-        if (
-          uv.offset.x() != gv.offset.x() || uv.scale.x() != gv.scale.x()
-          || fu->uAxis != gu->uAxis)
-        {
-          edit(side, "uaxis", axisText(gu->uAxis, gv.offset.x(), gv.scale.x()));
-        }
-        if (
-          uv.offset.y() != gv.offset.y() || uv.scale.y() != gv.scale.y()
-          || fu->vAxis != gu->vAxis)
-        {
-          edit(side, "vaxis", axisText(gu->vAxis, gv.offset.y(), gv.scale.y()));
-        }
-        if (uv.rotation != gv.rotation)
-        {
-          edit(side, "rotation", number(gv.rotation));
-        }
+        refuse(parent - 1, "opaque brush-entity attachment prevents addition");
       }
+      appended[parent - 1] += text + "\n";
     }
     else
     {
-      refuse(id, "unsupported scene object");
+      refuse(0, "unsupported generated object type");
     }
+  }
+  if (!roots.empty())
+  {
+    structural.push_back(
+      {VmfStructuralEdit::Type::AppendRoot, VmfStructuralEdit::Root, roots});
   }
   for (const auto& [block, entries] : appended)
   {
@@ -857,17 +1655,7 @@ std::string VmfScene::serialize(const WorldNode& world) const
   }
   if (!edits.empty() || !structural.empty())
   {
-    for (const auto root : d.roots())
-    {
-      if (d.entries()[root].isBlock() && key(d, root) == "versioninfo")
-      {
-        const auto format = property(d, root, "formatversion");
-        if (!format || text(d, *d.entries()[*format].value) != "100")
-        {
-          refuse(root, "native edits require recognized VMF formatversion 100");
-        }
-      }
-    }
+    requireEditableVersion(d);
   }
   return d.serialize(edits, structural);
 }

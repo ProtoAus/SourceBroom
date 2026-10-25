@@ -19,6 +19,7 @@
 
 #include "mdl/SwapNodeContentsCommand.h"
 
+#include "base/Logger.h"
 #include "base/Notifier.h"
 #include "mdl/GameInfo.h"
 #include "mdl/Map.h"
@@ -26,6 +27,7 @@
 #include "mdl/Map_World.h"
 #include "mdl/Node.h"
 #include "mdl/NodeQueries.h"
+#include "mdl/VmfScene.h"
 
 #include "kd/ranges/to.h"
 
@@ -96,26 +98,28 @@ void doSwapNodeContents(
     auto* node = pair.first;
     auto& contents = pair.second.get();
 
-    pair.second = node->accept(kdl::overload(
-      [&](WorldNode& worldNode) {
-        return NodeContents{worldNode.setEntity(std::get<Entity>(std::move(contents)))};
-      },
-      [&](LayerNode& layerNode) {
-        return NodeContents(layerNode.setLayer(std::get<Layer>(std::move(contents))));
-      },
-      [&](GroupNode& groupNode) {
-        return NodeContents{groupNode.setGroup(std::get<Group>(std::move(contents)))};
-      },
-      [&](EntityNode& entityNode) {
-        return NodeContents{entityNode.setEntity(std::get<Entity>(std::move(contents)))};
-      },
-      [&](BrushNode& brushNode) {
-        return NodeContents{brushNode.setBrush(std::get<Brush>(std::move(contents)))};
-      },
-      [&](PatchNode& patchNode) {
-        return NodeContents{
-          patchNode.setPatch(std::get<BezierPatch>(std::move(contents)))};
-      }));
+    pair.second = node->accept(
+      kdl::overload(
+        [&](WorldNode& worldNode) {
+          return NodeContents{worldNode.setEntity(std::get<Entity>(std::move(contents)))};
+        },
+        [&](LayerNode& layerNode) {
+          return NodeContents(layerNode.setLayer(std::get<Layer>(std::move(contents))));
+        },
+        [&](GroupNode& groupNode) {
+          return NodeContents{groupNode.setGroup(std::get<Group>(std::move(contents)))};
+        },
+        [&](EntityNode& entityNode) {
+          return NodeContents{
+            entityNode.setEntity(std::get<Entity>(std::move(contents)))};
+        },
+        [&](BrushNode& brushNode) {
+          return NodeContents{brushNode.setBrush(std::get<Brush>(std::move(contents)))};
+        },
+        [&](PatchNode& patchNode) {
+          return NodeContents{
+            patchNode.setPatch(std::get<BezierPatch>(std::move(contents)))};
+        }));
   }
 }
 
@@ -132,6 +136,21 @@ SwapNodeContentsCommand::~SwapNodeContentsCommand() = default;
 
 bool SwapNodeContentsCommand::doPerformDo(Map& map)
 {
+  if (auto* scene = map.vmfScene())
+  {
+    try
+    {
+      for (const auto& [node, contents] : m_nodes)
+      {
+        scene->validateContents(*node, contents, map.worldBounds());
+      }
+    }
+    catch (const std::exception& e)
+    {
+      map.logger().error() << "Native VMF content edit refused: " << e.what();
+      return false;
+    }
+  }
   doSwapNodeContents(m_nodes, map);
   return true;
 }

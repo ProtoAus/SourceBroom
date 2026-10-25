@@ -65,41 +65,42 @@ auto extractNodesToPaste(const std::vector<Node*>& nodes, Node& parent)
 
   for (auto* node : nodes)
   {
-    node->accept(kdl::overload(
-      [&](auto&& thisLambda, WorldNode& worldNode) {
-        worldNode.visitChildren(thisLambda);
-        nodesToDelete.push_back(&worldNode);
-      },
-      [&](auto&& thisLambda, LayerNode& layerNode) {
-        layerNode.visitChildren(thisLambda);
-        nodesToDetach.push_back(&layerNode);
-        nodesToDelete.push_back(&layerNode);
-      },
-      [&](GroupNode& groupNode) {
-        nodesToDetach.push_back(&groupNode);
-        nodesToAdd[&parent].push_back(&groupNode);
-      },
-      [&](auto&& thisLambda, EntityNode& entityNode) {
-        if (isWorldspawn(entityNode.entity().classname()))
-        {
-          entityNode.visitChildren(thisLambda);
-          nodesToDetach.push_back(&entityNode);
-          nodesToDelete.push_back(&entityNode);
-        }
-        else
-        {
-          nodesToDetach.push_back(&entityNode);
-          nodesToAdd[&parent].push_back(&entityNode);
-        }
-      },
-      [&](BrushNode& brushNode) {
-        nodesToDetach.push_back(&brushNode);
-        nodesToAdd[&parent].push_back(&brushNode);
-      },
-      [&](PatchNode& patchNode) {
-        nodesToDetach.push_back(&patchNode);
-        nodesToAdd[&parent].push_back(&patchNode);
-      }));
+    node->accept(
+      kdl::overload(
+        [&](auto&& thisLambda, WorldNode& worldNode) {
+          worldNode.visitChildren(thisLambda);
+          nodesToDelete.push_back(&worldNode);
+        },
+        [&](auto&& thisLambda, LayerNode& layerNode) {
+          layerNode.visitChildren(thisLambda);
+          nodesToDetach.push_back(&layerNode);
+          nodesToDelete.push_back(&layerNode);
+        },
+        [&](GroupNode& groupNode) {
+          nodesToDetach.push_back(&groupNode);
+          nodesToAdd[&parent].push_back(&groupNode);
+        },
+        [&](auto&& thisLambda, EntityNode& entityNode) {
+          if (isWorldspawn(entityNode.entity().classname()))
+          {
+            entityNode.visitChildren(thisLambda);
+            nodesToDetach.push_back(&entityNode);
+            nodesToDelete.push_back(&entityNode);
+          }
+          else
+          {
+            nodesToDetach.push_back(&entityNode);
+            nodesToAdd[&parent].push_back(&entityNode);
+          }
+        },
+        [&](BrushNode& brushNode) {
+          nodesToDetach.push_back(&brushNode);
+          nodesToAdd[&parent].push_back(&brushNode);
+        },
+        [&](PatchNode& patchNode) {
+          nodesToDetach.push_back(&patchNode);
+          nodesToAdd[&parent].push_back(&patchNode);
+        }));
   }
 
   for (auto* node : nodesToDetach)
@@ -117,23 +118,24 @@ auto extractNodesToPaste(const std::vector<Node*>& nodes, Node& parent)
 std::vector<IdType> allPersistentGroupIds(const Node& root)
 {
   auto result = std::vector<IdType>{};
-  root.accept(kdl::overload(
-    [](auto&& thisLambda, const WorldNode& worldNode) {
-      worldNode.visitChildren(thisLambda);
-    },
-    [](auto&& thisLambda, const LayerNode& layerNode) {
-      layerNode.visitChildren(thisLambda);
-    },
-    [&](auto&& thisLambda, const GroupNode& groupNode) {
-      if (const auto persistentId = groupNode.persistentId())
-      {
-        result.push_back(*persistentId);
-      }
-      groupNode.visitChildren(thisLambda);
-    },
-    [](const EntityNode&) {},
-    [](const BrushNode&) {},
-    [](const PatchNode&) {}));
+  root.accept(
+    kdl::overload(
+      [](auto&& thisLambda, const WorldNode& worldNode) {
+        worldNode.visitChildren(thisLambda);
+      },
+      [](auto&& thisLambda, const LayerNode& layerNode) {
+        layerNode.visitChildren(thisLambda);
+      },
+      [&](auto&& thisLambda, const GroupNode& groupNode) {
+        if (const auto persistentId = groupNode.persistentId())
+        {
+          result.push_back(*persistentId);
+        }
+        groupNode.visitChildren(thisLambda);
+      },
+      [](const EntityNode&) {},
+      [](const BrushNode&) {},
+      [](const PatchNode&) {}));
   return result;
 }
 
@@ -148,27 +150,28 @@ void fixRedundantPersistentIds(
   {
     for (auto* node : nodesToAddToParent)
     {
-      node->accept(kdl::overload(
-        [&](auto&& thisLambda, WorldNode& worldNode) {
-          worldNode.visitChildren(thisLambda);
-        },
-        [&](auto&& thisLambda, LayerNode& layerNode) {
-          layerNode.visitChildren(thisLambda);
-        },
-        [&](auto&& thisLambda, GroupNode& groupNode) {
-          if (const auto persistentGroupId = groupNode.persistentId())
-          {
-            if (!persistentGroupIds.insert(*persistentGroupId).second)
+      node->accept(
+        kdl::overload(
+          [&](auto&& thisLambda, WorldNode& worldNode) {
+            worldNode.visitChildren(thisLambda);
+          },
+          [&](auto&& thisLambda, LayerNode& layerNode) {
+            layerNode.visitChildren(thisLambda);
+          },
+          [&](auto&& thisLambda, GroupNode& groupNode) {
+            if (const auto persistentGroupId = groupNode.persistentId())
             {
-              // a group with this ID is already in the map or being pasted
-              groupNode.resetPersistentId();
+              if (!persistentGroupIds.insert(*persistentGroupId).second)
+              {
+                // a group with this ID is already in the map or being pasted
+                groupNode.resetPersistentId();
+              }
             }
-          }
-          groupNode.visitChildren(thisLambda);
-        },
-        [](EntityNode&) {},
-        [](BrushNode&) {},
-        [](PatchNode&) {}));
+            groupNode.visitChildren(thisLambda);
+          },
+          [](EntityNode&) {},
+          [](BrushNode&) {},
+          [](PatchNode&) {}));
     }
   }
 }
@@ -181,30 +184,31 @@ void fixRecursiveLinkedGroups(
     const auto linkedGroupIds = kdl::vec_sort(collectParentLinkedGroupIds(*newParent));
     for (auto* node : nodesToAddToParent)
     {
-      node->accept(kdl::overload(
-        [&](auto&& thisLambda, WorldNode& worldNode) {
-          worldNode.visitChildren(thisLambda);
-        },
-        [&](auto&& thisLambda, LayerNode& layerNode) {
-          layerNode.visitChildren(thisLambda);
-        },
-        [&](auto&& thisLambda, GroupNode& groupNode) {
-          const auto& linkId = groupNode.linkId();
-          if (std::ranges::binary_search(linkedGroupIds, linkId))
-          {
-            logger.warn() << "Unlinking recursive linked group with ID '" << linkId
-                          << "'";
+      node->accept(
+        kdl::overload(
+          [&](auto&& thisLambda, WorldNode& worldNode) {
+            worldNode.visitChildren(thisLambda);
+          },
+          [&](auto&& thisLambda, LayerNode& layerNode) {
+            layerNode.visitChildren(thisLambda);
+          },
+          [&](auto&& thisLambda, GroupNode& groupNode) {
+            const auto& linkId = groupNode.linkId();
+            if (std::ranges::binary_search(linkedGroupIds, linkId))
+            {
+              logger.warn() << "Unlinking recursive linked group with ID '" << linkId
+                            << "'";
 
-            auto group = groupNode.group();
-            group.setTransformation(vm::mat4x4d::identity());
-            groupNode.setGroup(std::move(group));
-            groupNode.setLinkId(generateUuid());
-          }
-          groupNode.visitChildren(thisLambda);
-        },
-        [](EntityNode&) {},
-        [](BrushNode&) {},
-        [](PatchNode&) {}));
+              auto group = groupNode.group();
+              group.setTransformation(vm::mat4x4d::identity());
+              groupNode.setGroup(std::move(group));
+              groupNode.setLinkId(generateUuid());
+            }
+            groupNode.visitChildren(thisLambda);
+          },
+          [](EntityNode&) {},
+          [](BrushNode&) {},
+          [](PatchNode&) {}));
     }
   }
 }
@@ -223,6 +227,17 @@ void copyAndSetLinkIds(
 
 bool pasteNodes(Map& map, const std::vector<Node*>& nodes)
 {
+  if (map.vmfScene())
+  {
+    map.logger().error()
+      << "Native VMF node paste is not supported yet; use native Duplicate/Create. "
+         "Clipboard node text has no trusted VMF provenance.";
+    for (auto* node : nodes)
+    {
+      delete node;
+    }
+    return false;
+  }
   const auto nodesToAdd = extractNodesToPaste(nodes, parentForNodes(map));
   fixRedundantPersistentIds(nodesToAdd, allPersistentGroupIds(map.worldNode()));
   fixRecursiveLinkedGroups(nodesToAdd, map.logger());

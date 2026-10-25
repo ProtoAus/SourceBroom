@@ -268,6 +268,9 @@ public: // misc
 
   MapTextEncoding encoding() const;
 
+  VmfScene* vmfScene() { return m_vmfScene.get(); }
+  const VmfScene* vmfScene() const { return m_vmfScene.get(); }
+
   NodeHandleManager& nodeHandles();
   const NodeHandleManager& nodeHandles() const;
 

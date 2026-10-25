@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -67,11 +68,14 @@ struct VmfStructuralEdit
   {
     Key,
     Remove,
-    Append
+    Append,
+    AppendRoot
   };
+  static constexpr VmfEntryId Root = std::numeric_limits<VmfEntryId>::max();
   Type type;
+  /** AppendRoot requires Root; other operations use an immutable entry ID. */
   VmfEntryId entry;
-  /** Key: quoted token; Remove: empty; Append: complete child entries. */
+  /** Key: quoted token; Remove: empty; Append/AppendRoot: complete entries. */
   std::string text;
 };
 
@@ -109,6 +113,13 @@ public:
    * with std::invalid_argument. Does not write files or change this document.
    */
   std::string serialize(
+    std::span<const VmfValueEdit> edits = {},
+    std::span<const VmfStructuralEdit> structuralEdits = {}) const;
+
+  /** Copies one native entry without re-exporting its opaque/repeated contents.
+   * Edits keep this document's IDs and must be inside the selected subtree. */
+  std::string serializeEntry(
+    VmfEntryId entry,
     std::span<const VmfValueEdit> edits = {},
     std::span<const VmfStructuralEdit> structuralEdits = {}) const;
 };

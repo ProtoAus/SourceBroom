@@ -28,12 +28,13 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   explicitly bounded repeated browse/open/close workload with real peak/resident
   measurements, correct release behavior and unchanged texture appearance.
   A successful small-room preview is not that evidence.
-- **Alpha operation affordances — `ui/MapWindow.cpp`, `mdl/VmfScene.cpp`.** Some
-  upstream new/topology/hierarchy tools remain visible although native
-  preserving-save refuses unsupported edits. Follow-up: disable those actions
-  per native capability before the full A5 exit rather than letting users discover every
-  restriction at save time. Falsifier: unsupported actions are unavailable or
-  explain refusal before mutation; supported transforms and undo still work.
+- **Alpha operation affordances — `ui/MapWindow.cpp`, `mdl/VmfScene.cpp`.**
+  A5.2 enables basic native creation/duplication/deletion/brush-entity ownership
+  and gates common unsupported clipboard/CSG/clip/content changes before mutation.
+  Some upstream topology/hierarchy tools can remain visible. Follow-up: complete
+  capability-specific affordances before the full A5 exit, not merely save-time
+  refusal. Falsifier: each unsupported action is unavailable or explains refusal
+  before mutation; supported authoring, transforms, selection and undo still work.
 - **Windows preference regression check — `test/src/tst_QPreferenceStore.cpp`,
   replacement/reload sections.** The A5 full UI run passed 41/42, with this
   untouched test throwing rename `Access is denied` in its task-owned Unicode

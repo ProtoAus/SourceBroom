@@ -1,9 +1,31 @@
-# Native Source authoring tools — bounded A5 candidate
+# Native Source authoring tools — bounded A5.2 candidate
 
 SourceBroom edits native Source 1 VMF, not a converted Quake MAP. CSS and
 Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
+
+## Basic native object authoring
+
+New Source maps start from the profile's native VMF starter, not a Quake MAP.
+On a new map or owned copy, normal tools can create closed plain brushes and
+simple point entities, transform them, duplicate supported plain objects and
+remove them. Brush-to-entity creation and whole/partial duplication of plain
+brush entities preserve native solid ownership. Undo/redo and Save As remain
+available. Opaque/geometry-dependent attachments or native references can make
+an operation unsafe; refusal is intentional, not permission to strip that data.
+
+New object and side IDs are allocated at admission, independently, above all
+existing IDs in their namespaces, including unprojected groups. Saved IDs do not
+change on each write and undo does not recycle an issued ID. Untouched native
+text, repeated keys, unknown blocks and metadata remain authoritative. Duplicates
+use new IDs, preserve supported template metadata and refuse unsafe opaque data.
+Removing a last brush also checks its implicitly removed native owner.
+
+This is not arbitrary topology support. An admitted brush keeps its complete,
+unique side-identity set; face splitting, missing/aliased sides and unsupported
+clipboard/CSG/clip operations refuse before mutation, with a preserving-save
+backstop. Use Save As and independently reopen the copy in matching Hammer++.
 
 ## Entity properties and ordered outputs
 
@@ -32,7 +54,7 @@ versions/layouts or missing/mismatched/oversized data use a diagnostic fallback
 instead of pretending the model rendered. Check the console.
 
 This does not add skeletal animation, physics/collision authoring, full bodygroup
-or shader equivalence, or arbitrary native object creation. A static pose or
+or shader equivalence, or instance/displacement/overlay authoring. A static pose or
 visible mesh is not proof of the game's collision hull or runtime behavior.
 Invalid/out-of-range skin/frame numbers fall back safely without rewriting the
 original native property; this is not validation of every model's skin table.
@@ -108,10 +130,11 @@ in the intended Source game with only its declared prerequisites installed.
 
 ## Still outside this candidate
 
-Existing plain-object edits remain the safe native surface. New/deleted topology,
-hierarchy/instance/displacement/overlay authoring, full Source material rendering
-and all-branch performance are not claimed. Some upstream actions remain visible;
-unsupported edits must refuse preserving-save. Never ignore an error or assume an
+Basic plain-object authoring does not imply arbitrary topology or native
+editor-group/layer/instance/displacement/overlay authoring, full Source material
+rendering or all-branch performance. Common unsupported operations are gated;
+some upstream actions can remain visible, but unsupported content changes must
+refuse before mutation and preserving-save remains the final backstop. Never ignore an error or assume an
 unsuccessful save changed the original. Use **Save As** and inspect a copy in
 Hammer++ before relying on it. Actual owner Hammer++/game observations belong in
 `lextest.md`; automated checks do not fill those human gates.

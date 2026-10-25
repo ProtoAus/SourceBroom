@@ -1,4 +1,4 @@
-# SourceBroom validation — A5.1 usability follow-up
+# SourceBroom validation — A5.2 native-authoring follow-up
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
@@ -10,7 +10,7 @@ separate states. Full A4/A5 exit and a general release are **not** claimed.
 | Area | Implemented and checked | Not implied |
 | --- | --- | --- |
 | Native document | Ordered/repeated keys, comments, unknown blocks, numeric text, byte-exact no-edit serialization; surgical token edits and entry/nesting bounds | All VMF branch semantics or independent Hammer acceptance |
-| Scene/edit/save | Stable native bindings, strict geometry/UV checks, bounded existing-brush/entity edits, undo/redo, transactional preserving save/Save As | New/deleted topology, hierarchy, displacement/overlay/instance authoring |
+| Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | Arbitrary topology, native editor-group/layer/displacement/overlay/instance authoring |
 | Entity tools | FGD property hints, choices/flags and I/O metadata; ordered/repeated outputs; unknown data retained, definition defaults not blindly inserted | FGD completeness or correctness for every game; malformed data silently repaired |
 | Props/materials | Bounded static MDL44/48/49 with matching VVD/VTX, root/default pose, installed loose/VPK material lookup; explicit fallbacks | Animation, physics/bodygroup/shader parity or every model variant |
 | Native metadata | Read-only groups/visgroups/membership/hidden/cameras/cordons, known-reference diagnostics; camera-eye navigation | Scene parenting, visibility/cordon authoring or arbitrary compiler clipping behavior |
@@ -28,23 +28,47 @@ not substituted for compilation or runtime checks.
 
 | Check | Actual result |
 | --- | --- |
-| Full filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 165/165 + 42/42 passed** (248 entries) |
+| Full filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 167/167 + 42/42 passed** (250 entries) |
 | Preference replacement history | The untouched test passes this full run; earlier A5 full/narrow runs failed with Windows rename `Access is denied`. One pass is not a fix or a claim of consistent host behavior |
 | Focused accepted-fix UI controls | **4/4 passed**: property/I/O namespace controls, production build backend and metadata/package tools |
 | Lossless supplied corpus | **38/38 passed**, no-edit plus acted in-memory mutation; original SHA-256 unchanged |
 | Scene supplied corpus | **35/38 constructed** under the shared +/-131072 preview envelope, versus **32/38** under the explicit +/-65536 control; three ID/geometry/UV refusals remain, not skipped success |
 | Native edited ramp/entity/output save | Production native map save/reopen control changes actual ramp bounds, property data and one repeated-output delay; original/copy separation maintained |
-| Installed CSS/Momentum pipeline | Production backend VBSP/VVIS/VRAD completes for an authored native-edited fixture; target headers are BSP20/BSP25, inputs unchanged; no game launched by this check |
+| Installed CSS/Momentum pipeline | Production-saved room includes a fresh transformed brush and point after duplicate/delete controls; actual VBSP/VVIS/VRAD completes for CSS20 and Strata25, inputs unchanged; no game launched by this check |
 | Build-tree A5.1 GUI smoke | Actual Momentum prop fixture and two external copied maps opened and closed with exit zero; inputs unchanged. Title readiness is not visual or owner acceptance |
 | Historical A5 installed GUI smoke | CSS/Momentum starter fixtures opened; the installed-prop description was overbroad because an unsupported input environment variable was ignored. Build-tree prop evidence is separate; installed A5.1 coverage belongs to its receipt |
 | Packaging implementation | Authored custom files and optional short-name synthetic BSP written to new ZIP; independent reader extracts exact bytes; no-overwrite/approval/snapshot/path/budget refusals exercised |
 
-The corpus was rerun through syntax/mutation, old-envelope and current-envelope
-arms for A5.1, with all original hashes unchanged. This sample is useful evidence,
+The corpus syntax/mutation and envelope evidence below was obtained for A5.1,
+with all original hashes unchanged; a current package's receipt distinguishes
+any later installed-candidate rerun from that retained evidence. This sample is useful evidence,
 not all-map/all-game coverage. External map names, content and raw private logs
 are not public fixtures.
 
-### Usability controls and measured limits
+### Native authoring controls
+
+- Production model controls act on fresh brushes/points, native-template and
+  fresh duplicates, transforms, deletion, ownership and save/reopen. Original
+  inputs and untouched native fragments remain unchanged; no MAP re-export is used.
+- Native IDs reserve large decimal and leading-zero object/group/side IDs without
+  narrowing. Undo/redo and repeated saves preserve bindings and issued IDs are
+  not reused. Fresh duplicates receive independently owned complete side sets.
+- Native starter creation clears saved-file association before the first save.
+  Whole/partial plain brush-entity duplication preserves ownership. Deleting an
+  implicit owner after a descendant edit removes only the highest original
+  source span; undo restores exact original bytes.
+- Unsupported clipboard/CSG/clip/topology/opaque-reference paths are refused
+  before mutation, with transaction serialization as a backstop. Acted controls
+  check selection, modification count, bindings, command history and save bytes.
+- Independent review found a fresh-brush repeated/missing side-identity hole
+  and a repeated-classname load regression. Both were reproduced, fixed and
+  regression-tested. A bounded fresh closure review found no remaining issue
+  in those fixes or native same-parent normalization. The later opt-in
+  authored-room export is a test-only extension, not an independently reviewed
+  production change. The review itself is not desktop, Hammer++, compiler or
+  all-branch certification.
+
+### Retained A5.1 usability controls and measured limits
 
 - A closed authored box translated far beyond the old preview envelope has the
   expected six faces/eight vertices and exact bounds in the new envelope; its

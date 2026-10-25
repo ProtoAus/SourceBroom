@@ -87,13 +87,14 @@ std::vector<Node*> collectNodesToUnlink(const std::vector<GroupNode*>& groupNode
   for (auto* groupNode : groupNodes)
   {
     result.push_back(groupNode);
-    groupNode->visitChildren(kdl::overload(
-      [](const WorldNode&) {},
-      [](const LayerNode&) {},
-      [](const GroupNode&) {},
-      [&](EntityNode& entityNode) { result.push_back(&entityNode); },
-      [&](BrushNode& brushNode) { result.push_back(&brushNode); },
-      [&](PatchNode& patchNode) { result.push_back(&patchNode); }));
+    groupNode->visitChildren(
+      kdl::overload(
+        [](const WorldNode&) {},
+        [](const LayerNode&) {},
+        [](const GroupNode&) {},
+        [&](EntityNode& entityNode) { result.push_back(&entityNode); },
+        [&](BrushNode& brushNode) { result.push_back(&brushNode); },
+        [&](PatchNode& patchNode) { result.push_back(&patchNode); }));
   }
   return result;
 }
@@ -140,26 +141,28 @@ auto getLinkIds(const std::vector<Node*> nodes)
   auto result = std::unordered_set<std::string>{};
   for (const auto* node : nodes)
   {
-    node->accept(kdl::overload(
-      [](const WorldNode&) {},
-      [](const LayerNode&) {},
-      [&](const GroupNode& groupNode) { result.insert(groupNode.linkId()); },
-      [&](const EntityNode& entityNode) { result.insert(entityNode.linkId()); },
-      [&](const BrushNode& brushNode) { result.insert(brushNode.linkId()); },
-      [&](const PatchNode& patchNode) { result.insert(patchNode.linkId()); }));
+    node->accept(
+      kdl::overload(
+        [](const WorldNode&) {},
+        [](const LayerNode&) {},
+        [&](const GroupNode& groupNode) { result.insert(groupNode.linkId()); },
+        [&](const EntityNode& entityNode) { result.insert(entityNode.linkId()); },
+        [&](const BrushNode& brushNode) { result.insert(brushNode.linkId()); },
+        [&](const PatchNode& patchNode) { result.insert(patchNode.linkId()); }));
   }
   return result;
 }
 
 bool hasLinkIdOf(const Node& node, const std::unordered_set<std::string>& linkIds)
 {
-  return node.accept(kdl::overload(
-    [](const WorldNode&) { return false; },
-    [](const LayerNode&) { return false; },
-    [&](const GroupNode& groupNode) { return linkIds.contains(groupNode.linkId()); },
-    [&](const EntityNode& entityNode) { return linkIds.contains(entityNode.linkId()); },
-    [&](const BrushNode& brushNode) { return linkIds.contains(brushNode.linkId()); },
-    [&](const PatchNode& patchNode) { return linkIds.contains(patchNode.linkId()); }));
+  return node.accept(
+    kdl::overload(
+      [](const WorldNode&) { return false; },
+      [](const LayerNode&) { return false; },
+      [&](const GroupNode& groupNode) { return linkIds.contains(groupNode.linkId()); },
+      [&](const EntityNode& entityNode) { return linkIds.contains(entityNode.linkId()); },
+      [&](const BrushNode& brushNode) { return linkIds.contains(brushNode.linkId()); },
+      [&](const PatchNode& patchNode) { return linkIds.contains(patchNode.linkId()); }));
 }
 
 bool recursivelyHasLinkIdOf(
@@ -197,23 +200,24 @@ auto getNodesToRemoveAfterExtraction(
 
   for (auto* node : rootNode.children())
   {
-    node->accept(kdl::overload(
-      [](const WorldNode&) {},
-      [](const LayerNode&) {},
-      [&](auto&& thisLambda, GroupNode& groupNode) {
-        if (addNodeToRemove(&groupNode))
-        {
-          groupNode.visitChildren(thisLambda);
-        }
-      },
-      [&](auto&& thisLambda, EntityNode& entityNode) {
-        if (addNodeToRemove(&entityNode))
-        {
-          entityNode.visitChildren(thisLambda);
-        }
-      },
-      [&](BrushNode& brushNode) { addNodeToRemove(&brushNode); },
-      [&](PatchNode& patchNode) { addNodeToRemove(&patchNode); }));
+    node->accept(
+      kdl::overload(
+        [](const WorldNode&) {},
+        [](const LayerNode&) {},
+        [&](auto&& thisLambda, GroupNode& groupNode) {
+          if (addNodeToRemove(&groupNode))
+          {
+            groupNode.visitChildren(thisLambda);
+          }
+        },
+        [&](auto&& thisLambda, EntityNode& entityNode) {
+          if (addNodeToRemove(&entityNode))
+          {
+            entityNode.visitChildren(thisLambda);
+          }
+        },
+        [&](BrushNode& brushNode) { addNodeToRemove(&brushNode); },
+        [&](PatchNode& patchNode) { addNodeToRemove(&patchNode); }));
   }
 
   return nodesToRemove;
@@ -575,13 +579,21 @@ std::vector<GroupNode*> extractLinkedGroups(Map& map)
   // Remove the nodes to extract from the original link set
   openGroup(map, *oldLinkedGroup);
   selectNodes(map, nodesToExtract);
-  removeSelectedNodes(map);
+  if (!removeSelectedNodes(map))
+  {
+    transaction.cancel();
+    return {};
+  }
   closeGroup(map);
 
   // Remove the other nodes from the new link set
   openGroup(map, *newLinkedGroup);
   selectNodes(map, nodesToRemoveFromNewLinkedGroup);
-  removeSelectedNodes(map);
+  if (!removeSelectedNodes(map))
+  {
+    transaction.cancel();
+    return {};
+  }
   closeGroup(map);
 
   selectNodes(map, {newLinkedGroup});

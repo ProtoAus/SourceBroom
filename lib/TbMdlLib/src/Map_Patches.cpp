@@ -19,6 +19,7 @@
 
 #include "mdl/Map_Patches.h"
 
+#include "base/Logger.h"
 #include "mdl/ApplyAndSwap.h"
 #include "mdl/BezierPatch.h"
 #include "mdl/ControlPointCommand.h"
@@ -46,6 +47,12 @@ namespace tb::mdl
 void convertSelectionToPatches(
   Map& map, const size_t pointRowCount, const size_t pointColumnCount)
 {
+  if (map.vmfScene())
+  {
+    map.logger().error()
+      << "Native VMF patch/topology reconstruction is not supported yet";
+    return;
+  }
   const auto& selection = map.selection();
   contract_assert(selection.hasAnyBrushFaces());
 
@@ -65,8 +72,17 @@ void convertSelectionToPatches(
   auto transaction = Transaction{map, "Convert Selection to Patches"};
 
   auto addedNodes = addNodes(map, {{&parentForNodes(map), patchNodes}});
+  if (addedNodes.empty())
+  {
+    transaction.cancel();
+    return;
+  }
   deselectAll(map);
-  removeNodes(map, nodesToRemove);
+  if (!removeNodes(map, nodesToRemove))
+  {
+    transaction.cancel();
+    return;
+  }
   selectNodes(map, addedNodes);
 
   transaction.commit();

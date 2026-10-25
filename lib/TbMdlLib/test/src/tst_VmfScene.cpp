@@ -372,7 +372,8 @@ TEST_CASE("VmfScene", "[vmf]")
     node->setFilePosition(12345, 1);
     CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
-  SECTION("real object additions and deletions refuse")
+  SECTION(
+    "unregistered additions refuse but plain native deletion preserves unrelated bytes")
   {
     auto scene = VmfScene::read(fixture(), bounds);
     auto* layer = scene.world().defaultLayer();
@@ -381,9 +382,16 @@ TEST_CASE("VmfScene", "[vmf]")
     layer->addChild(copy.get());
     CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
     layer->removeChild(copy.get());
+    const auto& entry = scene.document().entries()[original->lineNumber() - 1];
+    auto expected = scene.document().source();
+    expected.erase(entry.key.offset, entry.end - entry.key.offset);
     layer->removeChild(original);
     auto owned = std::unique_ptr<Node>{original};
-    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+    const auto deleted = scene.serialize(scene.world());
+    CHECK(deleted == expected);
+    auto reopened = VmfScene::read(deleted, bounds);
+    CHECK(reopened.world().defaultLayer()->childCount() == layer->childCount());
+    CHECK(reopened.serialize(reopened.world()) == deleted);
   }
   SECTION("face and object IDs have separate namespaces")
   {

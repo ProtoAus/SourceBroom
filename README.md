@@ -5,21 +5,24 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.1 usability follow-up to the A5 authoring-tools candidate:
-native VMF opening,
-base-texture and bounded static-prop preview, existing-brush/entity edits,
+**Status:** Windows A5.2 native-authoring follow-up to the A5 candidate:
+native VMF opening, starter/new plain-brush and point-entity creation,
+supported duplication/deletion and brush-entity ownership, base-texture and
+bounded static-prop preview, existing-brush/entity edits,
 FGD-backed properties and ordered Source outputs, preserving saves, external
 compile/play, capability preflight, read-only native metadata and an explicit
 custom-content distribution ZIP. CSS and Momentum are the first tested profiles,
 not the only configurable games. Independent Hammer++/owner acceptance remains
 pending; full A5, advanced native authoring and a general release are not claimed.
-The follow-up removes a redundant Source-content scan and a quadratic material-
-folder lookup, and accepts larger finite Source preview worlds without weakening
-geometry/save guards. The supplied scene corpus now constructs **35/38** maps;
+Native authoring keeps stable independent object/side IDs and preserves original
+VMF data without a MAP conversion; arbitrary topology and opaque-reference edits
+remain gated. The retained usability fixes remove a redundant Source-content
+scan and quadratic material-folder lookup, and accept larger finite Source
+preview worlds without weakening geometry/save guards. The supplied scene corpus now constructs **35/38** maps;
 all **38/38** remain lossless at the document level.
 
 - [Try the Windows alpha and understand its limits](docs/sourcebroom/ALPHA.md)
-- [Properties, outputs, props, metadata and custom packages](docs/sourcebroom/SOURCE_TOOLS.md)
+- [Native authoring, properties, outputs, props, metadata and custom packages](docs/sourcebroom/SOURCE_TOOLS.md)
 - [Measured validation and pending acceptance](docs/sourcebroom/VALIDATION.md)
 - [Ordered alpha roadmap and acceptance gates](docs/sourcebroom/ROADMAP.md)
 - [Development, build, and preservation contract](docs/sourcebroom/DEVELOPMENT.md)

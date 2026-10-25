@@ -4,22 +4,31 @@
  */
 
 #include "fs/TestEnvironment.h"
+#include "mdl/AddRemoveNodesCommand.h"
 #include "mdl/Brush.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushNode.h"
 #include "mdl/CatchConfig.h"
 #include "mdl/EditorContext.h"
+#include "mdl/EntityDefinition.h"
+#include "mdl/EntityNode.h"
+#include "mdl/GameConfig.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
 #include "mdl/MapFixture.h"
 #include "mdl/MapFormat.h"
+#include "mdl/Map_Brushes.h"
 #include "mdl/Map_CopyPaste.h"
 #include "mdl/Map_Entities.h"
 #include "mdl/Map_Geometry.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/Node.h"
+#include "mdl/NodeContents.h"
+#include "mdl/PasteType.h"
+#include "mdl/SwapNodeContentsCommand.h"
 #include "mdl/VmfDocument.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 
 #include "vm/mat.h"
@@ -149,7 +158,8 @@ std::vector<BindingPosition> filePositions(const Map& map)
 
 // Compare native state rather than material-reference identity across independent
 // MapFixtures, whose resource managers may own different fallback materials.
-void checkReopenedBrush(const Brush& actual, const Brush& expected)
+void checkReopenedBrush(
+  const Brush& actual, const Brush& expected, const bool bindings = true)
 {
   REQUIRE(actual.faceCount() == expected.faceCount());
   CHECK(actual.vertexCount() == expected.vertexCount());
@@ -171,9 +181,68 @@ void checkReopenedBrush(const Brush& actual, const Brush& expected)
     CHECK(face.surfaceAttributes() == before.surfaceAttributes());
     CHECK(face.uvAttributes() == before.uvAttributes());
     CHECK(face.takeUvCoordSystemSnapshot() == before.takeUvCoordSystemSnapshot());
-    CHECK(face.lineNumber() == before.lineNumber());
+    if (bindings)
+    {
+      CHECK(face.lineNumber() == before.lineNumber());
+    }
     CHECK(face.preservesPlanePrecision() == before.preservesPlanePrecision());
   }
+}
+
+Node& nativeNode(Map& map, const std::string& id)
+{
+  auto* found = static_cast<Node*>(nullptr);
+  const auto visit = [&](auto&& self, Node& node) -> void {
+    if (
+      node.lineNumber() && !dynamic_cast<LayerNode*>(&node)
+      && map.vmfScene()->nativeId(node) == id)
+    {
+      found = &node;
+    }
+    for (auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  visit(visit, map.worldNode());
+  REQUIRE(found);
+  return *found;
+}
+
+std::string nativeFragment(const std::string& source, const std::string& id)
+{
+  const auto document = VmfDocument::parse(source);
+  for (size_t i = 0; i < document.entries().size(); ++i)
+  {
+    const auto& entry = document.entries()[i];
+    if (entry.isBlock() && document.tokenContents(entry.key) != "side")
+    {
+      for (const auto child : entry.children)
+      {
+        const auto& property = document.entries()[child];
+        if (
+          property.value && document.tokenContents(property.key) == "id"
+          && document.tokenContents(*property.value) == id)
+        {
+          return source.substr(entry.key.offset, entry.end - entry.key.offset);
+        }
+      }
+    }
+  }
+  throw std::logic_error{"Native fragment is absent: " + id};
+}
+
+std::vector<vm::vec3d> nativeCubePoints()
+{
+  return {
+    {-32, -32, -32},
+    {32, -32, -32},
+    {-32, 32, -32},
+    {32, 32, -32},
+    {-32, -32, 32},
+    {32, -32, 32},
+    {-32, 32, 32},
+    {32, 32, 32}};
 }
 
 void checkOnlyPlaneTokensChanged(const std::string& original, const std::string& saved)
@@ -420,6 +489,525 @@ TEST_CASE("VmfMap", "[vmf]")
     CHECK(readBinary(path) == original);
   }
 
+  SECTION(
+    "native new map resolves its VMF starter without retaining saved-file association")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto starter = env.dir() / "native starter.vmf";
+    const auto original = nativeRamp(true);
+    writeBinary(starter, original);
+    auto nativeConfig = config;
+    nativeConfig.mapFormat = MapFormat::SourceVMF;
+    nativeConfig.gameInfo.gameConfig.fileFormats = {{"Source VMF", starter}};
+    auto fixture = MapFixture{};
+    auto& map = fixture.create(nativeConfig);
+    REQUIRE(map.vmfScene());
+    CHECK(map.worldNode().mapFormat() == MapFormat::SourceVMF);
+    CHECK_FALSE(map.persistent());
+    CHECK_FALSE(map.modified());
+    CHECK(map.path() != starter);
+    CHECK(map.worldNode().defaultLayer()->childCount() == 2);
+    const auto saved = env.dir() / "new native map.vmf";
+    REQUIRE(map.saveAs(saved).is_success());
+    CHECK(readBinary(saved) == original);
+    CHECK(readBinary(starter) == original);
+    REQUIRE(createBrush(map, nativeCubePoints()));
+    REQUIRE(map.save().is_success());
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(saved, config);
+    CHECK(reopened.worldNode().defaultLayer()->childCount() == 3);
+    CHECK(readBinary(starter) == original);
+  }
+
+  SECTION(
+    "native counters reserve large leading-zero group and side IDs without narrowing or "
+    "reuse")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "native ID control.vmf";
+    auto original = nativeRamp(false);
+    const auto groupId = std::string{"000900719925474099300000000000"};
+    const auto at = original.find("editor { \"color\"");
+    REQUIRE(at != std::string::npos);
+    original.insert(
+      at, "group { \"id\" \"" + groupId + "\" editor { color \"1 2 3\" } }\r\n");
+    const auto oldSide = std::string{"\"id\" \"8\""};
+    const auto sideAt = original.find(oldSide);
+    REQUIRE(sideAt != std::string::npos);
+    original.replace(sideAt, oldSide.size(), "\"id\" \"000800719925474099300000000000\"");
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    const auto definition = EntityDefinition{
+      .name = "info_target",
+      .pointEntityDefinition = PointEntityDefinition{.bounds = vm::bbox3d{8}}};
+    auto* point = createPointEntity(map, definition, vm::vec3d{16, 16, 16});
+    REQUIRE(point);
+    CHECK(map.vmfScene()->nativeId(*point) == "900719925474099300000000001");
+    map.undoCommand();
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 2);
+    REQUIRE(createBrush(map, nativeCubePoints()));
+    auto* cube = map.selection().brushes.front();
+    REQUIRE(map.vmfScene()->nativeId(*cube) == "900719925474099300000000002");
+    const auto positions = filePositions(map);
+    const auto saved = env.dir() / "large native IDs.vmf";
+    REQUIRE(map.saveAs(saved).is_success());
+    const auto bytes = readBinary(saved);
+    CHECK(bytes.find("\"800719925474099300000000001\"") != std::string::npos);
+    CHECK(nativeFragment(bytes, groupId) == nativeFragment(original, groupId));
+    CHECK(filePositions(map) == positions);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(saved, config);
+    CHECK(reopened.worldNode().defaultLayer()->childCount() == 3);
+    CHECK(dynamic_cast<BrushNode*>(&nativeNode(reopened, "900719925474099300000000002")));
+    CHECK(readBinary(path) == original);
+  }
+
+  SECTION(
+    "fresh native duplicates retain distinct side sets through transform and history")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "fresh duplicate control.vmf";
+    writeBinary(path, nativeRamp(false));
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    REQUIRE(createBrush(map, nativeCubePoints()));
+    REQUIRE(map.vmfScene()->nativeId(*map.selection().brushes.front()) == "10");
+    const auto before = env.dir() / "before fresh duplicate.vmf";
+    REQUIRE(map.saveAs(before).is_success());
+    const auto beforeBytes = readBinary(before);
+    duplicateSelectedNodes(map);
+    REQUIRE(map.selection().brushes.size() == 1);
+    auto* duplicate = map.selection().brushes.front();
+    REQUIRE(map.vmfScene()->nativeId(*duplicate) == "11");
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 4);
+    map.editorContext().setAlignmentLock(false);
+    REQUIRE(transformSelection(
+      map, "Move fresh duplicate", vm::translation_matrix(vm::vec3d{64, 0, 0})));
+    const auto data = duplicate->brush();
+    const auto positions = filePositions(map);
+    const auto saved = env.dir() / "fresh duplicate.vmf";
+    REQUIRE(map.saveAs(saved).is_success());
+    const auto bytes = readBinary(saved);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(saved, config);
+    checkReopenedBrush(
+      dynamic_cast<BrushNode&>(nativeNode(reopened, "11")).brush(), data, false);
+    CHECK(nativeFragment(bytes, "10") == nativeFragment(beforeBytes, "10"));
+    map.undoCommand();
+    map.undoCommand();
+    const auto undone = env.dir() / "fresh duplicate undone.vmf";
+    REQUIRE(map.saveAs(undone).is_success());
+    CHECK(readBinary(undone) == beforeBytes);
+    map.redoCommand();
+    map.redoCommand();
+    CHECK(filePositions(map) == positions);
+    const auto redone = env.dir() / "fresh duplicate redone.vmf";
+    REQUIRE(map.saveAs(redone).is_success());
+    CHECK(readBinary(redone) == bytes);
+  }
+
+  SECTION(
+    "native brush entity wrapping whole and partial duplication preserve ownership and "
+    "metadata")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "native ownership control.vmf";
+    const auto original = nativeRamp(true);
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    auto* brush = &ramp(map);
+    selectNodes(map, {brush});
+    const auto definition = EntityDefinition{.name = "func_detail"};
+    auto* owner = createBrushEntity(map, definition);
+    REQUIRE(owner);
+    REQUIRE(map.vmfScene()->nativeId(*owner) == "10");
+    CHECK(brush->parent() == owner);
+    CHECK(map.vmfScene()->nativeId(*brush) == "2");
+    const auto single = env.dir() / "single native owner.vmf";
+    REQUIRE(map.saveAs(single).is_success());
+    const auto singleBytes = readBinary(single);
+    CHECK(nativeFragment(singleBytes, "2") == nativeFragment(original, "2"));
+    deselectAll(map);
+    REQUIRE(createBrush(map, nativeCubePoints()));
+    auto* fresh = map.selection().brushes.front();
+    REQUIRE(fresh->parent() == map.worldNode().defaultLayer());
+    deselectAll(map);
+    REQUIRE(reparentNodes(map, {{owner, {fresh}}}));
+    REQUIRE(fresh->parent() == owner);
+    REQUIRE(owner->childCount() == 2);
+    REQUIRE(map.selection().nodes.empty());
+    selectNodes(map, {fresh});
+    const auto noOpPositions = filePositions(map);
+    const auto noOpUndo = map.undoCommandName();
+    REQUIRE(reparentNodes(map, {{owner, {fresh}}}));
+    CHECK(map.undoCommandName() == noOpUndo);
+    CHECK(filePositions(map) == noOpPositions);
+    deselectAll(map);
+    selectNodes(map, owner->children());
+    REQUIRE(map.selection().brushes.size() == 2);
+    duplicateSelectedNodes(map);
+    REQUIRE(map.selection().brushes.size() == 2);
+    auto* whole = dynamic_cast<EntityNode*>(map.selection().brushes.front()->parent());
+    REQUIRE(whole);
+    REQUIRE(whole != owner);
+    REQUIRE(whole->childCount() == 2);
+    const auto wholeId = map.vmfScene()->nativeId(*whole);
+    deselectAll(map);
+    selectNodes(map, {brush});
+    duplicateSelectedNodes(map);
+    REQUIRE(map.selection().brushes.size() == 1);
+    auto* partial = dynamic_cast<EntityNode*>(map.selection().brushes.front()->parent());
+    REQUIRE(partial);
+    REQUIRE(partial != owner);
+    REQUIRE(partial->childCount() == 1);
+    const auto partialId = map.vmfScene()->nativeId(*partial);
+    const auto saved = env.dir() / "native ownership duplicates.vmf";
+    REQUIRE(map.saveAs(saved).is_success());
+    const auto bytes = readBinary(saved);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(saved, config);
+    CHECK(nativeNode(reopened, "10").childCount() == 2);
+    CHECK(nativeNode(reopened, wholeId).childCount() == 2);
+    CHECK(nativeNode(reopened, partialId).childCount() == 1);
+    CHECK(nativeFragment(bytes, "9") == nativeFragment(original, "9"));
+    CHECK(nativeFragment(bytes, "2") == nativeFragment(original, "2"));
+
+    // Reopening makes the owner/solid original native subtrees. Editing a child
+    // then deleting its ancestor must remove only that highest source span.
+    auto deletionFixture = MapFixture{};
+    auto& deletion = deletionFixture.load(single, config);
+    selectNodes(deletion, {&nativeNode(deletion, "2")});
+    REQUIRE(transformSelection(
+      deletion,
+      "Edit child before ancestor deletion",
+      vm::translation_matrix(vm::vec3d{16, 0, 0})));
+    // The selected last brush implicitly removes its now-empty native owner.
+    REQUIRE(removeSelectedNodes(deletion));
+    const auto deleted = env.dir() / "deleted native ancestor.vmf";
+    REQUIRE(deletion.saveAs(deleted).is_success());
+    auto expected = singleBytes;
+    const auto span = nativeFragment(singleBytes, "10");
+    expected.erase(expected.find(span), span.size());
+    CHECK(readBinary(deleted) == expected);
+    CHECK_NOTHROW(VmfScene::read(readBinary(deleted), deletion.worldBounds()));
+    deletion.undoCommand();
+    deletion.undoCommand();
+    const auto restored = env.dir() / "native ancestor restored.vmf";
+    REQUIRE(deletion.saveAs(restored).is_success());
+    CHECK(readBinary(restored) == singleBytes);
+    CHECK(readBinary(path) == original);
+  }
+
+  SECTION("fresh native brushes reject split or missing side identities before mutation")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "fresh topology control.vmf";
+    const auto original = nativeRamp(false);
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    const auto points = std::vector<vm::vec3d>{
+      {-32, -32, -32},
+      {32, -32, -32},
+      {-32, 32, -32},
+      {32, 32, -32},
+      {-32, -32, 32},
+      {32, -32, 32},
+      {-32, 32, 32},
+      {32, 32, 32}};
+    REQUIRE(createBrush(map, points));
+    auto* cube = map.selection().brushes.front();
+    REQUIRE(cube->brush().faceCount() == 6);
+    const auto positions = filePositions(map);
+    const auto count = map.modificationCount();
+    const auto selection = map.selection().nodes;
+    const auto undo = map.canUndoCommand();
+    const auto redo = map.canRedoCommand();
+    CHECK_FALSE(addVertex(map, vm::vec3d{0, 0, 64}));
+    auto aliased = cube->brush();
+    aliased.faces()[1].setFilePosition(aliased.faces()[0].lineNumber(), 1);
+    CHECK_FALSE(map.executeAndStore(
+      std::make_unique<SwapNodeContentsCommand>(
+        "Duplicate native side identity",
+        std::vector<std::pair<Node*, NodeContents>>{
+          {cube, NodeContents{std::move(aliased)}}})));
+    CHECK(cube->brush().faceCount() == 6);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.selection().nodes == selection);
+    CHECK(map.canUndoCommand() == undo);
+    CHECK(map.canRedoCommand() == redo);
+    const auto savedPath = env.dir() / "fresh topology refused.vmf";
+    REQUIRE(map.saveAs(savedPath).is_success());
+    CHECK_NOTHROW(VmfScene::read(readBinary(savedPath), map.worldBounds()));
+    REQUIRE(cube->brush().faceCount() == 6);
+    map.editorContext().setAlignmentLock(false);
+    REQUIRE(transformSelection(
+      map, "Move fresh native control", vm::translation_matrix(vm::vec3d{64, 0, 0})));
+    const auto moved = env.dir() / "fresh transform control.vmf";
+    REQUIRE(map.saveAs(moved).is_success());
+    auto reopened = VmfScene::read(readBinary(moved), map.worldBounds());
+    CHECK(reopened.world().defaultLayer()->childCount() == 3);
+    CHECK(readBinary(path) == original);
+  }
+
+  SECTION(
+    "ambiguous repeated classnames preserve no edit loading and fail geometry "
+    "classification closed")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "repeated classname control.vmf";
+    auto original = nativeRamp(false);
+    const auto classname = std::string{"\"classname\" \"info_target\""};
+    const auto at = original.find(classname);
+    REQUIRE(at != std::string::npos);
+    original.insert(at + classname.size(), " " + classname);
+    auto projection = std::optional<VmfScene>{};
+    CHECK_NOTHROW(projection.emplace(VmfScene::read(original, vm::bbox3d{4096})));
+    REQUIRE(projection);
+    CHECK(projection->serialize(projection->world()) == original);
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    REQUIRE(map.save().is_success());
+    CHECK(readBinary(path) == original);
+    auto& brush = ramp(map);
+    selectNodes(map, {&brush});
+    const auto positions = filePositions(map);
+    const auto count = map.modificationCount();
+    CHECK_FALSE(transformSelection(
+      map, "Ambiguous reference guard", vm::translation_matrix(vm::vec3d{16, 0, 0})));
+    CHECK_FALSE(removeSelectedNodes(map));
+    CHECK(filePositions(map) == positions);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.selection().nodes == std::vector<Node*>{&brush});
+    REQUIRE(map.save().is_success());
+    CHECK(readBinary(path) == original);
+  }
+
+  SECTION("native fresh brush point entity and outputs survive save reopen undo redo")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "authoring control.vmf";
+    const auto original = nativeRamp(true);
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    const auto originalPositions = filePositions(map);
+    const auto entryCount = map.vmfScene()->document().entries().size();
+    const auto points = std::vector<vm::vec3d>{
+      {128.0001, 0, 0},
+      {192.0001, 0, 0},
+      {128.0001, 64, 0},
+      {192.0001, 64, 0},
+      {128.0001, 0, 64},
+      {192.0001, 0, 64},
+      {128.0001, 64, 64},
+      {192.0001, 64, 64}};
+    REQUIRE(createBrush(map, points));
+    REQUIRE(map.selection().brushes.size() == 1);
+    auto* cube = map.selection().brushes.front();
+    REQUIRE(map.vmfScene()->nativeId(*cube) == "10");
+    CHECK(cube->lineNumber() > entryCount);
+    CHECK(cube->brush().bounds().min.x() == Catch::Approx(128.0001).margin(1e-8));
+    for (const auto& face : cube->brush().faces())
+    {
+      CHECK(face.lineNumber() > entryCount);
+    }
+    const auto definition = EntityDefinition{
+      .name = "info_target",
+      .pointEntityDefinition = PointEntityDefinition{.bounds = vm::bbox3d{8}}};
+    auto* point = createPointEntity(map, definition, vm::vec3d{128, 32, 16});
+    REQUIRE(point);
+    REQUIRE(map.vmfScene()->nativeId(*point) == "11");
+    REQUIRE(setSourceEntityConnections(
+      map,
+      {{"OnUser1", "!self,Enable,,0,-1", std::nullopt},
+       {"OnUser1", "!self,Disable,,1,-1", std::nullopt}}));
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 4);
+    const auto cubeData = cube->brush();
+    const auto positions = filePositions(map);
+    CHECK_FALSE(serializeSelectedNodes(map).empty());
+    CHECK(filePositions(map) == positions);
+    const auto savedPath = env.dir() / "authored.vmf";
+    REQUIRE(map.saveAs(savedPath).is_success());
+    const auto saved = readBinary(savedPath);
+    CHECK(nativeFragment(saved, "9") == nativeFragment(original, "9"));
+    CHECK(nativeFragment(saved, "2") == nativeFragment(original, "2"));
+    CHECK(filePositions(map) == positions);
+    REQUIRE(map.save().is_success());
+    CHECK(readBinary(savedPath) == saved);
+    CHECK(readBinary(path) == original);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(savedPath, config);
+    REQUIRE(reopened.worldNode().defaultLayer()->childCount() == 4);
+    checkReopenedBrush(
+      dynamic_cast<BrushNode&>(nativeNode(reopened, "10")).brush(), cubeData, false);
+    const auto& entity = dynamic_cast<EntityNode&>(nativeNode(reopened, "11")).entity();
+    REQUIRE(entity.property("origin"));
+    CHECK(*entity.property("origin") == *point->entity().property("origin"));
+    REQUIRE(entity.sourceConnections().size() == 2);
+    CHECK(entity.sourceConnections()[0].value == "!self,Enable,,0,-1");
+    CHECK(entity.sourceConnections()[1].value == "!self,Disable,,1,-1");
+    for (size_t i = 0; i < 16 && map.canUndoCommand(); ++i)
+    {
+      map.undoCommand();
+    }
+    REQUIRE_FALSE(map.canUndoCommand());
+    CHECK(filePositions(map) == originalPositions);
+    const auto undone = env.dir() / "authoring undone.vmf";
+    REQUIRE(map.saveAs(undone).is_success());
+    CHECK(readBinary(undone) == original);
+    REQUIRE(map.canRedoCommand());
+    for (size_t i = 0; i < 16 && map.canRedoCommand(); ++i)
+    {
+      map.redoCommand();
+    }
+    REQUIRE_FALSE(map.canRedoCommand());
+    CHECK(filePositions(map) == positions);
+    const auto redone = env.dir() / "authoring redone.vmf";
+    REQUIRE(map.saveAs(redone).is_success());
+    CHECK(readBinary(redone) == saved);
+    deselectAll(map);
+    selectNodes(map, {&nativeNode(map, "10"), &nativeNode(map, "11")});
+    REQUIRE(removeSelectedNodes(map));
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 2);
+    const auto deleted = env.dir() / "authoring deleted.vmf";
+    REQUIRE(map.saveAs(deleted).is_success());
+    CHECK(readBinary(deleted) == original);
+    map.undoCommand();
+    CHECK(filePositions(map) == positions);
+    const auto restored = env.dir() / "authoring restored.vmf";
+    REQUIRE(map.saveAs(restored).is_success());
+    CHECK(readBinary(restored) == saved);
+  }
+
+  SECTION(
+    "native duplicates use fresh IDs and retain template UV metadata and repeated "
+    "outputs")
+  {
+    const auto kind = GENERATE(std::string{"brush"}, std::string{"entity"});
+    CAPTURE(kind);
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "duplicate control.vmf";
+    auto original = nativeRamp(true);
+    if (kind == "entity")
+    {
+      original.insert(
+        original.rfind('}'), " editor { /*keep editor*/ color \"1 2 3\" } ");
+    }
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    const auto originalPositions = filePositions(map);
+    auto& source = nativeNode(map, kind == "brush" ? "2" : "9");
+    selectNodes(map, {&source});
+    duplicateSelectedNodes(map);
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 3);
+    REQUIRE(map.selection().nodes.size() == 1);
+    auto* duplicate = map.selection().nodes.front();
+    CHECK(duplicate != &source);
+    REQUIRE(map.vmfScene()->nativeId(*duplicate) == "10");
+    if (kind == "brush")
+    {
+      map.editorContext().setAlignmentLock(false);
+      REQUIRE(transformSelection(
+        map, "Move native duplicate", vm::translation_matrix(vm::vec3d{16, 8, 4})));
+    }
+    else
+    {
+      auto rows = dynamic_cast<EntityNode*>(duplicate)->entity().sourceConnections();
+      REQUIRE(rows.size() == 2);
+      rows[0].value = "!self,Disable,,0.125,-1";
+      REQUIRE(setSourceEntityConnections(map, rows));
+    }
+    const auto positions = filePositions(map);
+    const auto savedPath = env.dir() / "duplicated.vmf";
+    REQUIRE(map.saveAs(savedPath).is_success());
+    const auto saved = readBinary(savedPath);
+    CHECK(nativeFragment(saved, "2") == nativeFragment(original, "2"));
+    CHECK(nativeFragment(saved, "9") == nativeFragment(original, "9"));
+    CHECK(filePositions(map) == positions);
+    CHECK(readBinary(path) == original);
+    auto recovered = MapFixture{};
+    auto& reopened = recovered.load(savedPath, config);
+    REQUIRE(reopened.worldNode().defaultLayer()->childCount() == 3);
+    if (kind == "brush")
+    {
+      checkReopenedBrush(
+        dynamic_cast<BrushNode&>(nativeNode(reopened, "10")).brush(),
+        dynamic_cast<BrushNode*>(duplicate)->brush(),
+        false);
+      CHECK(
+        nativeFragment(saved, "10").find("[1 0 0 0.1250] 0.2500") != std::string::npos);
+    }
+    else
+    {
+      CHECK(saved.starts_with(original));
+      const auto& rows = dynamic_cast<EntityNode&>(nativeNode(reopened, "10"))
+                           .entity()
+                           .sourceConnections();
+      REQUIRE(rows.size() == 2);
+      CHECK(rows[0].value == "!self,Disable,,0.125,-1");
+      CHECK(rows[1].value == "marker,Disable,,1,-1");
+      CHECK(
+        nativeFragment(saved, "10").find("/*keep editor*/ color \"1 2 3\"")
+        != std::string::npos);
+    }
+    map.undoCommand();
+    map.undoCommand();
+    CHECK(filePositions(map) == originalPositions);
+    const auto undone = env.dir() / "duplicate undone.vmf";
+    REQUIRE(map.saveAs(undone).is_success());
+    CHECK(readBinary(undone) == original);
+    map.redoCommand();
+    map.redoCommand();
+    CHECK(filePositions(map) == positions);
+    const auto redone = env.dir() / "duplicate redone.vmf";
+    REQUIRE(map.saveAs(redone).is_success());
+    CHECK(readBinary(redone) == saved);
+  }
+
+  SECTION(
+    "native original deletion removes only the native subtree and undo restores exact "
+    "bytes")
+  {
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "deletion control.vmf";
+    const auto original = nativeRamp(false);
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    const auto positions = filePositions(map);
+    auto& brush = ramp(map);
+    const auto document = VmfDocument::parse(original);
+    const auto& entry = document.entries()[brush.lineNumber() - 1];
+    auto expected = original;
+    expected.erase(entry.key.offset, entry.end - entry.key.offset);
+    selectNodes(map, {&brush});
+    REQUIRE(removeSelectedNodes(map));
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 1);
+    const auto deleted = env.dir() / "deleted original.vmf";
+    REQUIRE(map.saveAs(deleted).is_success());
+    CHECK(readBinary(deleted) == expected);
+    CHECK(readBinary(path) == original);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(deleted, config);
+    REQUIRE(reopened.worldNode().defaultLayer()->childCount() == 1);
+    CHECK(nativeNode(reopened, "9").lineNumber() > 0);
+    map.undoCommand();
+    CHECK(filePositions(map) == positions);
+    const auto undone = env.dir() / "deletion undone.vmf";
+    REQUIRE(map.saveAs(undone).is_success());
+    CHECK(readBinary(undone) == original);
+    map.redoCommand();
+    const auto redone = env.dir() / "deletion redone.vmf";
+    REQUIRE(map.saveAs(redone).is_success());
+    CHECK(readBinary(redone) == expected);
+  }
+
   SECTION("authored room first-brush loop can retain an explicitly requested copy")
   {
     auto env = fs::TestEnvironment{};
@@ -471,6 +1059,23 @@ TEST_CASE("VmfMap", "[vmf]")
       REQUIRE(setEntityProperty(map, "spawnflags", "0"));
       CHECK(relay->entity().sourceConnections()[1] == originalSecond);
     }
+    if (std::getenv("SOURCEBROOM_A52_AUTHORING"))
+    {
+      deselectAll(map);
+      map.setCurrentMaterialName("tools/toolsnodraw");
+      REQUIRE(createBrush(map, nativeCubePoints()));
+      REQUIRE(transformSelection(
+        map, "Place authored cube", vm::translation_matrix(vm::vec3d{0, 0, 64})));
+      const auto count = map.worldNode().defaultLayer()->childCount();
+      duplicateSelectedNodes(map);
+      REQUIRE(map.worldNode().defaultLayer()->childCount() == count + 1);
+      REQUIRE(removeSelectedNodes(map));
+      CHECK(map.worldNode().defaultLayer()->childCount() == count);
+      const auto definition = EntityDefinition{
+        .name = "info_target",
+        .pointEntityDefinition = PointEntityDefinition{.bounds = vm::bbox3d{8}}};
+      REQUIRE(createPointEntity(map, definition, vm::vec3d{128, 0, 64}));
+    }
     const auto destination =
       output ? std::filesystem::path{output} : env.dir() / "room edited.vmf";
     REQUIRE_FALSE(std::filesystem::exists(destination));
@@ -519,19 +1124,81 @@ TEST_CASE("VmfMap", "[vmf]")
     auto& map = fixture.load(path, config);
     REQUIRE(map.save().is_success());
     selectNodes(map, {&ramp(map)});
-    REQUIRE(transformSelection(
+    const auto positions = filePositions(map);
+    const auto count = map.modificationCount();
+    REQUIRE_FALSE(transformSelection(
       map, "Move with unknown root", vm::translation_matrix(vm::vec3d{16, 0, 0})));
-    REQUIRE(map.modified());
-    CHECK(map.save().is_error());
+    CHECK_FALSE(map.modified());
+    CHECK(map.modificationCount() == count);
+    CHECK(filePositions(map) == positions);
+    REQUIRE(map.save().is_success());
     CHECK(readBinary(path) == original);
-    CHECK(map.modified());
   }
 
-  SECTION("unsafe topology duplicate and deletion saves refuse without losing bytes")
+  SECTION(
+    "unsupported native actions refuse before changing objects selection or history")
   {
-    const auto operation =
-      GENERATE(std::string{"topology"}, std::string{"duplicate"}, std::string{"delete"});
+    const auto operation = GENERATE(
+      std::string{"topology"},
+      std::string{"opaque duplicate"},
+      std::string{"opaque delete"},
+      std::string{"node paste"},
+      std::string{"csg"});
     CAPTURE(operation);
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "admission control.vmf";
+    auto original = nativeRamp(false);
+    if (operation.starts_with("opaque"))
+    {
+      const auto needle = std::string{"\"smoothing_groups\" \"0\""};
+      original.insert(
+        original.find(needle) + needle.size(),
+        " dispinfo { power 2 normals { row0 \"0 0 1\" } }");
+    }
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    auto& brush = ramp(map);
+    selectNodes(map, {&brush});
+    const auto positions = filePositions(map);
+    const auto count = map.modificationCount();
+    const auto undo = map.canUndoCommand();
+    const auto redo = map.canRedoCommand();
+    if (operation == "topology")
+    {
+      CHECK_FALSE(addVertex(map, vm::vec3d{32, 32, 128}));
+    }
+    else if (operation == "opaque duplicate")
+    {
+      duplicateSelectedNodes(map);
+    }
+    else if (operation == "opaque delete")
+    {
+      CHECK_FALSE(removeSelectedNodes(map));
+    }
+    else if (operation == "node paste")
+    {
+      const auto clipboard = serializeSelectedNodes(map);
+      REQUIRE_FALSE(clipboard.empty());
+      CHECK(paste(map, clipboard) == PasteType::Failed);
+    }
+    else
+    {
+      CHECK_FALSE(csgHollow(map));
+    }
+    CHECK(map.worldNode().defaultLayer()->childCount() == 2);
+    CHECK(map.selection().nodes == std::vector<Node*>{&brush});
+    CHECK(filePositions(map) == positions);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.canUndoCommand() == undo);
+    CHECK(map.canRedoCommand() == redo);
+    CHECK_FALSE(map.modified());
+    REQUIRE(map.save().is_success());
+    CHECK(readBinary(path) == original);
+  }
+
+  SECTION("unregistered low-level mutations remain unsavable and preserve destinations")
+  {
     auto env = fs::TestEnvironment{};
     const auto path = env.dir() / "guarded original.vmf";
     const auto destination = env.dir() / "existing destination.vmf";
@@ -544,21 +1211,10 @@ TEST_CASE("VmfMap", "[vmf]")
     const auto before = ramp(map).brush();
     const auto positions = filePositions(map);
     selectNodes(map, {&ramp(map)});
-    if (operation == "topology")
-    {
-      REQUIRE(addVertex(map, vm::vec3d{32, 32, 128}));
-      REQUIRE(ramp(map).brush().faceCount() != before.faceCount());
-    }
-    else if (operation == "duplicate")
-    {
-      duplicateSelectedNodes(map);
-      REQUIRE(map.worldNode().defaultLayer()->childCount() == 3u);
-    }
-    else
-    {
-      removeSelectedNodes(map);
-      REQUIRE(map.worldNode().defaultLayer()->childCount() == 1u);
-    }
+    auto* unregistered = ramp(map).cloneRecursively(map.worldBounds());
+    REQUIRE(map.executeAndStore(
+      AddRemoveNodesCommand::add({{map.worldNode().defaultLayer(), {unregistered}}})));
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 3u);
     REQUIRE(map.modified());
     const auto modificationCount = map.modificationCount();
     const auto unsafePositions = filePositions(map);

@@ -1,5 +1,13 @@
 # SourceBroom development
 
+Native A5.2 authoring is exercised through the production model/command path,
+not a MAP export. `VmfMap`/`VmfScene` cover fresh and native-template identities,
+side-set/ownership admission, duplication/deletion, command history and preserving
+save/reopen. The existing authored-room fixture may additionally opt into
+`SOURCEBROOM_A52_AUTHORING=1` alongside its explicit `SOURCEBROOM_A4_INPUT` and
+create-new `SOURCEBROOM_A4_OUTPUT`; it emits a production-saved room with a fresh
+brush/point after duplicate/delete controls for external compiler checks.
+
 Read [the ordered alpha roadmap](ROADMAP.md) and [alpha limits](ALPHA.md) first.
 The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.

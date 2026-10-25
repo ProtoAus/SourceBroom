@@ -319,6 +319,45 @@ std::string_view VmfDocument::tokenContents(const VmfToken& token) const
   return text;
 }
 
+std::string VmfDocument::serializeEntry(
+  const VmfEntryId id,
+  const std::span<const VmfValueEdit> edits,
+  const std::span<const VmfStructuralEdit> structuralEdits) const
+{
+  if (id >= m_entries.size())
+  {
+    throw std::invalid_argument{"Invalid VMF subtree entry ID"};
+  }
+  const auto& entry = m_entries[id];
+  const auto fragment =
+    VmfDocument::parse(m_source.substr(entry.key.offset, entry.end - entry.key.offset));
+  const auto localId = [&](const VmfEntryId original) {
+    if (original < id || original - id >= fragment.entries().size())
+    {
+      throw std::invalid_argument{"VMF subtree edit is outside the selected entry"};
+    }
+    const auto local = original - id;
+    if (
+      fragment.entries()[local].key.offset + entry.key.offset
+      != m_entries[original].key.offset)
+    {
+      throw std::invalid_argument{"VMF subtree identity mismatch"};
+    }
+    return local;
+  };
+  auto values = std::vector<VmfValueEdit>{};
+  for (const auto& edit : edits)
+  {
+    values.push_back({localId(edit.entry), edit.token});
+  }
+  auto structure = std::vector<VmfStructuralEdit>{};
+  for (const auto& edit : structuralEdits)
+  {
+    structure.push_back({edit.type, localId(edit.entry), edit.text});
+  }
+  return fragment.serialize(values, structure);
+}
+
 std::string VmfDocument::serialize(
   const std::span<const VmfValueEdit> edits,
   const std::span<const VmfStructuralEdit> structuralEdits) const
@@ -342,6 +381,29 @@ std::string VmfDocument::serialize(
   }
   for (const auto& edit : structuralEdits)
   {
+    if (edit.type == VmfStructuralEdit::Type::AppendRoot)
+    {
+      if (
+        edit.entry != VmfStructuralEdit::Root || edit.text.empty()
+        || edit.text.starts_with("\xEF\xBB\xBF"))
+      {
+        throw std::invalid_argument{"Invalid VMF root append"};
+      }
+      try
+      {
+        const auto fragment = VmfDocument::parse(edit.text);
+        if (fragment.roots().empty())
+        {
+          throw std::invalid_argument{"Empty VMF root append"};
+        }
+      }
+      catch (const ParserException& e)
+      {
+        throw std::invalid_argument{"Invalid VMF root append: " + std::string{e.what()}};
+      }
+      replacements.push_back({m_source.size(), 0, "\n" + edit.text + "\n"});
+      continue;
+    }
     if (edit.entry >= m_entries.size())
     {
       throw std::invalid_argument{"VMF structural edit has invalid entry ID"};
@@ -406,6 +468,8 @@ std::string VmfDocument::serialize(
       // Separate tokens even when the original closing brace has no leading trivia.
       replacements.push_back({entry.end - 1, 0, "\n" + edit.text + "\n"});
       break;
+    case VmfStructuralEdit::Type::AppendRoot:
+      throw std::invalid_argument{"Unexpected VMF root append dispatch"};
     }
   }
   std::sort(replacements.begin(), replacements.end(), [](const auto& a, const auto& b) {
@@ -426,6 +490,18 @@ std::string VmfDocument::serialize(
     previousOffset = replacement.offset;
   }
   result.append(m_source, position, m_source.size() - position);
+  if (!structuralEdits.empty())
+  {
+    try
+    {
+      static_cast<void>(VmfDocument::parse(result));
+    }
+    catch (const ParserException& e)
+    {
+      throw std::invalid_argument{
+        "Invalid combined VMF structure: " + std::string{e.what()}};
+    }
+  }
   return result;
 }
 
