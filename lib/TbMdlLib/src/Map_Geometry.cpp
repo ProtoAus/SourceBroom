@@ -65,8 +65,11 @@ namespace tb::mdl
 
 kdl_reflect_impl(TransformVerticesResult);
 
-bool transformSelection(
-  Map& map, const std::string& commandName, const vm::mat4x4d& transformation)
+static bool transformSelectionWithSourcePolicy(
+  Map& map,
+  const std::string& commandName,
+  const vm::mat4x4d& transformation,
+  const bool sourceRotation)
 {
   if (map.nodeHandles().anyHandleSelected<VertexHandle>())
   {
@@ -153,7 +156,8 @@ bool transformSelection(
             || (containingGroup && containingGroup->closed() && collectLinkedNodes({&map.worldNode()}, brushNode).size() > 1);
 
               auto brush = brushNode.brush();
-              return brush.transform(map.worldBounds(), transformation, lockAlignment)
+              return brush.transform(
+                       map.worldBounds(), transformation, lockAlignment, sourceRotation)
                      | kdl::and_then([&]() -> TransformResult {
                          return std::make_pair(
                            &brushNode, NodeContents{std::move(brush)});
@@ -179,12 +183,19 @@ bool transformSelection(
 
   if (success)
   {
-    map.pushRepeatableCommand([&, commandName, transformation]() {
-      transformSelection(map, commandName, transformation);
+    map.pushRepeatableCommand([&, commandName, transformation, sourceRotation]() {
+      transformSelectionWithSourcePolicy(
+        map, commandName, transformation, sourceRotation);
     });
   }
 
   return success;
+}
+
+bool transformSelection(
+  Map& map, const std::string& commandName, const vm::mat4x4d& transformation)
+{
+  return transformSelectionWithSourcePolicy(map, commandName, transformation, false);
 }
 
 bool translateSelection(mdl::Map& map, const vm::vec3d& delta)
@@ -198,7 +209,7 @@ bool rotateSelection(
   const auto transformation = vm::translation_matrix(center)
                               * vm::rotation_matrix(axis, angle)
                               * vm::translation_matrix(-center);
-  return transformSelection(map, "Rotate Objects", transformation);
+  return transformSelectionWithSourcePolicy(map, "Rotate Objects", transformation, true);
 }
 
 bool scaleSelection(mdl::Map& map, const vm::bbox3d& oldBBox, const vm::bbox3d& newBBox)

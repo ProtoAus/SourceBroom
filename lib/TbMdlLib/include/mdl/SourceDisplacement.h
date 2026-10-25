@@ -6,6 +6,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include "mdl/VmfDocument.h"
 
 #include "vm/bbox.h"
+#include "vm/mat.h"
 #include "vm/ray.h"
 #include "vm/vec.h"
 
@@ -44,14 +45,22 @@ private:
   Row m_startRow;
   double m_elevation = 0;
   std::array<vm::vec3d, 4> m_corners;
+  std::array<vm::vec3d, 4> m_originalCorners;
+  vm::vec3d m_originalFaceNormal;
+  vm::mat4x4d m_baseTransform = vm::mat4x4d::identity();
   vm::vec3d m_faceNormal;
   vm::bbox3d m_worldBounds;
   std::vector<vm::vec3d> m_directions;
   std::vector<double> m_distances;
   std::vector<vm::vec3d> m_offsets;
+  std::vector<vm::vec3d> m_offsetNormals;
   std::vector<double> m_alphas;
+  std::vector<Row> m_directionRows;
   std::vector<Row> m_distanceRows;
+  std::vector<Row> m_offsetRows;
+  std::vector<Row> m_offsetNormalRows;
   bool m_normalsBound = false;
+  bool m_rotationSupported = true;
   std::vector<vm::vec3d> m_positions;
   std::vector<vm::vec3d> m_basePositions;
   std::vector<vm::vec3d> m_normals;
@@ -59,10 +68,13 @@ private:
   vm::bbox3d m_bounds;
 
   void rebuild();
+  void validateRigidSamples(
+    const SourceDisplacement& before, const vm::mat4x4d& transform) const;
 
 public:
   static constexpr size_t MaxPower = 6;
   static constexpr double TranslationEpsilon = 0.000001;
+  static constexpr double TransformEpsilon = TranslationEpsilon;
 
   /** Corners are the underlying BrushFace's counter-clockwise vertex positions. */
   static std::optional<SourceDisplacement> read(
@@ -85,6 +97,9 @@ public:
   bool canEditDistances() const;
   void setDistance(size_t row, size_t column, double distance);
   SourceDisplacement translated(const vm::vec3d& delta) const;
+  /** Explicit rotation path only; not permission for generic affine commands. */
+  SourceDisplacement rigidlyTransformed(const vm::mat4x4d& transform) const;
+  std::optional<vm::mat4x4d> baseTransformFrom(const SourceDisplacement& before) const;
   /** Only a uniform base translation, within plane-intersection roundoff. */
   std::optional<vm::vec3d> baseTranslationFrom(const SourceDisplacement& before) const;
   std::optional<double> intersect(const vm::ray3d& ray) const;

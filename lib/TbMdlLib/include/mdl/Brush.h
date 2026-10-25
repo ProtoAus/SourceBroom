@@ -325,7 +325,10 @@ public:
    * @return a void result or an error if the operation fails
    */
   Result<void> transform(
-    const vm::bbox3d& worldBounds, const vm::mat4x4d& transformation, bool lockMaterials);
+    const vm::bbox3d& worldBounds,
+    const vm::mat4x4d& transformation,
+    bool lockMaterials,
+    bool sourceRotation = false);
 
 public:
   bool contains(const vm::bbox3d& bounds) const;

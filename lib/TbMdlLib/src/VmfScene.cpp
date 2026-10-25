@@ -1426,7 +1426,7 @@ void VmfScene::nodeEdits(
     }
     if (!displacementSides.empty())
     {
-      auto translation = std::optional<vm::vec3d>{};
+      auto baseTransform = std::optional<vm::mat4x4d>{};
       auto baseChanged = false;
       for (const auto& face : b.faces())
       {
@@ -1443,33 +1443,30 @@ void VmfScene::nodeEdits(
           {
             refuse(id, "displacement structure changed");
           }
-          const auto delta = current.sourceDisplacement()->baseTranslationFrom(*mesh);
-          if (!delta)
+          const auto transform = current.sourceDisplacement()->baseTransformFrom(*mesh);
+          if (!transform)
           {
-            refuse(id, "nonuniform displacement base transform");
+            refuse(id, "displacement bases require shared proper rigid motion");
           }
-          if (translation)
+          if (baseTransform)
           {
-            // Tolerance handles arithmetic, never a moved/unchanged mismatch.
-            if (
-              ((*translation == vm::vec3d{}) != (*delta == vm::vec3d{}))
-              || !vm::is_equal(
-                *translation, *delta, SourceDisplacement::TranslationEpsilon))
+            // Stored frames encode intent exactly; epsilon is for points only.
+            if (*baseTransform != *transform)
             {
-              refuse(id, "displacement bases moved differently");
+              refuse(id, "displacement sides must share one exact base frame");
             }
           }
           else
           {
-            translation = delta;
+            baseTransform = transform;
           }
         }
       }
-      if (!translation)
+      if (!baseTransform)
       {
         refuse(id, "missing displacement base");
       }
-      if (baseChanged != (*translation != vm::vec3d{}))
+      if (baseChanged != (*baseTransform != vm::mat4x4d::identity()))
       {
         refuse(id, "displacement mesh and base must move together");
       }
@@ -1480,10 +1477,10 @@ void VmfScene::nodeEdits(
         {
           if (!vm::is_equal(
                 current.points()[i],
-                face.points()[i] + *translation,
-                SourceDisplacement::TranslationEpsilon))
+                *baseTransform * face.points()[i],
+                SourceDisplacement::TransformEpsilon))
           {
-            refuse(id, "displacement brush requires a uniform translation");
+            refuse(id, "all displacement base planes must follow one rigid frame");
           }
         }
       }

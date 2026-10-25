@@ -21,6 +21,7 @@
 #include "mdl/VmfScene.h"
 
 #include "vm/mat.h"
+#include "vm/mat_ext.h"
 
 #include <algorithm>
 #include <array>
@@ -258,6 +259,88 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
     node.setBrush(std::move(changed));
     CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
+  SECTION("rotation updates submitted positions normals UVs and retained topology")
+  {
+    const auto transform = vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37);
+    auto changed = node.brush();
+    REQUIRE(changed.transform(bounds, transform, true, true).is_success());
+    CHECK_NOTHROW(scene.validateContents(node, NodeContents{changed}, bounds));
+    node.setBrush(std::move(changed));
+    auto cache = BrushRendererBrushCache{};
+    cache.validateVertexCache(node);
+    const auto& faces = cache.cachedFacesSortedByMaterial();
+    const auto found = std::find_if(faces.begin(), faces.end(), [](const auto& f) {
+      return bool(f.face->sourceDisplacement());
+    });
+    REQUIRE(found != faces.end());
+    CHECK(found->vertexCount == 25);
+    CHECK(found->indexCount == 96);
+    const auto first = found->indexOfFirstVertexRelativeToBrush;
+    for (size_t i = 0; i < mesh.positions().size(); ++i)
+    {
+      const auto& vertex = cache.cachedVertices()[first + i];
+      CHECK(
+        vm::is_equal(vertex.attr, vm::vec3f{transform * mesh.positions()[i]}, 0.0001f));
+      CHECK(
+        vm::is_equal(
+          vertex.rest.attr,
+          vm::vec3f{vm::slice<3, 3>(transform, 0, 0) * mesh.normals()[i]},
+          0.0001f));
+      CHECK(
+        vertex.rest.rest.attr
+        == found->face->uvCoords(transform * mesh.basePositions()[i]));
+    }
+    auto indices = std::vector<GLuint>(found->indexCount);
+    found->writeIndices(indices, first + 200);
+    for (size_t i = 0; i < indices.size(); ++i)
+    {
+      CHECK(indices[i] == first + 200 + mesh.indices()[i]);
+    }
+    const auto saved = scene.serialize(scene.world());
+    CHECK(saved != source);
+    auto reopened = VmfScene::read(saved, bounds);
+    auto meshes = size_t{0};
+    for (const auto& f : brush(reopened.world()).brush().faces())
+    {
+      if (const auto& reopenedMesh = f.sourceDisplacement())
+      {
+        ++meshes;
+        CHECK(
+          vm::is_equal(
+            reopenedMesh->positions()[12], transform * mesh.positions()[12], 0.000001));
+        CHECK(reopenedMesh->alphas() == mesh.alphas());
+      }
+    }
+    CHECK(meshes == 1);
+  }
+  SECTION("mesh-only or base-only rotations refuse even below arithmetic tolerance")
+  {
+    const auto meshOnly = GENERATE(false, true);
+    const auto angle = GENERATE(0.37, 0.00000001);
+    const auto transform = vm::rotation_matrix(vm::vec3d{0, 0, 1}, angle);
+    auto changed = node.brush();
+    if (meshOnly)
+    {
+      changed.face(*faceIndex).setSourceDisplacement(mesh.rigidlyTransformed(transform));
+    }
+    else
+    {
+      REQUIRE(changed.transform(bounds, transform, false, true).is_success());
+      const auto binding = face.lineNumber();
+      for (size_t i = 0; i < changed.faceCount(); ++i)
+      {
+        if (changed.face(i).lineNumber() == binding)
+        {
+          changed.face(i).setSourceDisplacement(mesh);
+        }
+      }
+    }
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{changed}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+    node.setBrush(std::move(changed));
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+  }
   SECTION("malformed meshes refuse strictly and are counted as preview omissions")
   {
     auto invalid = source;
@@ -273,7 +356,8 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
 
 TEST_CASE("VmfScene every displacement agrees with whole base movement", "[vmf]")
 {
-  const auto wholeBase = GENERATE(false, true);
+  const auto scenario = GENERATE(0, 1, 2);
+  const auto rotation = GENERATE(false, true);
   const auto bounds = vm::bbox3d{4096};
   auto source = fixture(false, test::displacementBlock());
   auto bottom = test::displacementBlock();
@@ -291,39 +375,87 @@ TEST_CASE("VmfScene every displacement agrees with whole base movement", "[vmf]"
   {
     if (node.brush().face(i).sourceDisplacement())
     {
-      displaced.push_back(i);
+      displaced.push_back(node.brush().face(i).lineNumber());
     }
   }
   REQUIRE(displaced.size() == 2);
   CHECK(scene.serialize(scene.world()) == source);
+  const auto findFace = [](const Brush& b, const size_t binding) {
+    for (size_t i = 0; i < b.faceCount(); ++i)
+    {
+      if (b.face(i).lineNumber() == binding)
+      {
+        return i;
+      }
+    }
+    throw std::logic_error{"Native face binding disappeared"};
+  };
   auto changed = node.brush();
-  if (wholeBase)
+  if (scenario != 1)
   {
-    REQUIRE(changed.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), false)
-              .is_success());
+    const auto transform = rotation ? vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.37)
+                                    : vm::translation_matrix(vm::vec3d{16, 8, 4});
+    REQUIRE(changed.transform(bounds, transform, false, rotation).is_success());
+  }
+  if (scenario == 0)
+  {
     CHECK_NOTHROW(scene.validateContents(node, NodeContents{changed}, bounds));
     node.setBrush(std::move(changed));
     const auto saved = scene.serialize(scene.world());
     CHECK(saved != source);
     auto reopened = VmfScene::read(saved, bounds);
-    for (const auto index : displaced)
+    const auto& reopenedBrush = brush(reopened.world()).brush();
+    for (const auto binding : displaced)
     {
       CHECK(
-        brush(reopened.world()).brush().face(index).sourceDisplacement()->positions()[12]
-        == node.brush().face(index).sourceDisplacement()->positions()[12]);
+        vm::is_equal(
+          reopenedBrush.face(findFace(reopenedBrush, binding))
+            .sourceDisplacement()
+            ->positions()[12],
+          node.brush()
+            .face(findFace(node.brush(), binding))
+            .sourceDisplacement()
+            ->positions()[12],
+          0.000001));
     }
   }
   else
   {
-    const auto later = displaced.back();
+    const auto later = findFace(changed, displaced.back());
+    const auto& mesh = *changed.face(later).sourceDisplacement();
     changed.face(later).setSourceDisplacement(
-      changed.face(later).sourceDisplacement()->translated({0.00000001, 0, 0}));
+      rotation
+        ? mesh.rigidlyTransformed(vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.00000001))
+        : mesh.translated({0.00000001, 0, 0}));
     CHECK_THROWS_AS(
       scene.validateContents(node, NodeContents{changed}, bounds), std::invalid_argument);
     CHECK(scene.serialize(scene.world()) == source);
     node.setBrush(std::move(changed));
     CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
+}
+
+TEST_CASE(
+  "VmfScene explicit native rotation retains opaque and reference guards", "[vmf]")
+{
+  const auto reference = GENERATE(false, true);
+  const auto attachment =
+    test::displacementBlock()
+    + (reference ? " sides \"8\" " : " future_attachment { key opaque } ");
+  const auto source = fixture(false, attachment);
+  const auto bounds = vm::bbox3d{4096};
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  CHECK(scene.serialize(scene.world()) == source);
+  auto changed = node.brush();
+  REQUIRE(
+    changed.transform(bounds, vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37), false, true)
+      .is_success());
+  CHECK_THROWS_AS(
+    scene.validateContents(node, NodeContents{changed}, bounds), std::invalid_argument);
+  CHECK(scene.serialize(scene.world()) == source);
+  node.setBrush(std::move(changed));
+  CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
 }
 
 TEST_CASE("VmfScene only parsed displacement sides relax opaque guards", "[vmf]")

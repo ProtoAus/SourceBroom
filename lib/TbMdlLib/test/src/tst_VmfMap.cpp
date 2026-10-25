@@ -39,6 +39,7 @@
 #include "mdl/WorldNode.h"
 
 #include "vm/mat.h"
+#include "vm/mat_ext.h"
 
 #include <algorithm>
 #include <array>
@@ -419,6 +420,165 @@ TEST_CASE("VmfMap read-only compatibility safety", "[vmf]")
   CHECK(calls == 2);
 }
 
+TEST_CASE("VmfMap displacement rotation undo and continued saving", "[vmf]")
+{
+  const auto lockUv = GENERATE(false, true);
+  const auto angle = GENERATE(vm::constants<double>::half_pi(), 0.37);
+  auto env = fs::TestEnvironment{};
+  const auto originalPath = env.dir() / "displacement.vmf";
+  const auto outputPath = env.dir() / "rotated displacement.vmf";
+  const auto original = nativeDisplacementRoom();
+  writeBinary(originalPath, original);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(originalPath, config);
+  map.editorContext().setAlignmentLock(lockUv);
+  auto& node = ramp(map);
+  const auto before = node.brush();
+  const auto oldFace = before.findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(oldFace);
+  const auto& oldMesh = *before.face(*oldFace).sourceDisplacement();
+  REQUIRE(oldMesh.positions()[12] == vm::vec3d{32, 32, 80});
+  const auto center = vm::vec3d{8, 16, 24};
+  const auto axis = vm::vec3d{1, 0, 0};
+  const auto transform = vm::translation_matrix(center) * vm::rotation_matrix(axis, angle)
+                         * vm::translation_matrix(-center);
+  auto control = before;
+  control.face(*oldFace).setSourceDisplacement(std::nullopt);
+  REQUIRE(control.transform(map.worldBounds(), transform, lockUv).is_success());
+  selectNodes(map, {&node});
+  const auto count = map.modificationCount();
+  REQUIRE(rotateSelection(map, center, axis, angle));
+  CHECK(map.modificationCount() == count + 1);
+  const auto meshFace = [](const Brush& brush) {
+    for (size_t i = 0; i < brush.faceCount(); ++i)
+    {
+      if (brush.face(i).sourceDisplacement())
+      {
+        return i;
+      }
+    }
+    throw std::logic_error{"Rotated mesh disappeared"};
+  };
+  const auto faceIndex = meshFace(node.brush());
+  const auto& mesh = *node.brush().face(faceIndex).sourceDisplacement();
+  for (size_t i = 0; i < oldMesh.positions().size(); ++i)
+  {
+    CHECK(
+      vm::is_equal(mesh.positions()[i], transform * oldMesh.positions()[i], 0.000001));
+    CHECK(
+      vm::is_equal(
+        mesh.basePositions()[i], transform * oldMesh.basePositions()[i], 0.000001));
+  }
+  CHECK(mesh.indices() == oldMesh.indices());
+  CHECK(mesh.alphas() == oldMesh.alphas());
+  const auto base = mesh.basePositions()[12];
+  CHECK(
+    vm::is_equal(
+      node.brush().face(faceIndex).uvCoords(base),
+      control.face(faceIndex).uvCoords(base),
+      0.0001f));
+  auto hits = PickResult{};
+  pick(
+    map,
+    vm::ray3d{
+      transform * vm::vec3d{32, 32, 128},
+      vm::slice<3, 3>(transform, 0, 0) * vm::vec3d{0, 0, -1}},
+    hits);
+  REQUIRE_FALSE(hits.empty());
+  CHECK(hits.all()[0].distance() == Catch::Approx(48).margin(0.000001));
+  CHECK(
+    vm::is_equal(
+      hits.all()[0].hitPoint(), transform * oldMesh.positions()[12], 0.000001));
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  map.redoCommand();
+  const auto delta = vm::vec3d{16, 8, 4};
+  REQUIRE(translateSelection(map, delta));
+  deselectAll(map);
+  selectBrushFaces(map, {BrushFaceHandle{node, faceIndex}});
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24));
+  const auto expected = transform * vm::vec3d{32, 32, 88} + delta;
+  CHECK(
+    vm::is_equal(
+      node.brush().face(faceIndex).sourceDisplacement()->positions()[12],
+      expected,
+      0.000001));
+  REQUIRE(map.saveAs(outputPath).is_success());
+  const auto saved = readBinary(outputPath);
+  CHECK(saved != original);
+  CHECK(nativeFragment(saved, "9") == nativeFragment(original, "9"));
+  CHECK(readBinary(originalPath) == original);
+  auto reopened = MapFixture{};
+  auto& loaded = reopened.load(outputPath, config);
+  CHECK(
+    vm::is_equal(
+      ramp(loaded)
+        .brush()
+        .face(meshFace(ramp(loaded).brush()))
+        .sourceDisplacement()
+        ->positions()[12],
+      expected,
+      0.000001));
+  deselectAll(map);
+  selectNodes(map, {&node});
+  const auto beforeCount = map.modificationCount();
+  const auto beforeHistory = map.undoCommandName();
+  CHECK_FALSE(rotateSelection(map, center, {2, 0, 0}, 0.37));
+  CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {1.0000000000001, 1, 1}));
+  CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {2, 1, 1}));
+  CHECK_FALSE(flipSelection(map, {0, 0, 0}, vm::axis::x));
+  CHECK(map.modificationCount() == beforeCount);
+  CHECK(map.undoCommandName() == beforeHistory);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+  deselectAll(map);
+  selectBrushFaces(map, {BrushFaceHandle{node, faceIndex}});
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 32));
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(outputPath) != saved);
+  map.undoCommand();
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(outputPath) == saved);
+  CHECK(readBinary(originalPath) == original);
+}
+
+TEST_CASE("VmfMap untyped or overflowing native vectors refuse rotation", "[vmf]")
+{
+  const auto overflow = GENERATE(false, true);
+  const auto row = overflow ? std::string{"1.7e308 -1.7e308 0 0 0 0 0 0 0 0 0 0 0 0 0"}
+                            : std::string{"unbound"};
+  auto original = nativeDisplacementRoom();
+  const auto owner = std::string{"dispinfo {"};
+  const auto at = original.find(owner);
+  REQUIRE(at != std::string::npos);
+  original.insert(at + owner.size(), " offset_normals { row0 \"" + row + "\" } ");
+  auto env = fs::TestEnvironment{};
+  const auto originalPath = env.dir() / "untyped displacement.vmf";
+  writeBinary(originalPath, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    originalPath,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto& node = ramp(map);
+  selectNodes(map, {&node});
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  REQUIRE(translateSelection(map, {16, 8, 4}));
+  const auto translated = map.vmfScene()->serialize(map.worldNode());
+  CHECK(translated != original);
+  CHECK(translated.find(row) != std::string::npos);
+  const auto count = map.modificationCount();
+  const auto history = map.undoCommandName();
+  REQUIRE_FALSE(
+    rotateSelection(map, {0, 0, 0}, {0, 0, 1}, vm::constants<double>::quarter_pi()));
+  CHECK(map.modificationCount() == count);
+  CHECK(map.undoCommandName() == history);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == translated);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  CHECK(readBinary(originalPath) == original);
+}
+
 TEST_CASE("VmfMap displacement translation undo and continued saving", "[vmf]")
 {
   auto env = fs::TestEnvironment{};
@@ -451,7 +611,8 @@ TEST_CASE("VmfMap displacement translation undo and continued saving", "[vmf]")
   const auto before = map.vmfScene()->serialize(map.worldNode());
   const auto beforeCount = map.modificationCount();
   const auto beforeHistory = map.undoCommandName();
-  CHECK_FALSE(rotateSelection(map, {0, 0, 0}, {0, 0, 1}, 1.0));
+  CHECK_FALSE(transformSelection(
+    map, "Unclassified native rotation", vm::rotation_matrix(vm::vec3d{0, 0, 1}, 1.0)));
   CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {2, 1, 1}));
   CHECK_FALSE(flipSelection(map, {0, 0, 0}, vm::axis::x));
   auto shear = vm::mat4x4d::identity();

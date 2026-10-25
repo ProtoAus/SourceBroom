@@ -4,6 +4,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include "mdl/SourceDisplacement.h"
 
 #include "vm/intersection.h"
+#include "vm/mat_ext.h"
 
 #include <algorithm>
 #include <cctype>
@@ -118,8 +119,43 @@ std::vector<ParsedNumber> numbers(
   }
   return result;
 }
+bool properRigidTransform(const vm::mat4x4d& transform)
+{
+  for (size_t c = 0; c < 4; ++c)
+  {
+    for (size_t r = 0; r < 4; ++r)
+    {
+      if (!std::isfinite(transform[c][r]))
+      {
+        return false;
+      }
+    }
+  }
+  if (
+    transform[0][3] != 0 || transform[1][3] != 0 || transform[2][3] != 0
+    || transform[3][3] != 1)
+  {
+    return false;
+  }
+  const auto rotation = vm::slice<3, 3>(transform, 0, 0);
+  for (size_t a = 0; a < 3; ++a)
+  {
+    for (size_t b = 0; b < 3; ++b)
+    {
+      if (std::abs(vm::dot(rotation[a], rotation[b]) - (a == b ? 1.0 : 0.0)) > 1e-12)
+      {
+        return false;
+      }
+    }
+  }
+  return vm::dot(vm::cross(rotation[0], rotation[1]), rotation[2]) > 0;
+}
 std::string numberText(const double value)
 {
+  if (!std::isfinite(value))
+  {
+    invalid(0, "cannot emit a nonfinite native scalar");
+  }
   auto out = std::ostringstream{};
   out.imbue(std::locale::classic());
   out << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
@@ -147,6 +183,7 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
   auto result = SourceDisplacement{};
   result.m_entry = *block;
   result.m_faceNormal = faceNormal;
+  result.m_originalFaceNormal = faceNormal;
   result.m_worldBounds = worldBounds;
   const auto power = member(document, *block, "power", false);
   if (!power)
@@ -207,12 +244,26 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
   }
   std::rotate(clockwise.begin(), nearest, clockwise.end());
   std::copy(clockwise.begin(), clockwise.end(), result.m_corners.begin());
+  result.m_originalCorners = result.m_corners;
   const auto total = result.m_size * result.m_size;
   result.m_directions.assign(total, faceNormal);
   result.m_distances.assign(total, 0.0);
   result.m_offsets.assign(total, vm::vec3d{});
+  result.m_offsetNormals.assign(total, vm::vec3d{});
   result.m_alphas.assign(total, 0.0);
+  result.m_directionRows.resize(result.m_size);
   result.m_distanceRows.resize(result.m_size);
+  result.m_offsetRows.resize(result.m_size);
+  result.m_offsetNormalRows.resize(result.m_size);
+  const auto bindRow =
+    [](auto& binding, const VmfEntryId row, const auto& text, const auto& values) {
+      binding.entry = row;
+      binding.text = text;
+      for (const auto& component : values)
+      {
+        binding.spans.push_back({component.begin, component.end});
+      }
+    };
   const auto readRows =
     [&](const std::string& name, const size_t components, auto&& apply) {
       auto seen = std::vector<bool>(result.m_size, false);
@@ -244,8 +295,11 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
       return std::all_of(
         seen.begin(), seen.end(), [](const auto present) { return present; });
     };
-  result.m_normalsBound =
-    readRows("normals", 3, [&](const size_t y, auto, const auto&, const auto& values) {
+  result.m_normalsBound = readRows(
+    "normals",
+    3,
+    [&](const size_t y, const auto row, const auto& text, const auto& values) {
+      bindRow(result.m_directionRows[y], row, text, values);
       for (size_t x = 0; x < result.m_size; ++x)
       {
         result.m_directions[y * result.m_size + x] = {
@@ -256,22 +310,45 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
     "distances",
     1,
     [&](const size_t y, const VmfEntryId row, const auto& text, const auto& values) {
-      auto& binding = result.m_distanceRows[y];
-      binding.entry = row;
-      binding.text = text;
+      bindRow(result.m_distanceRows[y], row, text, values);
       for (size_t x = 0; x < result.m_size; ++x)
       {
         result.m_distances[y * result.m_size + x] = values[x].value;
-        binding.spans.push_back({values[x].begin, values[x].end});
       }
     });
-  readRows("offsets", 3, [&](const size_t y, auto, const auto&, const auto& values) {
-    for (size_t x = 0; x < result.m_size; ++x)
-    {
-      result.m_offsets[y * result.m_size + x] = {
-        values[3 * x].value, values[3 * x + 1].value, values[3 * x + 2].value};
-    }
-  });
+  readRows(
+    "offsets",
+    3,
+    [&](const size_t y, const auto row, const auto& text, const auto& values) {
+      bindRow(result.m_offsetRows[y], row, text, values);
+      for (size_t x = 0; x < result.m_size; ++x)
+      {
+        result.m_offsets[y * result.m_size + x] = {
+          values[3 * x].value, values[3 * x + 1].value, values[3 * x + 2].value};
+      }
+    });
+  try
+  {
+    readRows(
+      "offset_normals",
+      3,
+      [&](const size_t y, const auto row, const auto& text, const auto& values) {
+        bindRow(result.m_offsetNormalRows[y], row, text, values);
+        for (size_t x = 0; x < result.m_size; ++x)
+        {
+          result.m_offsetNormals[y * result.m_size + x] = {
+            values[3 * x].value, values[3 * x + 1].value, values[3 * x + 2].value};
+        }
+      });
+  }
+  catch (const std::invalid_argument&)
+  {
+    // This previously ignored metadata must not reduce unchanged-load coverage.
+    // Translation preserves it; rotation requires typed vector provenance.
+    result.m_rotationSupported = false;
+    result.m_offsetNormals.assign(total, vm::vec3d{});
+    result.m_offsetNormalRows.assign(result.m_size, Row{});
+  }
   readRows("alphas", 1, [&](const size_t y, auto, const auto&, const auto& values) {
     for (size_t x = 0; x < result.m_size; ++x)
     {
@@ -352,6 +429,23 @@ void SourceDisplacement::rebuild()
   }
 }
 
+void SourceDisplacement::validateRigidSamples(
+  const SourceDisplacement& before, const vm::mat4x4d& transform) const
+{
+  for (size_t i = 0; i < m_positions.size(); ++i)
+  {
+    const auto expected = transform * before.m_positions[i];
+    const auto expectedBase = transform * before.m_basePositions[i];
+    if (
+      !vm::is_finite(expected) || !vm::is_finite(expectedBase)
+      || !vm::is_equal(m_positions[i], expected, TransformEpsilon)
+      || !vm::is_equal(m_basePositions[i], expectedBase, TransformEpsilon))
+    {
+      invalid(m_entry, "rigid motion loses native sample precision");
+    }
+  }
+}
+
 double SourceDisplacement::distance(const size_t row, const size_t column) const
 {
   if (row >= m_size || column >= m_size)
@@ -411,26 +505,115 @@ SourceDisplacement SourceDisplacement::translated(const vm::vec3d& delta) const
   {
     corner = corner + delta;
   }
+  const auto transform = vm::translation_matrix(delta);
+  result.m_baseTransform = transform * m_baseTransform;
   result.rebuild();
+  result.validateRigidSamples(*this, transform);
   return result;
 }
 
-std::optional<vm::vec3d> SourceDisplacement::baseTranslationFrom(
+SourceDisplacement SourceDisplacement::rigidlyTransformed(
+  const vm::mat4x4d& transform) const
+{
+  if (!properRigidTransform(transform))
+  {
+    invalid(m_entry, "displacement rotation requires a finite proper rigid transform");
+  }
+  const auto delta = transform * vm::vec3d{};
+  if (transform == vm::translation_matrix(delta))
+  {
+    return translated(delta);
+  }
+  if (!m_rotationSupported)
+  {
+    invalid(m_entry, "rotation requires typed native offset_normals rows");
+  }
+  auto result = *this;
+  const auto rotation = vm::slice<3, 3>(transform, 0, 0);
+  result.m_start = transform * m_start;
+  for (auto& corner : result.m_corners)
+  {
+    corner = transform * corner;
+  }
+  const auto rotateVector = [&](vm::vec3d& vector) {
+    vector = rotation * vector;
+    if (!vm::is_finite(vector))
+    {
+      invalid(m_entry, "native vector rotation overflows");
+    }
+  };
+  rotateVector(result.m_faceNormal);
+  for (auto& direction : result.m_directions)
+  {
+    rotateVector(direction);
+  }
+  for (auto& offset : result.m_offsets)
+  {
+    rotateVector(offset);
+  }
+  for (auto& normal : result.m_offsetNormals)
+  {
+    rotateVector(normal);
+  }
+  result.m_baseTransform = transform * m_baseTransform;
+  result.rebuild();
+  result.validateRigidSamples(*this, transform);
+  return result;
+}
+
+std::optional<vm::mat4x4d> SourceDisplacement::baseTransformFrom(
   const SourceDisplacement& before) const
 {
-  const auto delta = m_start - before.m_start;
-  if (!vm::is_finite(delta))
+  if (
+    m_originalCorners != before.m_originalCorners
+    || m_originalFaceNormal != before.m_originalFaceNormal)
+  {
+    return std::nullopt;
+  }
+  const auto inverse = vm::invert(before.m_baseTransform);
+  if (!inverse)
+  {
+    return std::nullopt;
+  }
+  // Equal stored frames mean no movement, not a noisy M * inverse(M).
+  const auto transform = m_baseTransform == before.m_baseTransform
+                           ? vm::mat4x4d::identity()
+                           : m_baseTransform * *inverse;
+  if (!properRigidTransform(transform))
   {
     return std::nullopt;
   }
   for (size_t i = 0; i < m_corners.size(); ++i)
   {
-    if (!vm::is_equal(m_corners[i], before.m_corners[i] + delta, TranslationEpsilon))
+    if (!vm::is_equal(m_corners[i], transform * before.m_corners[i], TransformEpsilon))
     {
       return std::nullopt;
     }
   }
-  return delta;
+  if (
+    !vm::is_equal(m_start, transform * before.m_start, TransformEpsilon)
+    || !vm::is_equal(
+      m_faceNormal,
+      vm::slice<3, 3>(transform, 0, 0) * before.m_faceNormal,
+      TransformEpsilon))
+  {
+    return std::nullopt;
+  }
+  return transform;
+}
+
+std::optional<vm::vec3d> SourceDisplacement::baseTranslationFrom(
+  const SourceDisplacement& before) const
+{
+  if (
+    vm::slice<3, 3>(m_baseTransform, 0, 0)
+      != vm::slice<3, 3>(before.m_baseTransform, 0, 0)
+    || !baseTransformFrom(before))
+  {
+    return std::nullopt;
+  }
+  // Translation leaves the stored linear frame exact, even after an oblique turn.
+  return m_start - before.m_start;
 }
 
 std::optional<double> SourceDisplacement::intersect(const vm::ray3d& ray) const
@@ -453,15 +636,43 @@ std::optional<double> SourceDisplacement::intersect(const vm::ray3d& ray) const
 std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   const SourceDisplacement& before) const
 {
+  const auto transform = baseTransformFrom(before);
   if (
-    m_entry != before.m_entry || m_power != before.m_power || !baseTranslationFrom(before)
-    || m_elevation != before.m_elevation || m_startRow != before.m_startRow
-    || m_faceNormal != before.m_faceNormal || m_worldBounds != before.m_worldBounds
-    || m_directions != before.m_directions || m_normalsBound != before.m_normalsBound
-    || m_offsets != before.m_offsets || m_alphas != before.m_alphas
-    || m_distanceRows != before.m_distanceRows)
+    !transform || m_entry != before.m_entry || m_power != before.m_power
+    || m_size != before.m_size || m_elevation != before.m_elevation
+    || m_startRow != before.m_startRow || m_worldBounds != before.m_worldBounds
+    || m_normalsBound != before.m_normalsBound
+    || m_rotationSupported != before.m_rotationSupported || m_alphas != before.m_alphas
+    || m_directionRows != before.m_directionRows
+    || m_distanceRows != before.m_distanceRows || m_offsetRows != before.m_offsetRows
+    || m_offsetNormalRows != before.m_offsetNormalRows)
   {
     invalid(m_entry, "unsupported displacement structure or provenance edit");
+  }
+  const auto rotation = vm::slice<3, 3>(*transform, 0, 0);
+  const auto followsRotation = [&](const auto& oldValues, const auto& newValues) {
+    if (oldValues.size() != newValues.size())
+    {
+      return false;
+    }
+    for (size_t i = 0; i < oldValues.size(); ++i)
+    {
+      const auto expected = rotation * oldValues[i];
+      if (
+        !vm::is_finite(newValues[i]) || !vm::is_finite(expected)
+        || !vm::is_equal(newValues[i], expected, TransformEpsilon))
+      {
+        return false;
+      }
+    }
+    return true;
+  };
+  if (
+    !followsRotation(before.m_directions, m_directions)
+    || !followsRotation(before.m_offsets, m_offsets)
+    || !followsRotation(before.m_offsetNormals, m_offsetNormals))
+  {
+    invalid(m_entry, "displacement vectors do not follow the base rotation");
   }
   auto edits = std::vector<VmfValueEdit>{};
   const auto editRow = [&](const Row& row, const auto& oldValues, const auto& newValues) {
@@ -499,6 +710,31 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
       std::span{before.m_distances}.subspan(y * m_size, m_size),
       std::span{m_distances}.subspan(y * m_size, m_size));
   }
+  const auto editVectors =
+    [&](const auto& rows, const auto& oldValues, const auto& newValues) {
+      auto oldRow = std::vector<double>(3 * m_size);
+      auto newRow = std::vector<double>(3 * m_size);
+      for (size_t y = 0; y < m_size; ++y)
+      {
+        // Absent normal rows follow the face normal; absent offset rows stay zero.
+        if (!rows[y].entry)
+        {
+          continue;
+        }
+        for (size_t x = 0; x < m_size; ++x)
+        {
+          for (size_t c = 0; c < 3; ++c)
+          {
+            oldRow[3 * x + c] = oldValues[y * m_size + x][c];
+            newRow[3 * x + c] = newValues[y * m_size + x][c];
+          }
+        }
+        editRow(rows[y], oldRow, newRow);
+      }
+    };
+  editVectors(before.m_directionRows, before.m_directions, m_directions);
+  editVectors(before.m_offsetRows, before.m_offsets, m_offsets);
+  editVectors(before.m_offsetNormalRows, before.m_offsetNormals, m_offsetNormals);
   return edits;
 }
 std::ostream& operator<<(std::ostream& stream, const SourceDisplacement& displacement)

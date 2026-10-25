@@ -3,8 +3,11 @@ SPDX-License-Identifier: GPL-3.0-or-later
 */
 #include "catch2/catch_approx.hpp"
 #include "catch2/catch_test_macros.hpp"
+#include "catch2/generators/catch_generators.hpp"
 #include "mdl/SourceDisplacement.h"
 #include "mdl/VmfDocument.h"
+
+#include "vm/mat_ext.h"
 
 #include <algorithm>
 #include <limits>
@@ -148,6 +151,179 @@ TEST_CASE("SourceDisplacement")
       VmfDocument::parse(spelled).serialize(
         authored.translated({0, 8, 0}).editsFrom(authored))
       == replaceOnce(spelled, "[0.00  +0 0]", "[0.00  8 0]"));
+  }
+  SECTION("proper rigid rotation preserves native vector tokens and cumulative motion")
+  {
+    const auto text = replaceOnce(
+      source,
+      "normals {",
+      "elevation 2 offsets { row2 \"0.00 0 0 0 0 0 1  +2 3.00 0 0 0 0 0 0\" } "
+      "offset_normals { row2 \"0 0 0 0 0 0 4 5 6 0 0 0 0 0 0\" } "
+      "alphas { row2 \"0 0 127 0 0\" } normals {");
+    const auto authored = loadDisplacement(text);
+    const auto delta = vm::vec3d{16, 8, 4};
+    const auto moved = authored.translated(delta);
+    auto rotation = vm::mat4x4d::identity();
+    rotation[1][1] = 0;
+    rotation[2][2] = 0;
+    rotation[1][2] = 1;
+    rotation[2][1] = -1;
+    auto turned = moved.rigidlyTransformed(rotation);
+    REQUIRE(turned.baseTransformFrom(moved));
+    CHECK(*turned.baseTransformFrom(moved) == rotation);
+    CHECK_FALSE(turned.baseTranslationFrom(authored));
+    CHECK(turned.positions()[12] == vm::vec3d{49, -25, 42});
+    for (size_t i = 0; i < authored.positions().size(); ++i)
+    {
+      CHECK(turned.positions()[i] == rotation * (authored.positions()[i] + delta));
+      CHECK(
+        turned.basePositions()[i] == rotation * (authored.basePositions()[i] + delta));
+      CHECK(
+        vm::is_equal(
+          turned.normals()[i],
+          vm::slice<3, 3>(rotation, 0, 0) * authored.normals()[i],
+          0.000001));
+    }
+    CHECK(turned.indices() == authored.indices());
+    CHECK(turned.alphas() == authored.alphas());
+    auto expected = replaceOnce(text, "[0 0 0]", "[16 -4 8]");
+    for (size_t y = 0; y < 5; ++y)
+    {
+      expected = replaceOnce(
+        expected,
+        "0 0 1  0 0 1  0 0 1  0 0 1  0 0 1",
+        "0 -1 0  0 -1 0  0 -1 0  0 -1 0  0 -1 0");
+    }
+    expected = replaceOnce(expected, "1  +2 3.00", "1  -3 2");
+    expected = replaceOnce(expected, "4 5 6", "4 -6 5");
+    const auto saved = VmfDocument::parse(text).serialize(turned.editsFrom(authored));
+    CHECK(saved == expected);
+    auto newCorners = corners;
+    for (auto& corner : newCorners)
+    {
+      corner = rotation * (corner + delta);
+    }
+    const auto newNormal = vm::slice<3, 3>(rotation, 0, 0) * vm::vec3d{0, 0, 1};
+    const auto parsed = VmfDocument::parse(saved);
+    const auto reopened =
+      SourceDisplacement::read(parsed, parsed.roots()[0], newCorners, newNormal, bounds);
+    REQUIRE(reopened);
+    CHECK(reopened->positions() == turned.positions());
+    CHECK_THROWS_AS(reopened->editsFrom(authored), std::invalid_argument);
+    const auto hit = turned.intersect(vm::ray3d{{49, -100, 42}, {0, 1, 0}});
+    REQUIRE(hit);
+    CHECK(*hit == Catch::Approx(75));
+    turned.setDistance(2, 2, 24);
+    CHECK(turned.positions()[12] == vm::vec3d{49, -33, 42});
+    const auto savedAgain =
+      VmfDocument::parse(text).serialize(turned.editsFrom(authored));
+    CHECK(savedAgain == replaceOnce(expected, "+0  16  0", "+0  24  0"));
+    const auto again = VmfDocument::parse(savedAgain);
+    CHECK(
+      SourceDisplacement::read(again, again.roots()[0], newCorners, newNormal, bounds)
+        ->positions()
+      == turned.positions());
+    CHECK(loadDisplacement(text) == authored);
+    const auto oblique =
+      authored.rigidlyTransformed(vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.37));
+    const auto step = vm::vec3d{1, 2, 3};
+    const auto stepped = oblique.translated(step);
+    REQUIRE(stepped.baseTranslationFrom(oblique));
+    CHECK(vm::is_equal(*stepped.baseTranslationFrom(oblique), step, 0.000001));
+  }
+  SECTION("unbound ignored vectors preserve loading and translation but block rotation")
+  {
+    auto rotation = vm::mat4x4d::identity();
+    rotation[1][1] = 0;
+    rotation[2][2] = 0;
+    rotation[1][2] = 1;
+    rotation[2][1] = -1;
+    const auto malformed =
+      replaceOnce(source, "normals {", "offset_normals { row0 \"unbound\" } normals {");
+    const auto opaque = loadDisplacement(malformed);
+    CHECK(opaque.positions() == original.positions());
+    CHECK(VmfDocument::parse(malformed).serialize(opaque.editsFrom(opaque)) == malformed);
+    CHECK(
+      VmfDocument::parse(malformed).serialize(
+        opaque.translated({16, 8, 4}).editsFrom(opaque))
+      == replaceOnce(malformed, "[0 0 0]", "[16 8 4]"));
+    CHECK_THROWS_AS(opaque.rigidlyTransformed(rotation), std::invalid_argument);
+    const auto flat =
+      loadDisplacement("side { dispinfo { power 2 startposition \"[0 0 0]\" } }");
+    const auto turned = flat.rigidlyTransformed(rotation);
+    CHECK(turned.editsFrom(flat).empty());
+    CHECK(turned.positions()[12] == vm::vec3d{32, 0, 32});
+    CHECK_FALSE(turned.canEditDistances());
+    auto projective = rotation;
+    projective[0][3] = 0.1;
+    auto nonfinite = rotation;
+    nonfinite[0][0] = std::numeric_limits<double>::infinity();
+    auto shear = vm::mat4x4d::identity();
+    shear[1][0] = 0.1;
+    for (const auto& bad :
+         {projective,
+          nonfinite,
+          shear,
+          vm::scaling_matrix(vm::vec3d{2, 2, 2}),
+          vm::scaling_matrix(vm::vec3d{-1, 1, 1}),
+          vm::translation_matrix(vm::vec3d{1000, 0, 0})})
+    {
+      CHECK_THROWS_AS(original.rigidlyTransformed(bad), std::invalid_argument);
+    }
+    CHECK(loadDisplacement(source) == original);
+  }
+  SECTION("finite unused native vectors cannot overflow during rotation")
+  {
+    const auto overflow = GENERATE(false, true);
+    const auto vector =
+      overflow ? std::string{"1.7e308 -1.7e308 0"} : std::string{"1e100 -1e100 0"};
+    const auto text = replaceOnce(
+      source,
+      "normals {",
+      "offset_normals { row0 \"" + vector + " 0 0 0 0 0 0 0 0 0 0 0 0\" } normals {");
+    const auto large = loadDisplacement(text);
+    CHECK(large.positions() == original.positions());
+    CHECK(VmfDocument::parse(text).serialize(large.editsFrom(large)) == text);
+    const auto rotation =
+      vm::rotation_matrix(vm::vec3d{0, 0, 1}, vm::constants<double>::quarter_pi());
+    if (overflow)
+    {
+      CHECK_THROWS_AS(large.rigidlyTransformed(rotation), std::invalid_argument);
+    }
+    else
+    {
+      const auto turned = large.rigidlyTransformed(rotation);
+      CHECK(
+        vm::is_equal(turned.positions()[12], rotation * large.positions()[12], 0.000001));
+      const auto saved = VmfDocument::parse(text).serialize(turned.editsFrom(large));
+      CHECK(saved != text);
+      CHECK_NOTHROW(loadDisplacement(saved).rigidlyTransformed(rotation));
+    }
+    CHECK(loadDisplacement(text) == large);
+  }
+  SECTION("finite cancellation cannot silently deform a requested rigid motion")
+  {
+    auto text = std::string{
+      "side { dispinfo { power 2 startposition \"[0 0 0]\" elevation 1e18 normals {"};
+    for (size_t y = 0; y < 5; ++y)
+    {
+      text += "row" + std::to_string(y) + " \"0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1\" ";
+    }
+    text += "} distances {";
+    for (size_t y = 0; y < 5; ++y)
+    {
+      text += "row" + std::to_string(y) + " \"1e18 1e18 1e18 1e18 1e18\" ";
+    }
+    text += "} } }";
+    const auto cancellation = loadDisplacement(text);
+    CHECK(cancellation.positions()[12] == vm::vec3d{32, 32, 0});
+    CHECK(
+      VmfDocument::parse(text).serialize(cancellation.editsFrom(cancellation)) == text);
+    CHECK_THROWS_AS(cancellation.translated({16, 8, 4}), std::invalid_argument);
+    CHECK_THROWS_AS(
+      cancellation.rigidlyTransformed(vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37)),
+      std::invalid_argument);
+    CHECK(loadDisplacement(text) == cancellation);
   }
   SECTION("offset and elevation act exactly once")
   {

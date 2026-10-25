@@ -307,7 +307,8 @@ public:
     const vm::vec3d& cameraRight,
     vm::direction cameraRelativeFlipDirection);
 
-  Result<void> transform(const vm::mat4x4d& transform, bool lockAlignment);
+  Result<void> transform(
+    const vm::mat4x4d& transform, bool lockAlignment, bool sourceRotation = false);
   void invert();
 
   Result<void> updatePointsFromVertices();

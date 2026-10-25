@@ -1198,11 +1198,12 @@ Result<void> Brush::intersect(const vm::bbox3d& worldBounds, const Brush& brush)
 Result<void> Brush::transform(
   const vm::bbox3d& worldBounds,
   const vm::mat4x4d& transformation,
-  const bool lockMaterials)
+  const bool lockMaterials,
+  const bool sourceRotation)
 {
   for (auto& face : m_faces)
   {
-    if (!face.transform(transformation, lockMaterials))
+    if (!face.transform(transformation, lockMaterials, sourceRotation))
     {
       return Error{"Brush has invalid face"};
     }
