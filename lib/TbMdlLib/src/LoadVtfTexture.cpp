@@ -37,6 +37,97 @@
 
 namespace tb::mdl
 {
+namespace
+{
+// Packed VTF words are little endian, with the first named channel in the low
+// bits. Expand sub-byte UNORM channels by bit replication (no color-space change).
+void convertVtfPixels(
+  const unsigned char* input,
+  unsigned char* output,
+  const size_t pixels,
+  const uint32_t format,
+  const size_t stride)
+{
+  const auto expand5 = [](const unsigned int v) { return (v << 3) | (v >> 2); };
+  const auto expand6 = [](const unsigned int v) { return (v << 2) | (v >> 4); };
+  for (size_t i = 0; i < pixels; ++i, input += stride, output += 4)
+  {
+    unsigned int r = 0, g = 0, b = 0, a = 255;
+    switch (format)
+    {
+    case 1: // ABGR8888
+      a = input[0];
+      b = input[1];
+      g = input[2];
+      r = input[3];
+      break;
+    case 11: // ARGB8888
+      a = input[0];
+      r = input[1];
+      g = input[2];
+      b = input[3];
+      break;
+    case 16: // BGRX8888: X is not alpha.
+      b = input[0];
+      g = input[1];
+      r = input[2];
+      break;
+    case 5: // I8
+    case 6: // IA88
+      r = g = b = input[0];
+      if (format == 6)
+      {
+        a = input[1];
+      }
+      break;
+    case 8: // A8: white modulated by alpha.
+      r = g = b = 255;
+      a = input[0];
+      break;
+    case 9:  // RGB888_BLUESCREEN
+    case 10: // BGR888_BLUESCREEN
+      r = input[format == 9 ? 0 : 2];
+      g = input[1];
+      b = input[format == 9 ? 2 : 0];
+      a = r == 0 && g == 0 && b == 255 ? 0 : 255;
+      break;
+    default: // RGB565, BGR565, BGRX5551, BGRA4444, BGRA5551
+      const auto word =
+        static_cast<unsigned int>(input[0]) | (static_cast<unsigned int>(input[1]) << 8);
+      if (format == 19)
+      {
+        b = (word & 15) * 17;
+        g = ((word >> 4) & 15) * 17;
+        r = ((word >> 8) & 15) * 17;
+        a = ((word >> 12) & 15) * 17;
+      }
+      else if (format == 4 || format == 17)
+      {
+        const auto low = expand5(word & 31);
+        const auto high = expand5((word >> 11) & 31);
+        r = format == 4 ? low : high;
+        g = expand6((word >> 5) & 63);
+        b = format == 4 ? high : low;
+      }
+      else
+      {
+        b = expand5(word & 31);
+        g = expand5((word >> 5) & 31);
+        r = expand5((word >> 10) & 31);
+        if (format == 21)
+        {
+          a = (word & 0x8000) ? 255 : 0;
+        }
+      }
+      break;
+    }
+    output[0] = static_cast<unsigned char>(r);
+    output[1] = static_cast<unsigned char>(g);
+    output[2] = static_cast<unsigned char>(b);
+    output[3] = static_cast<unsigned char>(a);
+  }
+}
+} // namespace
 bool isVtfTexture(const std::filesystem::path& path)
 {
   return kdl::path_to_lower(path.extension()) == ".vtf";
@@ -95,6 +186,7 @@ Result<gl::Texture> loadVtfTexture(
     GLenum glFormat = 0;
     size_t bytes = 0;
     size_t block = 0;
+    bool convert = false;
     switch (format)
     {
     case 0:
@@ -113,6 +205,31 @@ Result<gl::Texture> loadVtfTexture(
       glFormat = GL_BGRA;
       bytes = 4;
       break;
+    case 1:  // ABGR8888
+    case 11: // ARGB8888
+    case 16: // BGRX8888
+      bytes = 4;
+      convert = true;
+      break;
+    case 9:  // RGB888_BLUESCREEN
+    case 10: // BGR888_BLUESCREEN
+      bytes = 3;
+      convert = true;
+      break;
+    case 4:  // RGB565
+    case 6:  // IA88
+    case 17: // BGR565
+    case 18: // BGRX5551
+    case 19: // BGRA4444
+    case 21: // BGRA5551
+      bytes = 2;
+      convert = true;
+      break;
+    case 5: // I8
+    case 8: // A8
+      bytes = 1;
+      convert = true;
+      break;
     case 13:
     case 20:
       glFormat = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
@@ -128,6 +245,10 @@ Result<gl::Texture> loadVtfTexture(
       break;
     default:
       return Error{"Unsupported VTF image format: " + std::to_string(format)};
+    }
+    if (convert)
+    {
+      glFormat = GL_RGBA;
     }
     const auto size = [&](size_t w, size_t h) {
       return block ? ((w + 3) / 4) * ((h + 3) / 4) * block : w * h * bytes;
@@ -278,18 +399,28 @@ Result<gl::Texture> loadVtfTexture(
     constexpr size_t MaxImageBytes = 256 * 1024 * 1024;
     auto remaining = imageEnd - imageOffset;
     size_t totalOutput = 0;
+    size_t totalEncoded = 0;
+    std::vector<size_t> encodedMipSizes(mips);
     std::vector<size_t> mipSizes(mips);
     for (size_t i = mips; i-- > 0;)
     {
-      const auto outputSize =
-        size(std::max(size_t{1}, width >> i), std::max(size_t{1}, height >> i));
+      const auto w = std::max(size_t{1}, width >> i);
+      const auto h = std::max(size_t{1}, height >> i);
+      const auto encodedSize = size(w, h);
+      if (encodedSize > MaxImageBytes - totalEncoded)
+      {
+        return Error{"VTF exceeds 256 MiB encoded image budget"};
+      }
+      totalEncoded += encodedSize;
+      encodedMipSizes[i] = encodedSize;
+      const auto outputSize = convert ? w * h * 4 : encodedSize;
       if (outputSize > MaxImageBytes - totalOutput)
       {
         return Error{"VTF exceeds 256 MiB decoded image budget"};
       }
       totalOutput += outputSize;
       mipSizes[i] = outputSize;
-      const auto inputSize = method ? compressedSizes[mips - 1 - i] : outputSize;
+      const auto inputSize = method ? compressedSizes[mips - 1 - i] : encodedSize;
       if (!inputSize || inputSize > MaxImageBytes || inputSize > remaining)
       {
         return Error{"Truncated or oversized VTF mip payload"};
@@ -308,42 +439,54 @@ Result<gl::Texture> loadVtfTexture(
     for (size_t i = mips; i-- > 0;)
     {
       buffers[i] = gl::TextureBuffer{mipSizes[i]};
+      // AXC inflates to encoded pixels, not to the retained RGBA conversion.
+      auto encoded =
+        convert ? gl::TextureBuffer{encodedMipSizes[i]} : gl::TextureBuffer{};
+      auto* destination = convert ? encoded.data() : buffers[i].data();
+      const auto destinationSize = encodedMipSizes[i];
       if (!method)
       {
-        reader.read(buffers[i].data(), buffers[i].size());
-        continue;
+        reader.read(destination, destinationSize);
       }
-      const auto inputSize = compressedSizes[mips - 1 - i];
-      auto input = std::vector<unsigned char>(inputSize);
-      reader.read(input.data(), input.size());
-      if (method == 8)
-      {
-        auto outputSize = static_cast<mz_ulong>(buffers[i].size());
-        auto consumed = static_cast<mz_ulong>(input.size());
-        const auto status =
-          mz_uncompress2(buffers[i].data(), &outputSize, input.data(), &consumed);
-        if (
-          status != MZ_OK || outputSize != buffers[i].size() || consumed != input.size())
-        {
-          return Error{"Invalid VTF AXC Deflate mip payload"};
-        }
-      }
-#ifdef TB_SOURCE_VTF_ZSTD
       else
       {
-        const auto frameSize = ZSTD_findFrameCompressedSize(input.data(), input.size());
-        if (ZSTD_isError(frameSize) || frameSize != input.size())
+        const auto inputSize = compressedSizes[mips - 1 - i];
+        auto input = std::vector<unsigned char>(inputSize);
+        reader.read(input.data(), input.size());
+        if (method == 8)
         {
-          return Error{"Invalid VTF AXC Zstd frame size"};
+          auto outputSize = static_cast<mz_ulong>(destinationSize);
+          auto consumed = static_cast<mz_ulong>(input.size());
+          const auto status =
+            mz_uncompress2(destination, &outputSize, input.data(), &consumed);
+          if (
+            status != MZ_OK || outputSize != destinationSize || consumed != input.size())
+          {
+            return Error{"Invalid VTF AXC Deflate mip payload"};
+          }
         }
-        const auto outputSize = ZSTD_decompress(
-          buffers[i].data(), buffers[i].size(), input.data(), input.size());
-        if (ZSTD_isError(outputSize) || outputSize != buffers[i].size())
+#ifdef TB_SOURCE_VTF_ZSTD
+        else
         {
-          return Error{"Invalid VTF AXC Zstd mip payload"};
+          const auto frameSize = ZSTD_findFrameCompressedSize(input.data(), input.size());
+          if (ZSTD_isError(frameSize) || frameSize != input.size())
+          {
+            return Error{"Invalid VTF AXC Zstd frame size"};
+          }
+          const auto outputSize =
+            ZSTD_decompress(destination, destinationSize, input.data(), input.size());
+          if (ZSTD_isError(outputSize) || outputSize != destinationSize)
+          {
+            return Error{"Invalid VTF AXC Zstd mip payload"};
+          }
         }
-      }
 #endif
+      }
+      if (convert)
+      {
+        convertVtfPixels(
+          encoded.data(), buffers[i].data(), destinationSize / bytes, format, bytes);
+      }
     }
     auto texture = gl::Texture{
       width, height, RgbaF{}, glFormat, gl::NoEmbeddedDefaults{}, std::move(buffers)};

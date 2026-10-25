@@ -205,6 +205,24 @@ Never migrate/expand a saved partial subset on dialog creation. Only explicit
 root enable/disable changes the saved choices; normal undo must restore them.
 Non-Source folder behavior and read-only-preview command safety remain controls.
 
+## Common integer VTF conversions
+
+The bounded loader also accepts ABGR8888, ARGB8888, BGRX8888, RGB565, BGR565,
+BGRX5551, BGRA4444, BGRA5551, I8, IA88, A8 and RGB/BGR888 bluescreen layouts.
+These convert to retained RGBA8 mip buffers; the original four direct byte
+layouts and BC1/BC2/BC3 retain their existing upload representations. X bits are
+not opacity; intensity and alpha-only semantics and exact bluescreen keying are
+explicit. This is not HDR, palette, normal-map, animation, cubemap or volume
+support, and it does not establish a whole-map texture-load speedup.
+
+Precompute both encoded-chain and retained-chain byte counts before allocating.
+The retained-mip budget must include conversion expansion (for example I8 to
+RGBA8), not just source bytes. Strata AXC inflates into the encoded representation
+first, then uses the same conversion. Never pass a larger converted layout as
+zlib's expected size. `loadVtfTexture` tests include independently authored literal
+pixel/mip and compressed-stream oracles, direct-layout controls, exact and one-byte
+under-budget checks, truncation, and explicit unsupported formats.
+
 ## A5.3 texture progress controls
 
 Resource-manager tests prove progress past a busy prefix, cursor survival across
