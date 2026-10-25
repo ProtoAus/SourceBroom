@@ -252,8 +252,33 @@ UV locked/unlocked behavior, undo/redo and continued saves after movement act.
 
 Only parser-admitted displacement sides relax the opaque-attachment check;
 misplaced/nested unparsed blocks remain opaque. Unknown fields, native geometry
-references, rotation/scale/shear/flip, duplication, deletion and topology remain
-guarded. This is not bit-exact floating geometry across arbitrary edit histories.
+references, scale/shear/flip, duplication, deletion and topology remain guarded.
+This is not bit-exact floating geometry across arbitrary edit histories.
+
+A5.10 adds proper rigid rotation with an explicit command policy: only the existing
+`rotateSelection` path opts in; generic/scale/shear/flip still default-deny native
+rotation. Proper finite affine/isometry checks (1e-12 arithmetic) are not operation
+permission. Repeat retains policy. Prepare native data before publishing faces.
+Track original corner/normal provenance and cumulative frame; all displacement
+sides must share EXACT relative frames, including nonzero motions. Check every
+base defining point within1e-6 and distinguish exact identity from changed bases.
+Avoid noisy M*inverse(M) when stored frames are equal.
+
+Bind authored normals/offsets/offset_normals numeric spans. Rotate start/corners as
+points; face normal/directions/offsets/offset normals as vectors. Scalar distances/
+elevation/alpha/tags/topology remain unchanged. Missing rows keep default semantics;
+malformed previously ignored offset_normals retains no-op/translation coverage but
+refuses rotation. Surgical scalar output retains unchanged spelling/rows/bytes.
+
+Rebuild sample/base positions, then require actual input-matrix covariance before
+returning transformed data. Large cancelling elevation/distance operands can leave
+finite in-world points but lose requested movement; refuse, don't bake offsets.
+Independently check every rotated vector finite, including metadata unused by
+sample rebuild. Matching infinities may compare equal in vm::is_equal: check
+finiteness explicitly in provenance and numeric output too. Reviewer P1 overflow
+reproduced through actual Map and Core before finite guard; red357/2 then green
+364/2, including unchanged history/count/serialization and large finite control.
+Final focus4009/41 and model184/184 pass; separate native visual/Hammer gates remain.
 The native grid owns its wire edges; adjacent ordinary faces retain their own
 base boundary for selected-edge highlighting. Tests cover actual cache vertices,
 UVs and triangle indices, raised ray/rtree hits, bounds, one-token save/undo and

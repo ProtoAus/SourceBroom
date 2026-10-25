@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.9 movement and skin candidate
+# Try the Windows SourceBroom A5.10 native-rotation candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,25 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.9: move native terrain and select fixed-model skins
+## A5.10: rotate native terrain without flattening it
+
+Select a whole displacement brush in object mode and use the normal rotation
+command. Its base, raised samples and authored vectors now rotate together,
+including arbitrary angles/pivots, UV-lock behavior, picking/bounds and undo/redo.
+Save As a new file, reopen, then continue moving or distance editing normally.
+Scale/shear/flip, face/vertex topology and sculpt/create/power/sew remain refused.
+Opaque attachments and native references remain guarded; no conversion through MAP.
+
+Finite in-world geometry alone is not enough: precision-losing cancellation and
+rotated vector overflow refuse before world mutation. Legacy untyped offset-normal
+rows can still load/translate unchanged but cannot rotate safely. No value clamping
+or metadata removal makes those operations pass.
+
+**Quick owner check:** on a **copy**, rotate one whole raised terrain brush a small
+angle, undo/redo and Save As. Compare its position, shading and UVs in matching
+Hammer++. Manual/native appearance remains pending; keep A5.9 as recovery.
+
+## Retained A5.9: move native terrain and select fixed-model skins
 
 Select a whole displacement brush in object mode and move it normally. Its base
 and raised mesh now translate together, with updated picking/bounds, undo/redo,
@@ -252,7 +270,7 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 - Basic plain-brush/point-entity creation, duplication, deletion and limited
   brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
   CSG/clipping, native editor-group/layer authoring, displacement creation/sculpt/
-  power/sew, native rotation/scale/shear/flip, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
+  power/sew, native scale/shear/flip, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
   some upstream controls can remain visible and save guards stay authoritative.
 - Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
   does not apply cordon clipping itself; unchanged VMF is passed to external tools
@@ -262,15 +280,16 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- All **181 model** entries pass after movement/skin integration. Affected UI
-  controls pass **129 assertions/3 cases**, native scene/UV controls **233/1**,
-  the two-mesh guard **16/1**, and existing five-config GPU controls **2,539**.
+- All **184 model** entries pass after rotation integration; native focus passes
+  **4,009 assertions/41 cases**, including real Map/cache/UV/guard controls.
+  The review overflow red-to-green passes **364 assertions/2 cases**. Affected
+  UI **129/3** and existing five-config GPU **2,539** evidence remain valid.
   Earlier filesystem20/graphics21 remain valid. The prior full UI **42/43**
   Windows preference-file replacement failure is preserved/unfixed; these
   targeted passes are not an all-UI-green or manual/Hammer acceptance claim. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep prior A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
+  Keep prior A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

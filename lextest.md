@@ -166,6 +166,15 @@ This is qualitative prior-build feedback, not A5.3 acceptance or measured timing
   with matching Hammer++. Explicit/legacy/dynamic declarations are separate
   preserved forms, not newly certified. No asset or original VMF is a write target.
 
+## A5.10 native rotation — pending owner/Hammer check
+
+- [ ] On a **copied** VMF, select one whole raised displacement brush in object
+  mode, rotate it a small angle, undo/redo, and Save As a new file. Compare its
+  position, shading and UVs in matching Hammer++; confirm later distance editing
+  still works. Scaling/shear/flip/sculpt/topology remain unsupported. Untyped
+  vector metadata and unsafe numeric motion must refuse, not flatten/drop data.
+  No original map is a write target; automation does not check this box.
+
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation
 or support for other Source branches from a visual check.

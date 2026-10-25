@@ -1,11 +1,40 @@
-# SourceBroom validation — A5.9 bounded movement and skin preview
+# SourceBroom validation — A5.10 bounded native rigid rotation
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.9 native translation / fixed-studio skin controls
+## A5.10 native rigid rotation / finite preservation controls
+
+Actual Map controls rotate a native raised quad by quarter/oblique angles around
+a pivot with both UV locks, then pick, undo/redo, translate, distance edit, Save As,
+reopen and save again. Cache controls inspect submitted positions/normals/base-UVs
+and retained indices. Two-displacement controls admit one whole frame but refuse
+later-only or different nonzero frames, including tiny motions; mesh-only/base-only,
+opaque attachments/native references and generic/scale/shear/flip remain guarded.
+
+Rotated start/corners are points, authored vectors are vectors, scalar fields and
+sparse/unchanged numeric spelling remain retained. Malformed previously ignored
+offset-normal rows still load/translate unchanged but refuse rotation. Parent
+reproduced finite cancellation that deformed samples and added pre-publication
+matrix covariance. Independent review then found unused offset-normal overflow:
+actual Core/Map red **357 assertions/2 cases**, then finite vector/provenance/output
+checks yield **364/2 green**, unchanged world/history/count/serialization. Large
+finite vectors remain supported, not clamped. This is a resolved finding, not a
+second independent re-review or universal numerical/SDK certification.
+
+Final native focus **4,009 assertions/41 cases**, normal model **184/184**, actual
+app/checker/UI rebuilds and zero new compiler warnings pass. Earlier affected UI
+**129/3** and Windows GPU **2,539** remain valid (only new rigid-precision/overflow
+failure branches changed later, not inspector/material ABI). Prior full UI42/43
+preference rename failure remains untouched/unfixed; no all-UI-green claim.
+Built corpus retains document38/38, strict35/38 and read-only38/38, all38 original
+hashes unchanged. Installed boundary is recorded separately in candidate receipt.
+Native appearance/rotation feel, matching Hammer and compiler/game acceptance are
+pending. A5.9 is recovery; full Source support is not complete.
+
+## Retained A5.9 native translation / fixed-studio skin controls
 
 Pure displacement translation now uses existing brush/Map movement, including
 start-coordinate token preservation, raised mesh bounds/picking, undo/redo,
@@ -53,9 +82,9 @@ passes 2,539 assertions; this is not a new displacement visual/Hammer acceptance
 All 38 corpus originals keep their SHA256: document38/38, strict35/38 and explicit
 read-only38/38, with the same three strict refusals and no new loader regression.
 
-Displacement creation, sculpt/power/sew, native rotation/scale/shear/flip,
+Displacement creation, sculpt/power/sew, native scale/shear/flip,
 alpha-material blending, overlay/instance authoring and full shader/model parity
-remain missing; A5.9 adds only base translation, not arbitrary transforms.
+remain missing; A5.10 adds proper rotation, not arbitrary affine transforms.
 The integer-format work does not add HDR/palette/normal/animated/cubemap/volume
 support or claim a startup/whole-map speed gain. Independent review's two guard
 findings and the adjacent-edge selection defect were fixed with acted controls;

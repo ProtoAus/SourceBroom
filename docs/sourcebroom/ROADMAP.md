@@ -65,19 +65,21 @@ compatible merely because they also use VMF.
   preference rename failure remains unfixed despite the current passing run.
   Final receipts retain the source/binary/run distinctions and appearance gates.
 - A5.8 starts A6 with native power2..6 displacement meshes, picking/bounds and
-  selected-face distance editing; A5.9 adds **whole-base translation** with undo,
-  surgical start-coordinate save and continued editing. Every displacement must
-  share base movement intent, not merely lie within an arithmetic epsilon.
+  selected-face distance editing; A5.9 adds **whole-base translation** and A5.10
+  **proper rotation** through normal commands, UV policy, undo and preserving saves.
+  Every displacement shares an exact motion frame; numeric overflow/cancellation
+  refuses before world mutation, not merely after a finite-bounds check.
   A5.9 also adds bounded Source-only entity skins for simple fixed FGD studio
   paths, preserving other-game/explicit/legacy/dynamic declaration semantics.
   Common integer VTF formats retain bounded RGBA8 preview. Full A6/Source support
-  is not claimed: native rotation/scale/shear, sculpt/create/power/sew, blend
+  is not claimed: native scale/shear/flip, sculpt/create/power/sew, blend
   materials, overlays/instances and broader shader/model tools remain pending.
-  All 181 model entries pass, affected UI 129 assertions/3 cases and GPU 2,539
-  pass; native scene/UV 233/1 and red->green two-mesh guard 16/1 act. Earlier
+  All 184 model entries and native focus4,009 assertions/41 cases pass. Review
+  overflow red->green364/2 acts through Core and Map; affected UI129/3 and existing
+  GPU2,539 remain valid. Earlier
   Fs20/Gl21 remain valid; the known untouched Windows preference failure is
   preserved/unfixed, not all UI green. Native appearance/Hammer checks remain
-  pending; A5.8 is recovery.
+  pending; A5.9 is recovery.
   No Source compiler, Valve content, or third-party/user map is bundled. See
   [alpha instructions](ALPHA.md) for the owner test path.
 
