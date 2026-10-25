@@ -60,6 +60,7 @@ target_sources(TbMdlLibTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceCapabilities.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceDependencyPack.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceEditorMetadata.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceDisplacement.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadSourceModel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadMdxModel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadMipTexture.cpp

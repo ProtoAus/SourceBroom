@@ -19,6 +19,7 @@
 
 #include <QApplication>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QListWidget>
@@ -29,6 +30,8 @@
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLFunctions_2_1>
 #include <QOpenGLVersionFunctionsFactory>
+#include <QPushButton>
+#include <QSpinBox>
 #include <QTimer>
 
 #include "TestEnvironment.h"
@@ -46,6 +49,8 @@
 #include "gl/TestGl.h"
 #include "gl/TestUtils.h"
 #include "gl/Texture.h"
+#include "mdl/BrushFace.h"
+#include "mdl/BrushFaceHandle.h"
 #include "mdl/BrushNode.h"
 #include "mdl/EntityDefinition.h"
 #include "mdl/EntityDefinitionManager.h"
@@ -60,6 +65,7 @@
 #include "mdl/WorldNode.h"
 #include "ui/AppControllerFixture.h"
 #include "ui/CatchConfig.h"
+#include "ui/FaceAttribsEditor.h"
 #include "ui/GlQt.h"
 #include "ui/MapDocument.h"
 #include "ui/MapDocumentFixture.h"
@@ -325,6 +331,116 @@ TEST_CASE("MapWindow")
     REQUIRE(!appController.glManager().resourceManager().needsProcessing());
     CHECK(window.canReloadEntityDefinitions());
   }
+}
+
+TEST_CASE(
+  "Source displacement inspector applies distance and guards stale grid coordinates",
+  "[source]")
+{
+  auto fixture = AppControllerFixture{};
+  auto& appController = fixture.appController();
+  auto env = fs::TestEnvironment{};
+  const auto solid = [](const size_t id, const size_t power) {
+    const auto planes = std::array<std::string, 6>{
+      "(0 0 0) (0 64 0) (0 0 64)",
+      "(64 0 0) (64 0 64) (64 64 0)",
+      "(0 0 0) (0 0 64) (64 0 0)",
+      "(0 64 0) (64 64 0) (0 64 64)",
+      "(0 0 0) (64 0 0) (0 64 0)",
+      "(0 0 64) (0 64 64) (64 0 64)"};
+    auto text = "solid { id " + std::to_string(id) + "\n";
+    for (size_t face = 0; face < planes.size(); ++face)
+    {
+      text += "side { id " + std::to_string(id + face + 1) + " plane \"" + planes[face]
+        + "\" material \"synthetic/missing\" uaxis \"[1 0 0 0] 1\" vaxis \"[0 -1 0 0] 1\" rotation 0\n";
+      if (face == 5)
+      {
+        const auto size = (size_t{1} << power) + 1;
+        text += "dispinfo { power " + std::to_string(power)
+                + " startposition \"[0 0 64]\" normals {\n";
+        for (size_t row = 0; row < size; ++row)
+        {
+          text += "row" + std::to_string(row) + " \"";
+          for (size_t column = 0; column < size; ++column)
+          {
+            text += "0 0 1 ";
+          }
+          text += "\"\n";
+        }
+        text += "} distances {\n";
+        for (size_t row = 0; row < size; ++row)
+        {
+          text += "row" + std::to_string(row) + " \"";
+          for (size_t column = 0; column < size; ++column)
+          {
+            text += (row == size / 2 && column == size / 2) ? "16 " : "0 ";
+          }
+          text += "\"\n";
+        }
+        text += "} }\n";
+      }
+      text += "}\n";
+    }
+    return text + "}\n";
+  };
+  env.createFile(
+    "displacement.vmf",
+    "world { id 1 classname worldspawn\n" + solid(2, 6) + solid(20, 2) + "}\n");
+  auto loaded = MapDocument::loadDocument(
+    appController.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192.0},
+    env.dir() / "displacement.vmf",
+    appController.taskManager(),
+    appController.glManager().resourceManager());
+  REQUIRE(loaded.is_success());
+  auto document = std::move(loaded) | kdl::value();
+  auto editor = FaceAttribsEditor{appController, *document};
+  auto& map = document->map();
+  const auto nodes = map.worldNode().defaultLayer()->children();
+  REQUIRE(nodes.size() == 2);
+  auto* large = dynamic_cast<mdl::BrushNode*>(nodes[0]);
+  auto* small = dynamic_cast<mdl::BrushNode*>(nodes[1]);
+  REQUIRE(large);
+  REQUIRE(small);
+  const auto largeFace = large->brush().findFace(vm::vec3d{0, 0, 1});
+  const auto smallFace = small->brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(largeFace);
+  REQUIRE(smallFace);
+  auto* row = editor.findChild<QSpinBox*>("sourceDisplacementRow");
+  auto* column = editor.findChild<QSpinBox*>("sourceDisplacementColumn");
+  auto* distance = editor.findChild<QDoubleSpinBox*>("sourceDisplacementDistance");
+  auto* apply = editor.findChild<QPushButton*>("sourceDisplacementApply");
+  REQUIRE(row);
+  REQUIRE(column);
+  REQUIRE(distance);
+  REQUIRE(apply);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*large, *largeFace}});
+  QApplication::processEvents();
+  REQUIRE(row->maximum() == 64);
+  row->setValue(64);
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*small, *smallFace}});
+  // No processEvents: the selection has changed but the queued refresh has not.
+  CHECK_NOTHROW(row->setValue(63));
+  CHECK(row->maximum() == 64);
+  QApplication::processEvents();
+  CHECK(row->maximum() == 4);
+  CHECK(row->value() == 4);
+  row->setValue(2);
+  column->setValue(2);
+  REQUIRE(distance->value() == 16);
+  REQUIRE(apply->isEnabled());
+  const auto count = map.modificationCount();
+  distance->setValue(24);
+  apply->click();
+  CHECK(map.modificationCount() == count + 1);
+  CHECK(small->brush().face(*smallFace).sourceDisplacement()->distance(2, 2) == 24);
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(distance->value() == 16);
+  CHECK(small->brush().face(*smallFace).sourceDisplacement()->distance(2, 2) == 16);
 }
 
 TEST_CASE("Source material settings group game mounts without changing the catalog")

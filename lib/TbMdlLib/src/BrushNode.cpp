@@ -48,11 +48,27 @@
 
 namespace tb::mdl
 {
+namespace
+{
+vm::bbox3d physicalBrushBounds(const Brush& brush)
+{
+  auto result = brush.bounds();
+  for (const auto& face : brush.faces())
+  {
+    if (const auto& displacement = face.sourceDisplacement())
+    {
+      result = vm::merge(result, displacement->bounds());
+    }
+  }
+  return result;
+}
+} // namespace
 const HitType::Type BrushNode::BrushHitType = HitType::freeType();
 
 BrushNode::BrushNode(Brush brush)
   : m_brushRendererBrushCache(std::make_unique<BrushRendererBrushCache>())
   , m_brush(std::move(brush))
+  , m_physicalBounds{physicalBrushBounds(m_brush)}
 {
   clearSelectedFaces();
 }
@@ -101,6 +117,7 @@ Brush BrushNode::setBrush(Brush brush)
 
   using std::swap;
   swap(m_brush, brush);
+  m_physicalBounds = physicalBrushBounds(m_brush);
 
   updateSelectedFaceCount();
   invalidateIssues();
@@ -159,13 +176,14 @@ static bool containsPatch(const Brush& brush, const PatchGrid& grid)
 
 bool BrushNode::contains(const Node& node) const
 {
-  return node.accept(kdl::overload(
-    [](const WorldNode&) { return false; },
-    [](const LayerNode&) { return false; },
-    [&](const GroupNode& group) { return m_brush.contains(group.logicalBounds()); },
-    [&](const EntityNode& entity) { return m_brush.contains(entity.logicalBounds()); },
-    [&](const BrushNode& brush) { return m_brush.contains(brush.brush()); },
-    [&](const PatchNode& patch) { return containsPatch(m_brush, patch.grid()); }));
+  return node.accept(
+    kdl::overload(
+      [](const WorldNode&) { return false; },
+      [](const LayerNode&) { return false; },
+      [&](const GroupNode& group) { return m_brush.contains(group.logicalBounds()); },
+      [&](const EntityNode& entity) { return m_brush.contains(entity.logicalBounds()); },
+      [&](const BrushNode& brush) { return m_brush.contains(brush.brush()); },
+      [&](const PatchNode& patch) { return containsPatch(m_brush, patch.grid()); }));
 }
 
 static bool faceIntersectsEdge(
@@ -233,13 +251,16 @@ static bool intersectsPatch(const Brush& brush, const PatchGrid& grid)
 
 bool BrushNode::intersects(const Node& node) const
 {
-  return node.accept(kdl::overload(
-    [](const WorldNode&) { return false; },
-    [](const LayerNode&) { return false; },
-    [&](const GroupNode& group) { return m_brush.intersects(group.logicalBounds()); },
-    [&](const EntityNode& entity) { return m_brush.intersects(entity.logicalBounds()); },
-    [&](const BrushNode& brush) { return m_brush.intersects(brush.brush()); },
-    [&](const PatchNode& patch) { return intersectsPatch(m_brush, patch.grid()); }));
+  return node.accept(
+    kdl::overload(
+      [](const WorldNode&) { return false; },
+      [](const LayerNode&) { return false; },
+      [&](const GroupNode& group) { return m_brush.intersects(group.logicalBounds()); },
+      [&](const EntityNode& entity) {
+        return m_brush.intersects(entity.logicalBounds());
+      },
+      [&](const BrushNode& brush) { return m_brush.intersects(brush.brush()); },
+      [&](const PatchNode& patch) { return intersectsPatch(m_brush, patch.grid()); }));
 }
 
 void BrushNode::clearSelectedFaces()
@@ -274,7 +295,7 @@ const std::string& BrushNode::doGetName() const
 
 const vm::bbox3d& BrushNode::doGetLogicalBounds() const
 {
-  return m_brush.bounds();
+  return m_physicalBounds;
 }
 
 const vm::bbox3d& BrushNode::doGetPhysicalBounds() const
@@ -368,6 +389,7 @@ void BrushNode::doFindNodesContaining(const vm::vec3d& point, std::vector<Node*>
 std::optional<std::tuple<double, size_t>> BrushNode::findFaceHit(
   const vm::ray3d& ray) const
 {
+  auto result = std::optional<std::tuple<double, size_t>>{};
   if (vm::intersect_ray_bbox(ray, logicalBounds()))
   {
     for (size_t i = 0u; i < m_brush.faceCount(); ++i)
@@ -375,11 +397,14 @@ std::optional<std::tuple<double, size_t>> BrushNode::findFaceHit(
       const auto& face = m_brush.face(i);
       if (const auto distance = face.intersectWithRay(ray))
       {
-        return std::tuple{*distance, i};
+        if (!result || *distance < std::get<0>(*result))
+        {
+          result = std::tuple{*distance, i};
+        }
       }
     }
   }
-  return std::nullopt;
+  return result;
 }
 
 Node* BrushNode::doGetContainer()

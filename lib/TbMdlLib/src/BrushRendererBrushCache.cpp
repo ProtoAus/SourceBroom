@@ -34,9 +34,32 @@ BrushRendererBrushCache::CachedFace::CachedFace(
   const mdl::BrushFace* i_face, const size_t i_indexOfFirstVertexRelativeToBrush)
   : material{i_face->material()}
   , face{i_face}
-  , vertexCount{i_face->vertexCount()}
+  , vertexCount{i_face->sourceDisplacement() ? i_face->sourceDisplacement()->positions().size() : i_face->vertexCount()}
+  , indexCount{i_face->sourceDisplacement() ? i_face->sourceDisplacement()->indices().size() : 3 * (i_face->vertexCount() - 2)}
   , indexOfFirstVertexRelativeToBrush{i_indexOfFirstVertexRelativeToBrush}
 {
+}
+
+void BrushRendererBrushCache::CachedFace::writeIndices(
+  const std::span<GLuint> target, const size_t firstVertex) const
+{
+  contract_pre(target.size() == indexCount);
+  if (const auto& displacement = face->sourceDisplacement())
+  {
+    for (size_t i = 0; i < indexCount; ++i)
+    {
+      target[i] = static_cast<GLuint>(firstVertex + displacement->indices()[i]);
+    }
+  }
+  else
+  {
+    for (size_t i = 0; i + 2 < vertexCount; ++i)
+    {
+      target[3 * i] = static_cast<GLuint>(firstVertex);
+      target[3 * i + 1] = static_cast<GLuint>(firstVertex + i + 1);
+      target[3 * i + 2] = static_cast<GLuint>(firstVertex + i + 2);
+    }
+  }
 }
 
 BrushRendererBrushCache::BrushRendererBrushCache()
@@ -70,7 +93,7 @@ void BrushRendererBrushCache::validateVertexCache(const mdl::BrushNode& brushNod
 
   for (const auto& face : brush.faces())
   {
-    const auto indexOfFirstVertexRelativeToBrush = m_cachedVertices.size();
+    auto indexOfFirstVertexRelativeToBrush = m_cachedVertices.size();
 
     // The boundary is in CCW order, but the renderer expects CW order:
     auto& boundary = face.geometry()->boundary();
@@ -93,6 +116,17 @@ void BrushRendererBrushCache::validateVertexCache(const mdl::BrushNode& brushNod
       currentHalfEdge = currentHalfEdge->previous();
     }
 
+    if (const auto& displacement = face.sourceDisplacement())
+    {
+      indexOfFirstVertexRelativeToBrush = m_cachedVertices.size();
+      for (size_t i = 0; i < displacement->positions().size(); ++i)
+      {
+        m_cachedVertices.emplace_back(
+          vm::vec3f{displacement->positions()[i]},
+          vm::vec3f{displacement->normals()[i]},
+          face.uvCoords(displacement->basePositions()[i]));
+      }
+    }
     // face cache
     m_cachedFacesSortedByMaterial.emplace_back(&face, indexOfFirstVertexRelativeToBrush);
   }
@@ -119,13 +153,62 @@ void BrushRendererBrushCache::validateVertexCache(const mdl::BrushNode& brushNod
     const auto& face1 = brush.face(*faceIndex1);
     const auto& face2 = brush.face(*faceIndex2);
 
+    if (face1.sourceDisplacement() && face2.sourceDisplacement())
+    {
+      continue;
+    }
     const auto vertexIndex1RelativeToBrush = currentEdge->firstVertex()->payload();
     const auto vertexIndex2RelativeToBrush = currentEdge->secondVertex()->payload();
 
-    m_cachedEdges.push_back(CachedEdge{
-      &face1, &face2, vertexIndex1RelativeToBrush, vertexIndex2RelativeToBrush});
+    m_cachedEdges.push_back(
+      CachedEdge{
+        face1.sourceDisplacement() ? &face2 : &face1,
+        face2.sourceDisplacement() ? &face1 : &face2,
+        vertexIndex1RelativeToBrush,
+        vertexIndex2RelativeToBrush});
   }
 
+  for (const auto& cached : m_cachedFacesSortedByMaterial)
+  {
+    if (const auto& displacement = cached.face->sourceDisplacement())
+    {
+      const auto side = displacement->size();
+      const auto edge = [&](const size_t a, const size_t b) {
+        m_cachedEdges.push_back(
+          CachedEdge{
+            cached.face,
+            cached.face,
+            static_cast<GLuint>(cached.indexOfFirstVertexRelativeToBrush + a),
+            static_cast<GLuint>(cached.indexOfFirstVertexRelativeToBrush + b)});
+      };
+      for (size_t y = 0; y < side; ++y)
+      {
+        for (size_t x = 0; x < side; ++x)
+        {
+          const auto i = y * side + x;
+          if (x + 1 < side)
+          {
+            edge(i, i + 1);
+          }
+          if (y + 1 < side)
+          {
+            edge(i, i + side);
+          }
+          if (x + 1 < side && y + 1 < side)
+          {
+            if ((x + y) % 2)
+            {
+              edge(i + 1, i + side);
+            }
+            else
+            {
+              edge(i, i + side + 1);
+            }
+          }
+        }
+      }
+    }
+  }
   m_rendererCacheValid = true;
 }
 

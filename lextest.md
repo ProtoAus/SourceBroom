@@ -143,6 +143,18 @@ This is qualitative prior-build feedback, not A5.3 acceptance or measured timing
   folder. Confirm no installed stock content or original BSP was changed. This
   visual/manual check is not licence or complete-dependency certification.
 
+## Native displacement development — pending candidate delivery and owner check
+
+- [ ] Open a **copy** of a CSS or Momentum VMF with a raised displacement.
+  Confirm the terrain is raised (not its old flat base) and face selection lands
+  on the visible surface. This is a quick appearance check, not shader parity.
+- [ ] Select one displacement face. In **Displacement vertex**, choose a row and
+  column with editable source data, apply a small distance change, then undo/redo.
+  Save As a new VMF and open the copy in matching Hammer++ to compare that vertex.
+  No original map is a write target. Creation, sculpt/power/sew and arbitrary base
+  transforms remain unsupported in this foundation; disabled/refused actions are
+  not permission to convert through MAP or overwrite the original.
+
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation
 or support for other Source branches from a visual check.

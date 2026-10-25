@@ -11,6 +11,7 @@
 #include "mdl/LayerNode.h"
 #include "mdl/MapFormat.h"
 #include "mdl/NodeContents.h"
+#include "mdl/SourceDisplacement.h"
 
 #include <algorithm>
 #include <cmath>
@@ -216,7 +217,10 @@ bool supportedConnections(
   return true;
 }
 
-bool opaque(const VmfDocument& d, VmfEntryId id)
+bool opaque(
+  const VmfDocument& d,
+  VmfEntryId id,
+  const std::set<VmfEntryId>* displacementSides = nullptr)
 {
   if (referencesGeometry(d, id))
   {
@@ -245,9 +249,32 @@ bool opaque(const VmfDocument& d, VmfEntryId id)
       const auto name = key(d, child);
       if (name == "solid" || name == "side" || name == "hidden")
       {
-        if (opaque(d, child))
+        if (opaque(d, child, displacementSides))
         {
           return true;
+        }
+      }
+      else if (name == "dispinfo" && displacementSides && displacementSides->contains(id))
+      {
+        const auto fields = std::set<std::string>{
+          "power",
+          "startposition",
+          "elevation",
+          "subdiv",
+          "flags",
+          "normals",
+          "distances",
+          "offsets",
+          "offset_normals",
+          "alphas",
+          "triangle_tags",
+          "allowed_verts"};
+        for (const auto field : d.entries()[child].children)
+        {
+          if (!fields.contains(key(d, field)))
+          {
+            return true;
+          }
         }
       }
       else if (name != "editor" && !supportedConnections(d, id, child))
@@ -598,6 +625,8 @@ VmfScene VmfScene::readImpl(
     std::move(config), entity(d, *worldId), MapFormat::SourceVMF);
   scene.m_world->setFilePosition(*worldId + 1, 1);
 
+  size_t displacementVertices = 0;
+  constexpr size_t maxDisplacementVertices = 1048576;
   const auto load = [&](auto&& self, VmfEntryId id, Node& parent, bool hidden) -> void {
     const auto name = key(d, id);
     if (name == "hidden")
@@ -703,6 +732,24 @@ VmfScene VmfScene::readImpl(
         {
           refuse(id, "solid construction discarded or clipped a native side");
         }
+        size_t addedVertices = 0;
+        for (size_t index = 0; index < brush.faceCount(); ++index)
+        {
+          auto& face = brush.face(index);
+          auto displacement = SourceDisplacement::read(
+            d,
+            face.lineNumber() - 1,
+            face.vertexPositions(),
+            face.normal(),
+            bounds,
+            maxDisplacementVertices - displacementVertices - addedVertices);
+          if (displacement)
+          {
+            addedVertices += displacement->positions().size();
+          }
+          face.setSourceDisplacement(std::move(displacement));
+        }
+        displacementVertices += addedVertices;
         auto node = std::make_unique<BrushNode>(std::move(brush));
         node->setFilePosition(id + 1, 1);
         if (hidden)
@@ -1344,6 +1391,14 @@ void VmfScene::nodeEdits(
     {
       refuse(id, "brush topology changed");
     }
+    auto displacementSides = std::set<VmfEntryId>{};
+    for (const auto& face : b.faces())
+    {
+      if (face.sourceDisplacement())
+      {
+        displacementSides.insert(face.lineNumber() - 1);
+      }
+    }
     auto sides = std::map<size_t, const BrushFace*>{};
     for (const auto& f : a.faces())
     {
@@ -1394,23 +1449,40 @@ void VmfScene::nodeEdits(
       {
         refuse(side, "surface attribute editing unsupported");
       }
-      const auto changed = f.points() != g.points()
-                           || f.materialName() != g.materialName() || uv != gv
-                           || fu->uAxis != gu->uAxis || fu->vAxis != gu->vAxis;
+      const auto displacementChanged = f.sourceDisplacement() != g.sourceDisplacement();
+      const auto changed =
+        f.points() != g.points() || f.materialName() != g.materialName() || uv != gv
+        || fu->uAxis != gu->uAxis || fu->vAxis != gu->vAxis || displacementChanged;
       if (!changed)
       {
         continue;
       }
-      if (opaque(d, id))
+      if (opaque(d, id, &displacementSides))
       {
-        refuse(id, "opaque/displacement attachment prevents safe brush edit");
+        refuse(id, "opaque attachment prevents safe brush edit");
       }
       if (protectExistingGeometry)
       {
         checkGeometryReferences(id);
       }
+      if (displacementChanged)
+      {
+        if (!f.sourceDisplacement() || !g.sourceDisplacement())
+        {
+          refuse(side, "displacement structure changed");
+        }
+        const auto displacementEdits =
+          g.sourceDisplacement()->editsFrom(*f.sourceDisplacement());
+        edits.insert(edits.end(), displacementEdits.begin(), displacementEdits.end());
+      }
       if (f.points() != g.points())
       {
+        if (std::any_of(b.faces().begin(), b.faces().end(), [](const auto& face) {
+              return bool(face.sourceDisplacement());
+            }))
+        {
+          refuse(side, "displacement base transform is not yet supported");
+        }
         edit(side, "plane", planeText(g));
       }
       if (f.materialName() != g.materialName())

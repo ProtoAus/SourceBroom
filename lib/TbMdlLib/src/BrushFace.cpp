@@ -103,6 +103,7 @@ BrushFace::BrushFace(const BrushFace& other)
   , m_uvCoordSystem{other.m_uvCoordSystem}
   , m_surfaceAttributes{other.m_surfaceAttributes}
   , m_materialReference{other.m_materialReference}
+  , m_sourceDisplacement{other.m_sourceDisplacement}
   , m_lineNumber{other.m_lineNumber}
   , m_lineCount{other.m_lineCount}
   , m_selected{other.m_selected}
@@ -121,6 +122,7 @@ BrushFace::BrushFace(BrushFace&& other) noexcept
   , m_surfaceAttributes{std::move(other.m_surfaceAttributes)}
   , m_materialReference{std::move(other.m_materialReference)}
   , m_geometry{other.m_geometry}
+  , m_sourceDisplacement{std::move(other.m_sourceDisplacement)}
   , m_lineNumber{other.m_lineNumber}
   , m_lineCount{other.m_lineCount}
   , m_selected{other.m_selected}
@@ -147,6 +149,7 @@ void swap(BrushFace& lhs, BrushFace& rhs) noexcept
   swap(lhs.m_materialReference, rhs.m_materialReference);
   swap(lhs.m_uvCoordSystem, rhs.m_uvCoordSystem);
   swap(lhs.m_geometry, rhs.m_geometry);
+  swap(lhs.m_sourceDisplacement, rhs.m_sourceDisplacement);
   swap(lhs.m_lineNumber, rhs.m_lineNumber);
   swap(lhs.m_lineCount, rhs.m_lineCount);
   swap(lhs.m_selected, rhs.m_selected);
@@ -925,6 +928,10 @@ std::optional<double> BrushFace::intersectWithRay(const vm::ray3d& ray) const
 {
   contract_pre(m_geometry != nullptr);
 
+  if (m_sourceDisplacement)
+  {
+    return m_sourceDisplacement->intersect(ray);
+  }
   const auto cos = vm::dot(m_boundary.normal, ray.direction);
   return cos < 0.0 ? vm::intersect_ray_polygon(
                        ray,

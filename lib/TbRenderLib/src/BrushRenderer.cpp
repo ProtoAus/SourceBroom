@@ -607,11 +607,11 @@ void BrushRenderer::validateBrush(const mdl::BrushNode& brushNode)
         contract_assert(cache.material == material);
         if (shouldDrawFaceInTransparentPass(brushNode, *cache.face, material))
         {
-          transparentIndexCount += triIndicesCountForPolygon(cache.vertexCount);
+          transparentIndexCount += cache.indexCount;
         }
         else
         {
-          opaqueIndexCount += triIndicesCountForPolygon(cache.vertexCount);
+          opaqueIndexCount += cache.indexCount;
         }
       }
     }
@@ -640,17 +640,19 @@ void BrushRenderer::validateBrush(const mdl::BrushNode& brushNode)
           cache.face->isMarked()
           && shouldDrawFaceInTransparentPass(brushNode, *cache.face, material))
         {
-          addTriIndicesForPolygon(
-            currentDest,
-            static_cast<GLuint>(
-              brushVerticesStartIndex + cache.indexOfFirstVertexRelativeToBrush),
-            cache.vertexCount);
+          cache.writeIndices(
+            std::span{currentDest, cache.indexCount},
+            brushVerticesStartIndex + cache.indexOfFirstVertexRelativeToBrush);
 
-          currentDest += triIndicesCountForPolygon(cache.vertexCount);
+          currentDest += cache.indexCount;
 
           // Used to sort this (brush, material) group against every other transparent
           // group by distance to the camera -- see FaceRenderer's sorted-draw mode.
-          sortPositionSum = sortPositionSum + vm::vec3f{cache.face->center()};
+          sortPositionSum = sortPositionSum
+                            + vm::vec3f{
+                              cache.face->sourceDisplacement()
+                                ? cache.face->sourceDisplacement()->bounds().center()
+                                : cache.face->center()};
           ++sortPositionCount;
         }
       }
@@ -684,13 +686,11 @@ void BrushRenderer::validateBrush(const mdl::BrushNode& brushNode)
           cache.face->isMarked()
           && !shouldDrawFaceInTransparentPass(brushNode, *cache.face, material))
         {
-          addTriIndicesForPolygon(
-            currentDest,
-            static_cast<GLuint>(
-              brushVerticesStartIndex + cache.indexOfFirstVertexRelativeToBrush),
-            cache.vertexCount);
+          cache.writeIndices(
+            std::span{currentDest, cache.indexCount},
+            brushVerticesStartIndex + cache.indexOfFirstVertexRelativeToBrush);
 
-          currentDest += triIndicesCountForPolygon(cache.vertexCount);
+          currentDest += cache.indexCount;
         }
       }
 
@@ -707,8 +707,9 @@ std::shared_ptr<std::vector<TransparentDrawItem>> BrushRenderer::
   {
     for (const auto& key : info.transparentFaceIndicesKeys)
     {
-      items->push_back(TransparentDrawItem{
-        key.material, key.block->pos, key.block->size, key.sortPosition});
+      items->push_back(
+        TransparentDrawItem{
+          key.material, key.block->pos, key.block->size, key.sortPosition});
     }
   }
   return items;

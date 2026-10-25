@@ -2,11 +2,13 @@
  Copyright (C) 2026 ProtoAus
  SPDX-License-Identifier: GPL-3.0-or-later
  */
+#include "SourceDisplacementFixture.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushNode.h"
 #include "mdl/BrushRendererBrushCache.h"
 #include "mdl/EditorContext.h"
 #include "mdl/EntityNode.h"
+#include "mdl/Hit.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
 #include "mdl/MapFixture.h"
@@ -14,6 +16,7 @@
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/NodeContents.h"
+#include "mdl/PickResult.h"
 #include "mdl/SourceEditorMetadata.h"
 #include "mdl/VmfScene.h"
 
@@ -27,6 +30,7 @@
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 namespace tb::mdl
 {
@@ -113,6 +117,147 @@ TEST_CASE("VmfScene renderer vertices keep outward clockwise faces", "[vmf]")
     }
     CHECK(triangles == 12);
     CHECK(scene.serialize(scene.world()) == source);
+  }
+}
+
+TEST_CASE("VmfScene native displacement mesh", "[vmf]")
+{
+  const auto bounds = vm::bbox3d{4096};
+  const auto source = fixture(false, test::displacementBlock());
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  const auto faceIndex = node.brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(faceIndex);
+  const auto& face = node.brush().face(*faceIndex);
+  REQUIRE(face.sourceDisplacement());
+  const auto& mesh = *face.sourceDisplacement();
+  CHECK(mesh.positions()[1] == vm::vec3d{16, 0, 64});
+  CHECK(mesh.positions()[5] == vm::vec3d{0, 16, 64});
+  CHECK(mesh.positions()[12] == vm::vec3d{32, 32, 80});
+  CHECK(mesh.normals()[12].z() > 0);
+  CHECK(mesh.alphas()[4] == 255);
+  CHECK(node.physicalBounds().max.z() == 80);
+  CHECK(scene.serialize(scene.world()) == source);
+
+  SECTION("renderer submits the native grid rather than a planar polygon fan")
+  {
+    auto cache = BrushRendererBrushCache{};
+    cache.validateVertexCache(node);
+    const auto& faces = cache.cachedFacesSortedByMaterial();
+    const auto found = std::find_if(faces.begin(), faces.end(), [](const auto& f) {
+      return bool(f.face->sourceDisplacement());
+    });
+    REQUIRE(found != faces.end());
+    CHECK(found->vertexCount == 25);
+    CHECK(found->indexCount == 96);
+    const auto first = found->indexOfFirstVertexRelativeToBrush;
+    CHECK(cache.cachedVertices()[first + 12].attr == vm::vec3f{32, 32, 80});
+    CHECK(
+      cache.cachedVertices()[first + 12].rest.rest.attr
+      == face.uvCoords(vm::vec3d{32, 32, 64}));
+    auto indices = std::vector<GLuint>(found->indexCount);
+    found->writeIndices(indices, first + 200);
+    for (size_t i = 0; i < indices.size(); ++i)
+    {
+      CHECK(indices[i] == first + 200 + mesh.indices()[i]);
+    }
+    CHECK(cache.cachedEdges().size() > 50);
+    const auto sideIndex = node.brush().findFace(vm::vec3d{1, 0, 0});
+    REQUIRE(sideIndex);
+    const auto* neighbor = &node.brush().face(*sideIndex);
+    const auto highlighted = std::count_if(
+      cache.cachedEdges().begin(), cache.cachedEdges().end(), [&](const auto& edge) {
+        const auto a = cache.cachedVertices()[edge.vertexIndex1RelativeToBrush].attr;
+        const auto b = cache.cachedVertices()[edge.vertexIndex2RelativeToBrush].attr;
+        return edge.face1 == neighbor && edge.face2 == neighbor && a.z() == 64
+               && b.z() == 64;
+      });
+    CHECK(highlighted == 1);
+  }
+  SECTION("pick hits the raised surface outside the original hull")
+  {
+    auto hits = PickResult{};
+    node.pick(EditorContext{}, vm::ray3d{{32, 32, 128}, {0, 0, -1}}, hits);
+    REQUIRE(hits.size() == 1);
+    CHECK(hits.all()[0].distance() == Catch::Approx(48));
+    CHECK(hits.all()[0].hitPoint() == vm::vec3d{32, 32, 80});
+  }
+  SECTION("distance and material edits preserve unrelated native bytes")
+  {
+    auto copy = node.brush();
+    auto edited = *copy.face(*faceIndex).sourceDisplacement();
+    edited.setDistance(2, 2, 24);
+    copy.face(*faceIndex).setSourceDisplacement(std::move(edited));
+    node.setBrush(std::move(copy));
+    CHECK(mesh.positions()[12].z() == 80);
+    CHECK(node.physicalBounds().max.z() == 88);
+    auto expected = source;
+    const auto token = expected.find("+0  16  0");
+    REQUIRE(token != std::string::npos);
+    expected.replace(token, 9, "+0  24  0");
+    const auto saved = scene.serialize(scene.world());
+    CHECK(saved == expected);
+    auto reopened = VmfScene::read(saved, bounds);
+    CHECK(
+      brush(reopened.world())
+        .brush()
+        .face(*faceIndex)
+        .sourceDisplacement()
+        ->distance(2, 2)
+      == 24);
+    auto materialEdit = node.brush();
+    materialEdit.face(*faceIndex).setMaterialName("synthetic/changed");
+    node.setBrush(std::move(materialEdit));
+    CHECK(scene.serialize(scene.world()).find("synthetic/changed") != std::string::npos);
+  }
+  SECTION("malformed meshes refuse strictly and are counted as preview omissions")
+  {
+    auto invalid = source;
+    const auto token = invalid.find("+0  16  0");
+    REQUIRE(token != std::string::npos);
+    invalid.replace(token, 9, "+0  nan  0");
+    CHECK_THROWS_AS(VmfScene::read(invalid, bounds), std::invalid_argument);
+    auto preview = VmfScene::readReadOnlyPreview(invalid, bounds);
+    CHECK(preview.unprojectedSolidCount() == 1);
+    CHECK(preview.serialize(preview.world()) == invalid);
+  }
+}
+
+TEST_CASE("VmfScene only parsed displacement sides relax opaque guards", "[vmf]")
+{
+  const auto misplaced =
+    GENERATE(std::string{"none"}, std::string{"solid"}, std::string{"nested side"});
+  auto source = fixture();
+  if (misplaced != "none")
+  {
+    const auto owner = misplaced == "solid" ? std::string{"solid { \"id\" \"2\""}
+                                            : std::string{"side { \"id\" \"3\""};
+    const auto at = source.find(owner);
+    REQUIRE(at != std::string::npos);
+    const auto attachment = misplaced == "solid"
+                              ? test::displacementBlock()
+                              : "side { id 99 " + test::displacementBlock() + " }";
+    source.insert(at + owner.size(), "\n" + attachment + "\n");
+  }
+  auto scene = VmfScene::read(source, vm::bbox3d{4096});
+  auto& node = brush(scene.world());
+  CHECK(scene.serialize(scene.world()) == source);
+  for (const auto& face : node.brush().faces())
+  {
+    REQUIRE_FALSE(face.sourceDisplacement());
+  }
+  auto moved = node.brush();
+  REQUIRE(
+    moved.transform(vm::bbox3d{4096}, vm::translation_matrix(vm::vec3d{16, 8, 4}), false)
+      .is_success());
+  node.setBrush(std::move(moved));
+  if (misplaced == "none")
+  {
+    CHECK(scene.serialize(scene.world()) != source);
+  }
+  else
+  {
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
 }
 
@@ -434,7 +579,7 @@ TEST_CASE("VmfScene", "[vmf]")
   SECTION("hidden and displacement bytes survive but transforms refuse")
   {
     const auto source =
-      fixture(true, "dispinfo { \"power\" \"2\" normals { \"row0\" \"0 0 1\" } }", true);
+      fixture(true, "sourcebroom_opaque_geometry { key \"preserved\" }", true);
     auto scene = VmfScene::read(source, bounds);
     CHECK(brush(scene.world()).visibilityState() == VisibilityState::Hidden);
     CHECK_FALSE(scene.diagnostics().empty());
@@ -620,7 +765,8 @@ TEST_CASE("VmfScene", "[vmf]")
     }
     // Interpreting metadata does not make geometry-bearing opaque blocks editable.
     auto opaque = VmfScene::read(
-      fixture(false, "dispinfo { \"power\" \"2\" }") + metadataBytes, bounds);
+      fixture(false, "sourcebroom_opaque_geometry { key \"preserved\" }") + metadataBytes,
+      bounds);
     CHECK(SourceEditorMetadata::read(opaque.document()).cameras[0].navigable());
     CHECK(opaque.serialize(opaque.world()) == opaque.document().source());
     translate(brush(opaque.world()));

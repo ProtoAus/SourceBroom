@@ -38,6 +38,13 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
+Development now includes bounded native displacement meshes (rendering, picking,
+bounds and existing-vertex distance edits with undo/preserving save), and 13 more
+common integer VTF pixel layouts. The installed candidate remains A5.7 pending
+replacement verification. Sculpt/create/power/sew, base transforms, alpha-material
+blending and full Source support are not complete; see the roadmap and validation
+for the exact automated controls and the retained preference-test failure.
+
 Strict editable loading still constructs **35/38** supplied maps. After explicit
 permission, a clearly labelled **read-only compatibility preview** opens all
 **38/38**, preserving duplicate IDs and original bytes while counting any solids

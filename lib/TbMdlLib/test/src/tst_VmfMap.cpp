@@ -3,6 +3,7 @@
  SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#include "SourceDisplacementFixture.h"
 #include "fs/TestEnvironment.h"
 #include "mdl/AddRemoveNodesCommand.h"
 #include "mdl/Brush.h"
@@ -14,6 +15,7 @@
 #include "mdl/EntityNode.h"
 #include "mdl/ExportOptions.h"
 #include "mdl/GameConfig.h"
+#include "mdl/Hit.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
 #include "mdl/MapFixture.h"
@@ -24,10 +26,12 @@
 #include "mdl/Map_Geometry.h"
 #include "mdl/Map_NodeVisibility.h"
 #include "mdl/Map_Nodes.h"
+#include "mdl/Map_Picking.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/Node.h"
 #include "mdl/NodeContents.h"
 #include "mdl/PasteType.h"
+#include "mdl/PickResult.h"
 #include "mdl/SwapNodeContentsCommand.h"
 #include "mdl/UndoableCommand.h"
 #include "mdl/VmfDocument.h"
@@ -398,6 +402,75 @@ TEST_CASE("VmfMap read-only compatibility safety", "[vmf]")
   CHECK(control.worldNode().entity().hasProperty("readonly_probe"));
   REQUIRE(acted.performUndo(control));
   CHECK(calls == 2);
+}
+
+TEST_CASE("VmfMap displacement distance undo and safe save", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto originalPath = env.dir() / "displacement.vmf";
+  const auto outputPath = env.dir() / "displacement edited.vmf";
+  auto original = nativeRamp(false);
+  const auto topPlane = original.find("(0 0 32) (0 64 32) (64 0 64)");
+  REQUIRE(topPlane != std::string::npos);
+  original.replace(
+    topPlane,
+    std::string{"(0 0 32) (0 64 32) (64 0 64)"}.size(),
+    "(0 0 64) (0 64 64) (64 0 64)");
+  const auto topSide = original.find("\"id\" \"8\"");
+  REQUIRE(topSide != std::string::npos);
+  const auto field = original.find("\"smoothing_groups\" \"0\"", topSide);
+  REQUIRE(field != std::string::npos);
+  original.insert(field, test::displacementBlock());
+  writeBinary(originalPath, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    originalPath,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto& node = ramp(map);
+  const auto index = node.brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(index);
+  REQUIRE(node.brush().face(*index).sourceDisplacement());
+  selectBrushFaces(map, {BrushFaceHandle{node, *index}});
+  const auto count = map.modificationCount();
+  auto hits = PickResult{};
+  pick(map, vm::ray3d{{32, 32, 128}, {0, 0, -1}}, hits);
+  REQUIRE_FALSE(hits.empty());
+  CHECK(hits.all()[0].distance() == Catch::Approx(48));
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24));
+  CHECK(map.modificationCount() == count + 1);
+  CHECK(node.physicalBounds().max.z() == 88);
+  REQUIRE(map.undoCommandName());
+  CHECK(*map.undoCommandName() == "Change Displacement Distance");
+  hits = PickResult{};
+  pick(map, vm::ray3d{{32, 32, 128}, {0, 0, -1}}, hits);
+  REQUIRE_FALSE(hits.empty());
+  CHECK(hits.all()[0].distance() == Catch::Approx(40));
+  const auto changedCount = map.modificationCount();
+  CHECK_FALSE(setSourceDisplacementDistance(map, 5, 2, 10));
+  CHECK_FALSE(setSourceDisplacementDistance(map, 2, 2, 10000));
+  CHECK(map.modificationCount() == changedCount);
+  CHECK(node.brush().face(*index).sourceDisplacement()->distance(2, 2) == 24);
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24));
+  CHECK(map.modificationCount() == changedCount);
+  map.undoCommand();
+  CHECK(node.brush().face(*index).sourceDisplacement()->distance(2, 2) == 16);
+  CHECK(node.physicalBounds().max.z() == 80);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  map.redoCommand();
+  CHECK(node.brush().face(*index).sourceDisplacement()->distance(2, 2) == 24);
+  REQUIRE(map.saveAs(outputPath).is_success());
+  auto expected = original;
+  const auto sample = expected.find("+0  16  0");
+  REQUIRE(sample != std::string::npos);
+  expected.replace(sample, 9, "+0  24  0");
+  CHECK(readBinary(outputPath) == expected);
+  CHECK(readBinary(originalPath) == original);
+  auto reopened = MapFixture{};
+  auto& loaded = reopened.load(
+    outputPath,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  CHECK(ramp(loaded).brush().face(*index).sourceDisplacement()->distance(2, 2) == 24);
+  CHECK(ramp(loaded).physicalBounds().max.z() == 88);
 }
 
 TEST_CASE("VmfMap", "[vmf]")
@@ -1288,7 +1361,7 @@ TEST_CASE("VmfMap", "[vmf]")
       const auto needle = std::string{"\"smoothing_groups\" \"0\""};
       original.insert(
         original.find(needle) + needle.size(),
-        " dispinfo { power 2 normals { row0 \"0 0 1\" } }");
+        " sourcebroom_opaque_geometry { key \"preserved\" }");
     }
     writeBinary(path, original);
     auto fixture = MapFixture{};

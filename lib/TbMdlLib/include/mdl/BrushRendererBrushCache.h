@@ -21,6 +21,7 @@
 
 #include "gl/VertexType.h"
 
+#include <span>
 #include <vector>
 
 namespace tb
@@ -46,9 +47,11 @@ public:
     const gl::Material* material;
     const BrushFace* face;
     size_t vertexCount;
+    size_t indexCount;
     size_t indexOfFirstVertexRelativeToBrush;
 
     CachedFace(const BrushFace* i_face, size_t i_indexOfFirstVertexRelativeToBrush);
+    void writeIndices(std::span<GLuint> target, size_t firstVertex) const;
   };
 
   struct CachedEdge

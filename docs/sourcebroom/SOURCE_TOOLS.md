@@ -213,6 +213,22 @@ of licence rights, a self-contained map, valid gameplay or compatibility with
 another branch. Review exclusions and runtime dependencies, then test the package
 in the intended Source game with only its declared prerequisites installed.
 
+## Native displacement distance editing (development)
+
+The development branch renders and picks admitted native power2..6 displacement
+meshes rather than their flat base faces. Select exactly one displacement **face**
+to show a **Displacement vertex** row/column/distance section in the face inspector.
+Choose a grid row and column, enter a distance and click **Apply distance**. This
+uses normal undo/redo and preserving Save As. The row/column order is the native
+Source grid, not a screen-space brush. The tool is disabled when the original
+normal/distance data is incomplete or cannot safely express a distance change.
+
+Use a copy until manual/Hammer acceptance is recorded. Unknown attachments and
+references remain guarded; missing or malformed meshes are not silently replaced
+by a flat editable proxy. This is not a sculpt brush, creation/power/sew tool,
+blend-material preview or permission to transform arbitrary displacement bases.
+The installed A5.7 package does not contain this development section yet.
+
 ## Still outside this candidate
 
 Basic plain-object authoring does not imply arbitrary topology or native

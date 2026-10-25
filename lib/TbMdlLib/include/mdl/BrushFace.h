@@ -23,6 +23,7 @@
 #include "base/Result.h"
 #include "mdl/AssetReference.h"
 #include "mdl/BrushGeometry.h"
+#include "mdl/SourceDisplacement.h"
 #include "mdl/SurfaceAttributes.h"
 #include "mdl/Tag.h"
 #include "mdl/UvAttributes.h"
@@ -97,6 +98,7 @@ private:
 
   AssetReference<gl::Material> m_materialReference;
   BrushFaceGeometry* m_geometry = nullptr;
+  std::shared_ptr<const SourceDisplacement> m_sourceDisplacement;
 
   mutable size_t m_lineNumber = 0;
   mutable size_t m_lineCount = 0;
@@ -125,7 +127,8 @@ public:
     m_surfaceAttributes,
     m_materialReference,
     m_uvCoordSystem,
-    m_preservePlanePrecision);
+    m_preservePlanePrecision,
+    m_sourceDisplacement);
 
   /**
    * Creates a face using TB's default UV projection for the given map format and the
@@ -239,6 +242,16 @@ public:
   const BrushFace::Points& points() const;
   const vm::plane3d& boundary() const;
   const vm::vec3d& normal() const;
+  const std::shared_ptr<const SourceDisplacement>& sourceDisplacement() const
+  {
+    return m_sourceDisplacement;
+  }
+  void setSourceDisplacement(std::optional<SourceDisplacement> displacement)
+  {
+    m_sourceDisplacement =
+      displacement ? std::make_shared<const SourceDisplacement>(std::move(*displacement))
+                   : nullptr;
+  }
   vm::vec3d center() const;
   vm::bbox3d bounds() const;
   vm::vec3d boundsCenter() const;

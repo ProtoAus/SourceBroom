@@ -97,6 +97,7 @@ target_sources(TbMdlLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SourceCapabilities.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SourceDependencyPack.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SourceEditorMetadata.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SourceDisplacement.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadMdxModel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadMipTexture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadShaders.cpp

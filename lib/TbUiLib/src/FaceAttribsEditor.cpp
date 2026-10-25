@@ -20,8 +20,11 @@
 #include "ui/FaceAttribsEditor.h"
 
 #include <QApplication>
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
+#include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QtGlobal>
@@ -609,6 +612,42 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   ++r;
   c = 0;
 
+  m_displacementEditor = new QWidget{};
+  auto* displacementLayout = new QGridLayout{m_displacementEditor};
+  displacementLayout->setContentsMargins(0, 0, 0, 0);
+  displacementLayout->addWidget(new QLabel{tr("Displacement vertex")}, 0, 0, 1, 4);
+  m_displacementRow = new QSpinBox{};
+  m_displacementRow->setObjectName("sourceDisplacementRow");
+  m_displacementColumn = new QSpinBox{};
+  m_displacementColumn->setObjectName("sourceDisplacementColumn");
+  m_displacementDistance = new QDoubleSpinBox{};
+  m_displacementDistance->setObjectName("sourceDisplacementDistance");
+  m_displacementDistance->setRange(-1048576.0, 1048576.0);
+  m_displacementDistance->setDecimals(6);
+  m_applyDisplacement = new QPushButton{tr("Apply distance")};
+  m_applyDisplacement->setObjectName("sourceDisplacementApply");
+  displacementLayout->addWidget(new QLabel{tr("Row")}, 1, 0);
+  displacementLayout->addWidget(m_displacementRow, 1, 1);
+  displacementLayout->addWidget(new QLabel{tr("Column")}, 1, 2);
+  displacementLayout->addWidget(m_displacementColumn, 1, 3);
+  displacementLayout->addWidget(new QLabel{tr("Distance")}, 2, 0);
+  displacementLayout->addWidget(m_displacementDistance, 2, 1, 1, 2);
+  displacementLayout->addWidget(m_applyDisplacement, 2, 3);
+  faceAttribsLayout->addWidget(m_displacementEditor, r, 0, 1, 4);
+  connect(m_displacementRow, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
+    updateDisplacementSample();
+  });
+  connect(m_displacementColumn, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
+    updateDisplacementSample();
+  });
+  connect(m_applyDisplacement, &QAbstractButton::clicked, this, [this] {
+    mdl::setSourceDisplacementDistance(
+      m_document.map(),
+      static_cast<size_t>(m_displacementRow->value()),
+      static_cast<size_t>(m_displacementColumn->value()),
+      m_displacementDistance->value());
+    updateControls();
+  });
   faceAttribsLayout->setColumnStretch(1, 1);
   faceAttribsLayout->setColumnStretch(3, 1);
 
@@ -751,6 +790,24 @@ static void setValueOrMulti(QDoubleSpinBox* box, const bool multi, const double 
   }
 }
 
+void FaceAttribsEditor::updateDisplacementSample()
+{
+  const auto faces = m_document.map().selection().allBrushFaces();
+  if (faces.size() != 1 || !faces[0].face().sourceDisplacement())
+  {
+    return;
+  }
+  const auto& displacement = *faces[0].face().sourceDisplacement();
+  const auto row = static_cast<size_t>(m_displacementRow->value());
+  const auto column = static_cast<size_t>(m_displacementColumn->value());
+  // Selection updates are deferred; the controls may still describe a larger grid.
+  if (row >= displacement.size() || column >= displacement.size())
+  {
+    return;
+  }
+  m_displacementDistance->setValue(displacement.distance(row, column));
+}
+
 void FaceAttribsEditor::updateControls()
 {
   // block signals emitted when updating the editor values
@@ -781,6 +838,21 @@ void FaceAttribsEditor::updateControls()
   setColorAttribEditorVisible(hasColorAttribs());
 
   const auto faceHandles = m_document.map().selection().allBrushFaces();
+  const auto displacement =
+    faceHandles.size() == 1 ? faceHandles[0].face().sourceDisplacement() : nullptr;
+  m_displacementEditor->setVisible(bool(displacement));
+  m_displacementEditor->setEnabled(
+    displacement && displacement->canEditDistances()
+    && !m_document.map().isReadOnlyVmfPreview());
+  if (displacement)
+  {
+    const auto blockRow = QSignalBlocker{m_displacementRow};
+    const auto blockColumn = QSignalBlocker{m_displacementColumn};
+    const auto maximum = static_cast<int>(displacement->size() - 1);
+    m_displacementRow->setRange(0, maximum);
+    m_displacementColumn->setRange(0, maximum);
+    updateDisplacementSample();
+  }
   if (!faceHandles.empty())
   {
     auto materialMulti = false;

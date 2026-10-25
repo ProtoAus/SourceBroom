@@ -57,6 +57,7 @@ enum class UvFitDirection
 bool createBrush(Map& map, const std::vector<vm::vec3d>& points);
 
 bool setBrushFaceAttributes(Map& map, const UpdateBrushFaceAttributes& update);
+bool setSourceDisplacementDistance(Map& map, size_t row, size_t column, double distance);
 
 bool copyUv(
   Map& map,

@@ -5,6 +5,32 @@ paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
+## Native mesh / integer VTF development (not yet packaged)
+
+The development branch adds bounded native displacement geometry and existing
+vertex-distance editing; A5.7 remains the installed candidate. Mesh triangles,
+base-position UVs, raised ray/rtree hits and bounds, surgical token save/reopen,
+undo/redo, malformed meshes, misplaced attachments and ordinary-face shared-edge
+ownership have acted synthetic controls. The real inspector test switches
+power6 row64 to power2 without draining its queued refresh, then applies a centre
+distance change and undoes it: 21 assertions pass. Native/VTF focus passes 3,182
+assertions in 37 cases; the exact integer VTF loader case passes 276 assertions.
+
+The normal baseline is Fs20/20, Gl21/21, Mdl178/178 and Ui42/43. The untouched
+QPreferenceStore Windows `Access denied` replacement failure occurred again and
+remains preserved/unfixed, not an all-green claim. Added guard/inspector cases
+pass separately. The unchanged five-configuration Source alpha GPU control still
+passes 2,539 assertions; this is not a new displacement visual/Hammer acceptance.
+All 38 corpus originals keep their SHA256: document38/38, strict35/38 and explicit
+read-only38/38, with the same three strict refusals and no new loader regression.
+
+Displacement creation, sculpt/power/sew, native base transforms, alpha-material
+blending, overlay/instance authoring and full shader/model parity remain missing.
+The integer-format work does not add HDR/palette/normal/animated/cubemap/volume
+support or claim a startup/whole-map speed gain. Independent review's two guard
+findings and the adjacent-edge selection defect were fixed with acted controls;
+manual native mesh appearance and independent Hammer checks remain pending.
+
 ## Current implementation boundary
 
 | Area | Implemented and checked | Not implied |

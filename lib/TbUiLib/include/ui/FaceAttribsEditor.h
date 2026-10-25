@@ -29,6 +29,8 @@ class QAbstractButton;
 class QLabel;
 class QLineEdit;
 class QGridLayout;
+class QSpinBox;
+class QDoubleSpinBox;
 
 namespace tb
 {
@@ -91,6 +93,11 @@ private:
   QLineEdit* m_colorEditor = nullptr;
   QAbstractButton* m_colorUnsetButton = nullptr;
 
+  QWidget* m_displacementEditor = nullptr;
+  QSpinBox* m_displacementRow = nullptr;
+  QSpinBox* m_displacementColumn = nullptr;
+  QDoubleSpinBox* m_displacementDistance = nullptr;
+  QAbstractButton* m_applyDisplacement = nullptr;
   SignalDelayer* m_updateControlsSignalDelayer = nullptr;
 
   NotifierConnection m_notifierConnection;
@@ -121,6 +128,7 @@ private:
   void surfaceValueUnset();
   void colorValueUnset();
   void updateIncrements();
+  void updateDisplacementSample();
 
 private:
   void createGui(AppController& appController);

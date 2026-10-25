@@ -61,6 +61,7 @@ public:
 private:
   mutable std::unique_ptr<BrushRendererBrushCache> m_brushRendererBrushCache;
   Brush m_brush; // must be destroyed before the brush renderer cache
+  vm::bbox3d m_physicalBounds;
   size_t m_selectedFaceCount = 0u;
 
 public:

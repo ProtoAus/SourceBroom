@@ -215,6 +215,39 @@ bool setBrushFaceAttributes(Map& map, const UpdateBrushFaceAttributes& update)
     });
 }
 
+bool setSourceDisplacementDistance(
+  Map& map, const size_t row, const size_t column, const double distance)
+{
+  const auto faces = map.selection().allBrushFaces();
+  if (!map.vmfScene() || faces.size() != 1 || !faces[0].face().sourceDisplacement())
+  {
+    return false;
+  }
+  const auto& displacement = *faces[0].face().sourceDisplacement();
+  if (row >= displacement.size() || column >= displacement.size())
+  {
+    return false;
+  }
+  if (displacement.distance(row, column) == distance)
+  {
+    return true;
+  }
+  return applyAndSwap(map, "Change Displacement Distance", faces, [&](auto& face) {
+    try
+    {
+      auto displacement = *face.sourceDisplacement();
+      displacement.setDistance(row, column, distance);
+      face.setSourceDisplacement(std::move(displacement));
+      return true;
+    }
+    catch (const std::exception& error)
+    {
+      map.logger().error() << "Could not change displacement: " << error.what();
+      return false;
+    }
+  });
+}
+
 bool copyUv(
   Map& map,
   const UvCoordSystemSnapshot& coordSystemSnapshot,

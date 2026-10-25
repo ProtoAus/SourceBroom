@@ -223,6 +223,33 @@ zlib's expected size. `loadVtfTexture` tests include independently authored lite
 pixel/mip and compressed-stream oracles, direct-layout controls, exact and one-byte
 under-budget checks, truncation, and explicit unsupported formats.
 
+## Native displacement mesh and distance controls
+
+`SourceDisplacement` is the bounded scene representation of an admitted side's
+`dispinfo`, not a conversion to a Quake patch. Power2..6 grids use the Source
+start-corner/alternating triangle layout, authored direction/distance/offset and
+elevation, and undeformed base positions for UVs. Derived normals, triangles and
+bounds feed the normal brush cache and picking. A document-wide 1,048,576-vertex
+budget precedes allocation; numeric rows reject excess values while reading.
+Immutable shared mesh data keeps plain face size and ordinary copies bounded.
+
+The selected-face distance command is a normal preflight/content-swap operation.
+It changes only existing distance-number spans, supports undo/redo and preserving
+Save As/reopen, and refuses invalid indices/nonfinite/out-of-world edits before
+mutation. Sparse/missing/zero-direction authoring data does not enable this tool.
+The inspector's queued selection refresh may lag a row-change signal: always
+check indices against the **current selected mesh**, not the old widget range.
+
+Only parser-admitted displacement sides relax the opaque-attachment check;
+misplaced/nested unparsed blocks remain opaque. Unknown fields, native geometry
+references, base transforms, duplication, deletion and topology remain guarded.
+The native grid owns its wire edges; adjacent ordinary faces retain their own
+base boundary for selected-edge highlighting. Tests cover actual cache vertices,
+UVs and triangle indices, raised ray/rtree hits, bounds, one-token save/undo and
+real inspector Apply/undo plus the large-grid-to-small-grid queued-refresh case.
+This foundation is not sculpt/create/power/sew, alpha-material blending, overlays,
+instances or complete Source rendering. Build/test is not visual owner acceptance.
+
 ## A5.3 texture progress controls
 
 Resource-manager tests prove progress past a busy prefix, cursor survival across
