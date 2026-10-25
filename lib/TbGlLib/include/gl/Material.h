@@ -177,6 +177,7 @@ public:
 
   MaterialCulling culling() const;
   void setCulling(MaterialCulling culling);
+  MaterialCulling effectiveCulling() const;
 
   void setBlendFunc(GLenum srcFactor, GLenum destFactor);
   void disableBlend();

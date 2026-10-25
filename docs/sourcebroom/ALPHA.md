@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.5 Patch-material candidate
+# Try the Windows SourceBroom A5.6 two-sided-material candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,24 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.5: inherited Source Patch materials
+## A5.6: two-sided Source materials
+
+Basic Source `$nocull 1` now makes demanded brush and static-prop base-image
+previews two-sided, including flags inherited or replaced through a Patch VMT.
+Absent/false flags keep normal culling, and explicit editor material overrides
+still win. Drawing restores the actual previous culling, blend and depth state;
+this is not another winding flip or a global disable of backface culling.
+Original map/material files are not rewritten and catalog metadata does not
+trigger texture loading. Malformed/duplicate flags refuse; strict material
+inspection remains strict. This does not reproduce Source backface lighting or
+add geometry, displacements or complete shader support.
+
+**Optional quick check:** open a copied map with a familiar two-sided fence,
+foliage or thin prop, and look from both sides. Compare the matching game's
+material without editing its installed VMT. Keep the prior A5.5 folder/ZIP as
+recovery; owner appearance confirmation is still pending.
+
+## Retained A5.5: inherited Source Patch materials
 
 Brush and static-prop textures can now resolve a Source **Patch VMT** through the
 configured mounted filesystem, instead of rejecting that wrapper outright.
@@ -183,14 +200,14 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current A5.5 filesystem/graphics/model suites pass **20/20, 21/21, 173/173**.
-  Normal UI is **42/43**: the unchanged Windows preference rename failure also
-  failed its isolated retry. It remains unresolved, not an all-green claim or
-  an A5.5 preference fix. Focused Patch controls pass 974 assertions and existing
-  GPU controls pass 394; [VALIDATION.md](VALIDATION.md) distinguishes older 255
-  full-pass evidence and package receipts identify the actual installed checks.
+- Current A5.6 filesystem/graphics/model/UI suites pass
+  **20/20, 21/21, 174/174, 43/43** (258 entries). The historically intermittent
+  Windows preference rename failure remains unfixed, not a preference-fix claim.
+  Focused graphics/model controls pass **945/2414 assertions**, and expanded
+  five-config GPU controls pass **1994**. [VALIDATION.md](VALIDATION.md) and package
+  receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep the accepted A5.4 package as recovery; do not merge package DLL sets.
+  Keep prior A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

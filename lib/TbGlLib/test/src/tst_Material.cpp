@@ -34,9 +34,11 @@ namespace tb::gl
 namespace
 {
 
-std::shared_ptr<TextureResource> makeReadyTextureResource(Gl& gl)
+std::shared_ptr<TextureResource> makeReadyTextureResource(
+  Gl& gl, EmbeddedDefaults defaults = NoEmbeddedDefaults{})
 {
   auto texture = Texture{4, 4};
+  texture.setEmbeddedDefaults(std::move(defaults));
   texture.upload(gl);
   return createTextureResource(std::move(texture));
 }
@@ -73,6 +75,7 @@ TEST_CASE("Material")
       CHECK(material.texture() == nullptr);
       CHECK(std::as_const(material).texture() == nullptr);
       CHECK(material.textureResource().get() == nullptr);
+      CHECK(material.effectiveCulling() == MaterialCulling::Default);
     }
     CHECK_FALSE(resource->needsProcessing());
     auto gl = MockGl{};
@@ -182,6 +185,10 @@ TEST_CASE("Material")
       };
       using CullingCall = std::pair<Call, GLenum>;
 
+      auto pushedAttribs = std::vector<GLbitfield>{};
+      auto poppedAttribs = size_t{0};
+      gl.onPushAttrib = [&](auto mask) { pushedAttribs.push_back(mask); };
+      gl.onPopAttrib = [&]() { ++poppedAttribs; };
       auto activateCalls = std::vector<CullingCall>{};
       gl.onEnable = [&](const GLenum cap) {
         activateCalls.emplace_back(Call::Enable, cap);
@@ -204,23 +211,52 @@ TEST_CASE("Material")
       {
       case MaterialCulling::None:
         CHECK(onActivate == std::vector<CullingCall>{{Call::Disable, GL_CULL_FACE}});
-        CHECK(onDeactivate == std::vector<CullingCall>{{Call::Enable, GL_CULL_FACE}});
         break;
       case MaterialCulling::Front:
         CHECK(onActivate == std::vector<CullingCall>{{Call::CullFace, GL_FRONT}});
-        CHECK(onDeactivate == std::vector<CullingCall>{{Call::CullFace, GL_BACK}});
         break;
       case MaterialCulling::Both:
         CHECK(
           onActivate == std::vector<CullingCall>{{Call::CullFace, GL_FRONT_AND_BACK}});
-        CHECK(onDeactivate == std::vector<CullingCall>{{Call::CullFace, GL_BACK}});
         break;
       case MaterialCulling::Back:
       case MaterialCulling::Default:
         CHECK(onActivate.empty());
-        CHECK(onDeactivate.empty());
         break;
       }
+      CHECK(onDeactivate.empty());
+      const auto scoped =
+        culling != MaterialCulling::Default && culling != MaterialCulling::Back;
+      CHECK(
+        pushedAttribs
+        == (scoped ? std::vector<GLbitfield>{GL_POLYGON_BIT} : std::vector<GLbitfield>{}));
+      CHECK(poppedAttribs == (scoped ? 1u : 0u));
+    }
+
+    SECTION("Source polygon state scopes nest before blend and depth")
+    {
+      auto material =
+        Material{"source", makeReadyTextureResource(gl, SourceEmbeddedDefaults{true})};
+      material.setBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      auto pushes = std::vector<GLbitfield>{};
+      auto pops = size_t{0};
+      gl.onPushAttrib = [&](auto mask) { pushes.push_back(mask); };
+      gl.onPopAttrib = [&]() { ++pops; };
+      auto disabled = std::vector<GLenum>{};
+      gl.onDisable = [&](auto cap) { disabled.push_back(cap); };
+      gl.onBlendFunc = [](auto src, auto dst) {
+        CHECK(src == GL_SRC_ALPHA);
+        CHECK(dst == GL_ONE_MINUS_SRC_ALPHA);
+      };
+      gl.onDepthMask = [](auto value) { CHECK(value == GL_FALSE); };
+      material.activate(gl, GL_NEAREST, GL_NEAREST);
+      CHECK(disabled == std::vector<GLenum>{GL_CULL_FACE});
+      CHECK(
+        pushes
+        == std::vector<GLbitfield>{
+          GL_POLYGON_BIT, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT});
+      material.deactivate(gl);
+      CHECK(pops == 2);
     }
 
     SECTION("apply the blend func set by setBlendFunc or disableBlend")
@@ -309,6 +345,33 @@ TEST_CASE("Material")
       material.deactivate(gl);
       CHECK(poppedAttribCount == 1);
     }
+  }
+
+  SECTION("Source culling hints only derive from configured Default")
+  {
+    auto gl = MockGl{};
+    installTextureUploadSupport(gl);
+    for (const auto noCull : {false, true})
+    {
+      auto material =
+        Material{"source", makeReadyTextureResource(gl, SourceEmbeddedDefaults{noCull})};
+      CHECK(material.culling() == MaterialCulling::Default);
+      CHECK(
+        material.effectiveCulling()
+        == (noCull ? MaterialCulling::None : MaterialCulling::Default));
+      for (const auto override :
+           {MaterialCulling::None,
+            MaterialCulling::Front,
+            MaterialCulling::Back,
+            MaterialCulling::Both})
+      {
+        material.setCulling(override);
+        CHECK(material.effectiveCulling() == override);
+      }
+    }
+    auto generic =
+      Material{"q2", makeReadyTextureResource(gl, Q2EmbeddedDefaults{1, 2, 3})};
+    CHECK(generic.effectiveCulling() == MaterialCulling::Default);
   }
 
   SECTION("effectiveAlphaFunc and effectiveBlendFunc")

@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <set>
+#include <tuple>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -32,6 +33,31 @@ std::shared_ptr<fs::File> file(const std::string& bytes)
   std::copy(bytes.begin(), bytes.end(), buffer.get());
   return std::make_shared<fs::OwningBufferFile>(std::move(buffer), bytes.size());
 }
+test::SyntheticProp withMaterialSkins(test::SyntheticProp prop)
+{
+  prop.mdl.resize(1200);
+  test::put(prop.mdl, 76, uint32_t(prop.mdl.size()));
+  test::put(prop.mdl, 204, 3);
+  test::put(prop.mdl, 208, 760);
+  for (size_t i = 0; i < 3; ++i)
+  {
+    test::put(prop.mdl, 760 + 64 * i, uint32_t(960 + 10 * i - (760 + 64 * i)));
+  }
+  prop.mdl.replace(960, 5, "metal");
+  prop.mdl.replace(970, 5, "other");
+  prop.mdl.replace(980, 5, "third");
+  test::put(prop.mdl, 216, 1100);
+  test::put(prop.mdl, 1100, 1104);
+  prop.mdl.replace(1104, 12, "models/test/");
+  test::put(prop.mdl, 224, 4);
+  test::put(prop.mdl, 228, 1000);
+  for (size_t i = 0; i < 4; ++i)
+  {
+    test::put(prop.mdl, 1000 + 2 * i, uint32_t(i % 3), 2);
+  }
+  return prop;
+}
+
 fs::TestFileSystem modelFileSystem(
   const test::SyntheticProp& prop,
   bool sidecars = true,
@@ -77,7 +103,7 @@ fs::TestFileSystem modelFileSystem(
                       : "VertexLitGeneric { $basetexture Models/Test/Pixel "
                           + materialParameters + " }")},
     fs::FileEntry{
-      "other.vmt", file("VertexLitGeneric { $basetexture models/test/other }")},
+      "other.vmt", file("VertexLitGeneric { $basetexture models/test/pixel }")},
     fs::FileEntry{
       "third.vmt", file("VertexLitGeneric { $basetexture models/test/third }")},
     fs::FileEntry{"other.vtf", file(vtf)},
@@ -210,22 +236,7 @@ TEST_CASE("loadSourceModel")
   }
   SECTION("aggregate budget charges unique retained mips and shared fallback")
   {
-    prop.mdl.resize(1200);
-    test::put(prop.mdl, 76, uint32_t(prop.mdl.size()));
-    test::put(prop.mdl, 204, 3);
-    test::put(prop.mdl, 208, 760);
-    for (size_t i = 0; i < 3; ++i)
-      test::put(prop.mdl, 760 + 64 * i, uint32_t(960 + 10 * i - (760 + 64 * i)));
-    prop.mdl.replace(960, 5, "metal");
-    prop.mdl.replace(970, 5, "other");
-    prop.mdl.replace(980, 5, "third");
-    test::put(prop.mdl, 216, 1100);
-    test::put(prop.mdl, 1100, 1104);
-    prop.mdl.replace(1104, 12, "models/test/");
-    test::put(prop.mdl, 224, 4);
-    test::put(prop.mdl, 228, 1000);
-    for (size_t i = 0; i < 4; ++i)
-      test::put(prop.mdl, 1000 + 2 * i, uint32_t(i % 3), 2);
+    prop = withMaterialSkins(std::move(prop));
     auto fs = modelFileSystem(prop, true, true);
     for (const auto allowance : {36u, 40u})
     {
@@ -283,7 +294,7 @@ TEST_CASE("loadSourceModel")
     CHECK(loadSourceModel("prop.mdl", missing, logger).is_error());
   }
 }
-TEST_CASE("Source VMT alpha controls brush and prop render policy")
+TEST_CASE("Source VMT alpha and culling control brush and prop render policy")
 {
   const auto modes = std::vector<std::pair<std::string, img::ImageAlphaDomain>>{
     {"", img::ImageAlphaDomain::Opaque},
@@ -296,19 +307,30 @@ TEST_CASE("Source VMT alpha controls brush and prop render policy")
   };
   auto taskManager = kdl::task_manager{2};
   auto logger = NullLogger{};
-  for (const auto [flags, patched] :
-       {std::pair{0u, false},
-        std::pair{0x1000u, false},
-        std::pair{0x2000u, false},
-        std::pair{0u, true},
-        std::pair{0x1000u, true},
-        std::pair{0x2000u, true}})
+  for (const auto& [flags, patched, noCull] :
+       {std::tuple{0u, false, false},
+        std::tuple{0x1000u, false, false},
+        std::tuple{0x2000u, false, false},
+        std::tuple{0u, true, false},
+        std::tuple{0x1000u, true, false},
+        std::tuple{0x2000u, true, false},
+        std::tuple{0u, false, true},
+        std::tuple{0x1000u, false, true},
+        std::tuple{0x2000u, false, true},
+        std::tuple{0u, true, true},
+        std::tuple{0x1000u, true, true},
+        std::tuple{0x2000u, true, true}})
   {
     for (const auto& [parameters, expected] : modes)
     {
-      CAPTURE(flags, parameters, patched);
-      auto fs =
-        modelFileSystem(test::SyntheticProp{}, true, false, parameters, flags, patched);
+      CAPTURE(flags, parameters, patched, noCull);
+      auto fs = modelFileSystem(
+        withMaterialSkins(test::SyntheticProp{}),
+        true,
+        false,
+        parameters + (noCull ? " $nocull 1" : " $nocull 0"),
+        flags,
+        patched);
       const auto raw =
         loadTexture("materials/models/test/pixel.vtf", "raw", fs, {}) | kdl::value();
       CHECK(
@@ -336,6 +358,10 @@ TEST_CASE("Source VMT alpha controls brush and prop render policy")
       const auto model = loadSourceModel("prop.mdl", fs, logger) | kdl::value();
       const auto* prop = model.surface(0).skin(0);
       REQUIRE(prop);
+      const auto* sameImage = model.surface(0).skin(1);
+      REQUIRE(sameImage);
+      CHECK(sameImage->effectiveCulling() == gl::MaterialCulling::Default);
+      CHECK(raw.embeddedDefaults() == gl::EmbeddedDefaults{gl::NoEmbeddedDefaults{}});
       for (const auto* material : {brush, prop})
       {
         REQUIRE(material->texture());
@@ -343,6 +369,13 @@ TEST_CASE("Source VMT alpha controls brush and prop render policy")
         CHECK(material->texture()->width() == 1);
         CHECK(material->texture()->height() == 1);
         CHECK(material->texture()->alphaDomain() == expected);
+        CHECK(
+          material->texture()->embeddedDefaults()
+          == gl::EmbeddedDefaults{gl::SourceEmbeddedDefaults{noCull}});
+        CHECK(material->culling() == gl::MaterialCulling::Default);
+        CHECK(
+          material->effectiveCulling()
+          == (noCull ? gl::MaterialCulling::None : gl::MaterialCulling::Default));
         const auto blend = material->effectiveBlendFunc();
         CHECK(
           blend.enable

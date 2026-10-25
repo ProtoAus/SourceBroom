@@ -565,6 +565,113 @@ void main() {
         resource->dropSync(gl);
       }
     }
+    struct CullState
+    {
+      bool enabled;
+      GLenum mode;
+      GLenum frontFace;
+    };
+    gl.pushAttrib(GL_POLYGON_BIT);
+    for (const auto state :
+         {CullState{true, GL_BACK, GL_CW},
+          CullState{false, GL_FRONT, GL_CW},
+          CullState{true, GL_FRONT, GL_CCW},
+          CullState{true, GL_FRONT_AND_BACK, GL_CW}})
+    {
+      for (const auto noCull : {false, true})
+      {
+        for (const auto overrideFront : {false, true})
+        {
+          for (const auto graduated : {false, true})
+          {
+            CAPTURE(
+              config.name,
+              state.enabled,
+              state.mode,
+              state.frontFace,
+              noCull,
+              overrideFront,
+              graduated);
+            auto pixels = gl::TextureBuffer{4};
+            const auto rgba = std::array<uint8_t, 4>{
+              255, 0, 0, static_cast<uint8_t>(graduated ? 128 : 255)};
+            std::copy(rgba.begin(), rgba.end(), pixels.data());
+            auto texture = gl::Texture{
+              1,
+              1,
+              Color{RgbaF{1, 0, 0, 1}},
+              GL_RGBA,
+              gl::SourceEmbeddedDefaults{noCull},
+              std::move(pixels)};
+            texture.setAlphaDomain(
+              graduated ? img::ImageAlphaDomain::Graduated
+                        : img::ImageAlphaDomain::Opaque);
+            auto resource = gl::createTextureResource(std::move(texture));
+            resource->uploadSync(gl);
+            auto material = gl::Material{"authored culling control", resource};
+            material.setRelativePath("control.vmt");
+            if (overrideFront)
+            {
+              material.setCulling(gl::MaterialCulling::Front);
+            }
+            if (face)
+            {
+              shader.set("Alpha", 1.0f);
+            }
+            gl::setAlphaFuncUniforms(shader, &material);
+            if (state.enabled)
+            {
+              gl.enable(GL_CULL_FACE);
+            }
+            else
+            {
+              gl.disable(GL_CULL_FACE);
+            }
+            gl.cullFace(state.mode);
+            functions->glFrontFace(state.frontFace);
+            gl.enable(GL_BLEND);
+            gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            gl.depthMask(GL_TRUE);
+            gl.clearColor(0, 0, 1, 1);
+            gl.clear(GL_COLOR_BUFFER_BIT);
+            material.activate(gl, GL_NEAREST, GL_NEAREST);
+            const auto activeCull = state.enabled && (overrideFront || !noCull);
+            const auto activeMode = overrideFront ? GLenum{GL_FRONT} : state.mode;
+            CHECK(
+              functions->glIsEnabled(GL_CULL_FACE) == (activeCull ? GL_TRUE : GL_FALSE));
+            auto mode = GLint{};
+            functions->glGetIntegerv(GL_CULL_FACE_MODE, &mode);
+            CHECK(mode == static_cast<GLint>(activeMode));
+            auto depth = GLboolean{};
+            gl.getBooleanv(GL_DEPTH_WRITEMASK, &depth);
+            CHECK(depth == (graduated ? GL_FALSE : GL_TRUE));
+            gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+            auto pixel = std::array<uint8_t, 4>{};
+            functions->glReadPixels(4, 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+            const auto front = state.frontFace == GL_CCW;
+            const auto visible =
+              !activeCull
+              || (activeMode != GL_FRONT_AND_BACK && !(activeMode == GL_FRONT && front) && !(activeMode == GL_BACK && !front));
+            const auto red = visible ? (graduated ? 128 : 255) : 0;
+            CHECK(std::abs(int(pixel[0]) - red) <= 2);
+            CHECK(std::abs(int(pixel[2]) - (255 - red)) <= 2);
+            material.deactivate(gl);
+            CHECK(
+              functions->glIsEnabled(GL_CULL_FACE)
+              == (state.enabled ? GL_TRUE : GL_FALSE));
+            functions->glGetIntegerv(GL_CULL_FACE_MODE, &mode);
+            CHECK(mode == static_cast<GLint>(state.mode));
+            functions->glGetIntegerv(GL_FRONT_FACE, &mode);
+            CHECK(mode == static_cast<GLint>(state.frontFace));
+            CHECK(functions->glIsEnabled(GL_BLEND) == GL_TRUE);
+            gl.getBooleanv(GL_DEPTH_WRITEMASK, &depth);
+            CHECK(depth == GL_TRUE);
+            resource->dropSync(gl);
+          }
+        }
+      }
+    }
+    gl.popAttrib();
   }
   CHECK(gl.getError() == GL_NO_ERROR);
 }

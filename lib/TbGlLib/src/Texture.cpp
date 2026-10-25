@@ -166,6 +166,7 @@ std::ostream& operator<<(std::ostream& lhs, const EmbeddedDefaults& rhs)
 
 kdl_reflect_impl(NoEmbeddedDefaults);
 kdl_reflect_impl(Q2EmbeddedDefaults);
+kdl_reflect_impl(SourceEmbeddedDefaults);
 
 kdl_reflect_impl(TextureLoadedState);
 kdl_reflect_impl(TextureReadyState);
@@ -252,6 +253,11 @@ void Texture::setAlphaDomain(const img::ImageAlphaDomain alphaDomain)
 const EmbeddedDefaults& Texture::embeddedDefaults() const
 {
   return m_embeddedDefaults;
+}
+
+void Texture::setEmbeddedDefaults(EmbeddedDefaults defaults)
+{
+  m_embeddedDefaults = std::move(defaults);
 }
 
 bool Texture::isReady() const

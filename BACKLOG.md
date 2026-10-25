@@ -30,7 +30,8 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   implement arbitrary `$alphatestreference`, combined translucent/cutout blending,
   scalar `$alpha`, proxies or full shader effects. A5.5 resolves bounded scalar
   Patch inheritance; nested/conditional/proxy/deletion and overlapping operations
-  remain unsupported rather than guessed. Basic cutout uses 0.5. Falsifier
+  remain unsupported rather than guessed. A5.6 adds basic `$nocull` and scoped
+  polygon-state restoration, not backface lighting. Basic cutout uses 0.5. Falsifier
   for expanding support: authored controls against the matching Source shader
   retain raw cutout ordering, actual opacity, editor fade, non-Source draw state
   and deferred loading without inventing unsupported effects.
@@ -55,8 +56,9 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   but A5.3 also observed another full-run failure followed by an isolated pass.
   A5.4 again failed the first full run, then passed alone and full 43/43.
   A5.5 observed full 42/43 and an isolated failure; both were preserved rather
-  than retried for green. These passes do not establish a fix. Earlier runs observed intermittent sharing
-  failures. The host/watcher cause is not conclusively diagnosed and no
+  than retried for green. A5.6's full UI run passed 43/43 with no preference-code
+  change. These passes do not establish a fix. Earlier runs observed intermittent
+  sharing failures. The host/watcher cause is not conclusively diagnosed and no
   unrelated product/test code was changed to conceal it. Falsifier: a bounded
   same-host control consistently performs both atomic replacements, observes
   the actual reload notifications/values, and preserves missing/malformed-file

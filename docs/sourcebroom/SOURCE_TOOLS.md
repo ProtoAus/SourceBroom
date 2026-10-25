@@ -1,4 +1,4 @@
-# Native Source authoring tools — bounded A5.5 candidate
+# Native Source authoring tools — bounded A5.6 candidate
 
 SourceBroom edits native Source 1 VMF, not a converted Quake MAP. CSS and
 Momentum/Strata are the first tested profiles; generic Source paths and external
@@ -105,6 +105,15 @@ Includes must stay in relative `materials/... .vmt` paths, with 1 MiB/file,
 or material-file writes. Nested/proxy, empty-value deletion, duplicate/overlapping
 operations and unsafe/missing/cyclic includes refuse explicitly. This does not
 add geometry patches, displacements or full shader/conditional semantics.
+
+A5.6 also honors basic `$nocull` for demanded brush/prop base-image previews,
+including resolved Patch flags. Only configured Default derives two-sided
+culling from a tagged Source hint; explicit editor material overrides win.
+Previous polygon enable/mode/front-face state is restored after drawing, nested
+with existing blend/depth state. No catalog-time decoding, geometry/winding
+change or original material rewrite is introduced. Absent/false flags retain
+normal culling; invalid/duplicate flags refuse and strict inspection still
+rejects unsupported features. Two-sided preview is not Source backface lighting.
 
 ## Static prop preview
 

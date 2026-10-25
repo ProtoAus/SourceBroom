@@ -394,11 +394,12 @@ Result<SourceMaterialInfo> parseMaterial(
     }
     auto translucent = false;
     auto alphaTest = false;
-    for (const auto* flag : {"$translucent", "$alphatest"})
+    auto noCull = false;
+    for (const auto* flag : {"$translucent", "$alphatest", "$nocull"})
     {
       if (std::ranges::count(shader.children, std::string{flag}, &Entry::key) > 1)
       {
-        return Error{"Repeated Source alpha flag requires explicit resolution"};
+        return Error{"Repeated Source material flag requires explicit resolution"};
       }
       if (const auto* entry = child(shader.children, flag))
       {
@@ -413,13 +414,17 @@ Result<SourceMaterialInfo> parseMaterial(
             parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()
             || (number != 0.0f && number != 1.0f))
           {
-            return Error{"Unsupported Source alpha flag: " + std::string{flag}};
+            return Error{"Unsupported Source material flag: " + std::string{flag}};
           }
           enabled = number == 1.0f;
         }
         if (entry->key == "$alphatest")
         {
           alphaTest = enabled;
+        }
+        else if (entry->key == "$nocull")
+        {
+          noCull = enabled;
         }
         else
         {
@@ -432,7 +437,8 @@ Result<SourceMaterialInfo> parseMaterial(
       std::filesystem::path{"materials"} / path,
       alphaTest     ? img::ImageAlphaDomain::Binary
       : translucent ? img::ImageAlphaDomain::Graduated
-                    : img::ImageAlphaDomain::Opaque};
+                    : img::ImageAlphaDomain::Opaque,
+      noCull};
   }
   catch (const std::runtime_error& e)
   {

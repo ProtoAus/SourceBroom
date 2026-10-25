@@ -217,14 +217,14 @@ TEST_CASE("Source material Patch resolution")
     game "|gameinfo_path|."
   } } })");
   env.createFile("materials/base.vmt", R"(VertexLitGeneric {
-    $basetexture wrong $translucent 1
+    $basetexture wrong $translucent 1 $nocull 1
   })");
   env.createFile("materials/middle.vmt", R"(Patch {
     include "materials/base.vmt" replace { $basetexture brick/wall }
   })");
   const auto patch = R"(pAtCh {
     include "MATERIALS\\middle.VMT"
-    insert { $translucent 0 $alphatest 1 $surfaceprop brick }
+    insert { $translucent 0 $alphatest 1 $surfaceprop brick $nocull 0 }
   })";
   env.createFile("materials/derived.vmt", patch);
   REQUIRE(env.fileExists("materials/derived.vmt"));
@@ -241,6 +241,11 @@ TEST_CASE("Source material Patch resolution")
   const auto info = result | kdl::value();
   CHECK(info.baseTexture == "materials/brick/wall.vtf");
   CHECK(info.alphaDomain == img::ImageAlphaDomain::Binary);
+  CHECK_FALSE(info.noCull);
+  const auto inherited = loadSourceMaterial(
+    "materials/middle.vmt", fs, SourceMaterialMode::BaseTexturePreview);
+  REQUIRE(inherited.is_success());
+  CHECK((inherited | kdl::value()).noCull);
   CHECK(loadSourceMaterial("materials/derived.vmt", fs).is_error());
   const auto original = fs.openFile("materials/derived.vmt") | kdl::value();
   CHECK(original->reader().readString(original->size()) == before);
@@ -410,6 +415,36 @@ TEST_CASE("Source material Patch safety and mounted precedence")
     CHECK((result | kdl::value()).baseTexture == "materials/priority/winner.vtf");
     CHECK(env.loadFile("materials/base.vmt") == base);
   }
+}
+
+TEST_CASE("Source VMT no-cull policy")
+{
+  const auto parse = [](const std::string& flags) {
+    return sourceMaterial(
+      "UnlitGeneric { $basetexture test/pixel " + flags + " }",
+      SourceMaterialMode::BaseTexturePreview);
+  };
+  for (const auto* flags : {"", "$nocull 0", "$nocull false", "$NoCull 0.0"})
+  {
+    const auto result = parse(flags);
+    REQUIRE(result.is_success());
+    CHECK_FALSE((result | kdl::value()).noCull);
+    CHECK((result | kdl::value()).alphaDomain == img::ImageAlphaDomain::Opaque);
+  }
+  for (const auto* flags : {"$nocull 1", "$nocull true", "$NoCull 1.0"})
+  {
+    const auto result = parse(flags);
+    REQUIRE(result.is_success());
+    CHECK((result | kdl::value()).noCull);
+    CHECK((result | kdl::value()).alphaDomain == img::ImageAlphaDomain::Opaque);
+  }
+  for (const auto* flags :
+       {"$nocull 2", "$nocull nan", "$nocull nope", "$nocull {}", "$nocull 0 $NoCull 1"})
+  {
+    CAPTURE(flags);
+    CHECK(parse(flags).is_error());
+  }
+  CHECK(sourceMaterial("UnlitGeneric { $basetexture test/pixel $nocull 1 }").is_error());
 }
 
 TEST_CASE("SourceContent")

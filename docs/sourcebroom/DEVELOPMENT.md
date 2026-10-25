@@ -94,6 +94,29 @@ pixels, then explicitly requests a texture to prove the loader acts. Keep game
 files/logs private and report the workload; this is not an end-to-end benchmark
 or a substitute for visual acceptance.
 
+## A5.6 two-sided material / polygon-state contracts
+
+Preview-only `$nocull` uses the existing bounded boolean policy after direct or
+Patch resolution. Both demanded brush and prop loads carry the Source-only hint
+in tagged `SourceEmbeddedDefaults`; Q2/default metadata and VMT cache identity
+remain separate. `Material::culling()` is configured policy; `effectiveCulling()`
+peeks without requesting loading and derives None only with configured Default.
+Explicit overrides win. Do not eagerly inspect the catalog or cache by base-image
+identity: two VMTs using the same image may have different draw hints.
+
+A real culling override saves `GL_POLYGON_BIT` before blend/depth attributes and
+pops in reverse order. Never guess that prior culling was enabled or GL_BACK.
+None/Front/Both are scoped; Default/Back keep existing no-op behavior. Readiness
+still gates activation/deactivation. The EmbeddedDefaults variant/API changed;
+build all six affected product/test targets and inspect actual dependencies,
+not an assumed equal size. The existing opt-in five-config GPU case now includes
+160 acted pixel/state culling scenarios alongside the retained alpha/fade arms.
+
+New tests need explicit MockGl disable/blend/depth callbacks, and the base
+SyntheticProp has only one skin. Reuse the existing aggregate-budget multi-skin
+fixture for same-image metadata isolation rather than assuming skin(1) exists.
+Neither fixture correction weakens a product or pixel assertion.
+
 ## A5.5 Patch material contracts / measured pitfalls
 
 `loadSourceMaterial` resolves only demanded scalar Patch chains through the
@@ -110,7 +133,7 @@ must keep the valid counterpart. Do not replace the generic Reader contract.
 Use a resolver-local ordered index of inherited key positions/occurrence counts;
 count/find per operation is quadratic even under text limits. Stable numeric
 indices survive vector inserts; the 40k+40k control checks acted override, not a
-performance promise. No public Material/Texture class-layout change is needed.
+performance promise. A5.5 did not require a public Material/Texture layout change.
 
 Tests must create fixture parent directories and compare exact before/after
 bytes, not LF literals with Windows text-mode files. Capture subprocess output

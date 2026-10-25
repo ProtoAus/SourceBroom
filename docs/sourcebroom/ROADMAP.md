@@ -53,10 +53,13 @@ compatible merely because they also use VMF.
   The owner accepted the observed A5.4 visual retry; detailed Hammer/authoring
   gates remain pending. A5.5 adds bounded, on-demand scalar Patch VMT inheritance
   for brush/prop textures through existing mounts, not full Patch/shader support.
-  [Validation](VALIDATION.md) records current Fs20/Gl21/Mdl173 passes, focused 974
-  and GPU 394 assertions. UI42/43 and its isolated retry retain the unchanged
-  Windows preference rename failure, unfixed. Earlier reviewed full255 evidence
-  is historical; final receipts retain the source/binary/run distinctions.
+  A5.6 adds demanded `$nocull` two-sided brush/prop previews and scoped restoration
+  of prior polygon state, preserving explicit overrides and existing alpha/fade.
+  This is not backface lighting or another winding/shader rewrite.
+  [Validation](VALIDATION.md) records current Fs20/Gl21/Mdl174/Ui43 passes,
+  focused Gl945/Mdl2414 and GPU1994 assertions. The earlier intermittent Windows
+  preference rename failure remains unfixed despite the current passing run.
+  Final receipts retain the source/binary/run distinctions and appearance gates.
 - A6 is not implemented. No Source compiler, Valve content, or third-party/user
   map is bundled. See [alpha instructions](ALPHA.md) for the owner test path.
 

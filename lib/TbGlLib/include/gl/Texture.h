@@ -47,7 +47,15 @@ struct Q2EmbeddedDefaults
   kdl_reflect_decl(Q2EmbeddedDefaults, flags, contents, value);
 };
 
-using EmbeddedDefaults = std::variant<NoEmbeddedDefaults, Q2EmbeddedDefaults>;
+// Source VMT render hints travel with demanded pixels, not catalog metadata.
+struct SourceEmbeddedDefaults
+{
+  bool noCull = false;
+  kdl_reflect_decl(SourceEmbeddedDefaults, noCull);
+};
+
+using EmbeddedDefaults =
+  std::variant<NoEmbeddedDefaults, Q2EmbeddedDefaults, SourceEmbeddedDefaults>;
 
 std::ostream& operator<<(std::ostream& lhs, const EmbeddedDefaults& rhs);
 
@@ -136,6 +144,7 @@ public:
   void setAlphaDomain(img::ImageAlphaDomain alphaDomain);
 
   const EmbeddedDefaults& embeddedDefaults() const;
+  void setEmbeddedDefaults(EmbeddedDefaults defaults);
 
   bool isReady() const;
 

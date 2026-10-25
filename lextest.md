@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom A4/A5/A5.5 candidates
+# Human acceptance — SourceBroom A4/A5/A5.6 candidates
 
 Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
@@ -42,6 +42,15 @@ in material settings and request game-named material-root entries. This confirms
 that opening observation only: exact binary/profile hashes, complete geometry,
 correct rendering and improved texture latency were not independently confirmed.
 External map names/content stay out of public notes.
+
+## A5.6 two-sided material appearance — pending
+
+- [ ] In a **copied** map with matching content, look at a familiar two-sided
+  fence, foliage or thin prop from both sides and compare the game. Do not edit
+  installed VMTs or the original map. Report a remaining fallback or unexpected
+  transparency; this is an appearance check, not full backface lighting, all
+  models/shaders or numerical performance acceptance. The continuation request
+  after A5.5 did not itself confirm A5.5 or A5.6 appearance.
 
 ## A5.5 inherited Patch material appearance — pending
 

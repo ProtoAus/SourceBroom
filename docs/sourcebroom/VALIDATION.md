@@ -1,4 +1,4 @@
-# SourceBroom validation — A5.5 bounded Patch-material follow-up
+# SourceBroom validation — A5.6 bounded two-sided-material follow-up
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
@@ -29,9 +29,9 @@ not substituted for compilation or runtime checks.
 
 | Check | Actual result |
 | --- | --- |
-| Current filesystem / graphics / model CTest suites | **20/20 + 21/21 + 173/173 passed** |
-| Current normal UI / preference history | **42/43**; unchanged QPreferenceStore Windows rename failure also failed its isolated retry. Unfixed; earlier reviewed A5.4 Fs20/Gl21/Mdl171/Ui43 full255 pass remains historical, not an all-runs-green claim |
-| Focused Patch and rendering controls | **974 assertions /5 cases** and retained shared-alpha GPU **394 assertions /1 case** passed |
+| Current filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 174/174 + 43/43 passed** (258 entries) |
+| Preference history | A5.5 full42/43 and isolated QPreferenceStore Windows rename failures remain preserved/unfixed. The current pass has no preference-code fix and is not an all-runs-green claim |
+| Focused two-sided/Patch/rendering controls | Graphics **945 assertions /2 cases**, model **2414 /6 cases** and expanded shared-alpha GPU **1994 /1 case** passed |
 | Focused accepted-fix UI controls | **4/4 passed**: property/I/O namespace controls, production build backend and metadata/package tools |
 | Lossless supplied corpus | **38/38 passed**, no-edit plus acted in-memory mutation; original SHA-256 unchanged |
 | Scene supplied corpus | Strict **35/38 constructed**, same three ID/geometry/UV refusals; explicit read-only preview **38/38**, counting/reporting unprojected solids with original hashes unchanged. Shared +/-131072 policy; retained smaller-envelope strict control was 32/38 |
@@ -49,7 +49,39 @@ installed-candidate reruns from retained checks. This sample is useful evidence,
 not all-map/all-game coverage. External map names, content and raw private logs
 are not public fixtures.
 
-### A5.5 on-demand scalar Patch materials
+### A5.6 two-sided material controls
+
+- Preview-only `$nocull` flags survive direct and Patch resolution into both
+  demanded brush textures and static-prop materials via tagged Source metadata.
+  Absent/false/true, malformed/duplicate/block, spelling and inherited
+  enable/override-disable controls act; strict material inspection still refuses.
+- The production brush/prop matrix now covers 84 raw-VTF/alpha/Patch/no-cull
+  combinations, with 2x2 inherited base versus 1x1 override versus 32x32 fallback.
+  A second VMT sharing the same base image retains ordinary culling; raw VTF and
+  Q2/default metadata remain controls. Metadata peeks do not request loading.
+- Configured culling remains separate from the effective Source hint; explicit
+  overrides win. None/Front/Both save polygon attributes before blend/depth and
+  pop in reverse order. Default/Back preserve their existing no-op GL behavior.
+- The existing actual GPU case retains 394 alpha/cutout/fade/non-Source assertions
+  and adds 160 culling draws /1600 assertions across all five configurations.
+  A deliberately back-facing quad is culled blue with flag0 and visible red with
+  flag1. Disabled/FRONT/BOTH entry state, explicit Front override, opaque and
+  graduated opacity check pixels and actual cull enable/mode/front-face, blend
+  and depth restoration. This is not Source backface-lighting/whole-viewport proof.
+- A fresh independent read-only source review found no issues. Supplied tests
+  were inspected, not independently rerun; async readiness was reviewed against
+  production resource publication and existing deferred controls. The parent
+  rebuilt all six affected app/checker/test targets and passed the 258 CTest
+  entries with zero compiler warnings/errors after the public variant/API change.
+- Two early fixture failures were preserved: new MockGl paths required explicit
+  callbacks, and the basic synthetic prop has only one skin. The latter now
+  reuses the passing aggregate-budget multi-skin fixture. No product guard or
+  pixel/state assertion was weakened. Original assets/maps remain read-only.
+- Final receipts identify the clean committed binary and installed checks.
+  Appearance confirmation remains pending; no geometry/winding/shader rewrite,
+  eager catalog scan, startup/FPS or full Source shader claim is made.
+
+### A5.5 on-demand scalar Patch materials (retained)
 
 - Both brush and static-prop texture paths resolve bounded Patch includes using
   existing mounted lookup priority. Scalar insert adds/overwrites, replace only

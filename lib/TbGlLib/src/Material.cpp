@@ -209,6 +209,25 @@ void Material::setCulling(const MaterialCulling culling)
   m_culling = culling;
 }
 
+MaterialCulling Material::effectiveCulling() const
+{
+  if (m_culling != MaterialCulling::Default)
+  {
+    return m_culling;
+  }
+  if (const auto* texture = m_textureResource->get())
+  {
+    if (
+      const auto* defaults =
+        std::get_if<SourceEmbeddedDefaults>(&texture->embeddedDefaults());
+      defaults && defaults->noCull)
+    {
+      return MaterialCulling::None;
+    }
+  }
+  return MaterialCulling::Default;
+}
+
 void Material::setBlendFunc(const GLenum srcFactor, const GLenum destFactor)
 {
   m_blendFunc.enable = MaterialBlendFunc::Enable::UseFactors;
@@ -289,7 +308,12 @@ void Material::activate(Gl& gl, const int minFilter, const int magFilter) const
     const auto* texture = m_textureResource->get();
     texture && texture->activate(gl, minFilter, magFilter))
   {
-    switch (m_culling)
+    const auto culling = effectiveCulling();
+    if (culling != MaterialCulling::Default && culling != MaterialCulling::Back)
+    {
+      gl.pushAttrib(GL_POLYGON_BIT);
+    }
+    switch (culling)
     {
     case MaterialCulling::None:
       gl.disable(GL_CULL_FACE);
@@ -337,16 +361,12 @@ void Material::deactivate(Gl& gl) const
       gl.popAttrib();
     }
 
-    switch (m_culling)
+    switch (effectiveCulling())
     {
     case MaterialCulling::None:
-      gl.enable(GL_CULL_FACE);
-      break;
     case MaterialCulling::Front:
-      gl.cullFace(GL_BACK);
-      break;
     case MaterialCulling::Both:
-      gl.cullFace(GL_BACK);
+      gl.popAttrib();
       break;
     case MaterialCulling::Default:
     case MaterialCulling::Back:

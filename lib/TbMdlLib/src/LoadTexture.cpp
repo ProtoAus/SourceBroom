@@ -58,6 +58,8 @@ Result<gl::Texture> loadTexture(
                       | kdl::transform([&](auto texture) {
                           // VTF alpha can be a shader mask, not transparency.
                           texture.setAlphaDomain(info.alphaDomain);
+                          texture.setEmbeddedDefaults(
+                            gl::SourceEmbeddedDefaults{info.noCull});
                           return texture;
                         });
              });

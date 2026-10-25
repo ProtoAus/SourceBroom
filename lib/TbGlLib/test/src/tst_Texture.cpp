@@ -74,6 +74,18 @@ TEST_CASE("Texture")
     CHECK(texture.alphaDomain() == img::ImageAlphaDomain::Binary);
   }
 
+  SECTION("Source hints are tagged independently of existing embedded defaults")
+  {
+    auto texture = Texture{4, 4};
+    CHECK(texture.embeddedDefaults() == EmbeddedDefaults{NoEmbeddedDefaults{}});
+    texture.setEmbeddedDefaults(SourceEmbeddedDefaults{true});
+    CHECK(texture.embeddedDefaults() == EmbeddedDefaults{SourceEmbeddedDefaults{true}});
+    texture.setEmbeddedDefaults(SourceEmbeddedDefaults{false});
+    CHECK(texture.embeddedDefaults() == EmbeddedDefaults{SourceEmbeddedDefaults{false}});
+    texture.setEmbeddedDefaults(Q2EmbeddedDefaults{1, 2, 3});
+    CHECK(texture.embeddedDefaults() == EmbeddedDefaults{Q2EmbeddedDefaults{1, 2, 3}});
+  }
+
   SECTION("constructor with a single buffer")
   {
     const auto texture =
