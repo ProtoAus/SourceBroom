@@ -49,6 +49,9 @@ using ExecuteFn = std::function<void(ActionExecutionContext&)>;
 using EnabledFn = std::function<bool(const ActionExecutionContext&)>;
 using CheckedFn = std::function<bool(const ActionExecutionContext&)>;
 
+// UI affordance policy only; model commands and native serialization also deny deltas.
+bool readOnlyVmfActionAllowed(const std::filesystem::path& preferencePath);
+
 class Action
 {
 private:

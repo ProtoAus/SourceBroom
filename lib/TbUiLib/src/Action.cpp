@@ -19,12 +19,57 @@
 
 #include "ui/Action.h"
 
+#include "mdl/Map.h"
 #include "ui/ActionExecutionContext.h"
 
 #include "kd/const_overload.h"
 
 namespace tb::ui
 {
+
+bool readOnlyVmfActionAllowed(const std::filesystem::path& preferencePath)
+{
+  const auto key = preferencePath.generic_string();
+  if (
+    key.starts_with("Menu/View/Camera/") || key.starts_with("Menu/View/Grid/")
+    || key.starts_with("Menu/Help/") || key.starts_with("Menu/Window/")
+    || key.starts_with("Menu/Edit/Select ")
+    || key.starts_with("Controls/Map view/View Filter > "))
+  {
+    return true;
+  }
+  for (const auto* allowed :
+       {"Menu/File/New",
+        "Menu/File/Open...",
+        "Menu/File/Save as...",
+        "Menu/File/Revert",
+        "Menu/File/Close",
+        "Menu/File/Preferences...",
+        "Menu/File/Quit",
+        "Menu/Edit/Undo",
+        "Menu/Edit/Redo",
+        "Menu/Edit/Copy",
+        "Menu/Edit/Deselect All",
+        "Menu/View/Switch to Map Inspector",
+        "Menu/View/Switch to Entity Inspector",
+        "Menu/View/Switch to Face Inspector",
+        "Menu/View/Toggle Toolbar",
+        "Menu/View/Toggle Info Panel",
+        "Menu/View/Toggle Inspector",
+        "Menu/View/Maximize Current View",
+        "Controls/Map view/Reveal in texture browser",
+        "Controls/Map view/Cycle map view",
+        "Controls/Map view/Reset camera zoom",
+        "Controls/Map view/Cancel",
+        "Controls/Map view/Deactivate current tool"})
+  {
+    if (key == allowed)
+    {
+      return true;
+    }
+  }
+  return false;
+}
 
 Action::Action(
   std::filesystem::path preferencePath,
@@ -118,6 +163,13 @@ void Action::execute(ActionExecutionContext& context) const
 
 bool Action::enabled(const ActionExecutionContext& context) const
 {
+  if (context.hasDocument() && context.map().isReadOnlyVmfPreview())
+  {
+    if (!readOnlyVmfActionAllowed(m_shortcutPreference.path))
+    {
+      return false;
+    }
+  }
   return context.hasActionContext(m_actionContext) && m_enabled(context);
 }
 

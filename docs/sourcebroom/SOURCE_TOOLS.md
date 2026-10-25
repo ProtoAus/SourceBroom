@@ -1,9 +1,30 @@
-# Native Source authoring tools — bounded A5.2 candidate
+# Native Source authoring tools — bounded A5.3 candidate
 
 SourceBroom edits native Source 1 VMF, not a converted Quake MAP. CSS and
 Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
+
+## Read-only compatibility preview
+
+Normal editable loading remains strict. A native load refusal can offer an
+explicit **Open read-only preview** choice, with Cancel as the default. This
+mode preserves duplicate IDs and the original document, but failed solids are
+reported and **not projected**. It does not invent UVs, repair a hull, replace an
+all-failed brush entity with a point, or claim that the displayed scene is complete.
+Syntax, structural and resource bounds still apply.
+
+The title/status/viewport persistently identify the mode and omission count.
+Labelled orange points are only source-plane samples; unlocated omissions are
+counted and at most 128 markers draw. Camera movement and selection/undo/redo
+are allowed; native authoring, entity drops, normal save/overwrite, export and
+compile/play are not. The saved-file build/metadata/package workflow below is
+for normally editable documents, not an escape from preview restrictions.
+
+**Save unchanged native copy…** is a separate new-file operation. It copies the
+loaded original bytes, refuses existing destinations or any native delta, and
+does not rebind the preview to the copy. Repair in a matching source editor and
+reopen through the normal loader before attempting edits.
 
 ## Basic native object authoring
 
@@ -43,6 +64,21 @@ such as `!self` remain literal. Unrecognized or malformed original rows are
 preserved rather than silently repaired; opaque connection children can make
 editing unavailable. FGD hints do not prove that an entity/input/event exists in
 all Source games. Native save guards remain authoritative.
+
+## Material progress and base-image limits
+
+Source catalogs remain complete and demand-loaded. Texture processing resumes
+across frames rather than repeatedly servicing a busy prefix; unused catalog
+resources compact in one pass. Browser resource notifications repaint without a
+full relayout unless a tracked texture's dimensions changed. This avoids several
+real stalls, but large first-time content indexing still takes seconds.
+
+The base-image preview accepts additional enumerated optional roughness/AO,
+tint/color and tree-sway parameters without resolving those extra textures or
+reproducing their effects. Strict material inspection still rejects those
+unsupported features. Unknown shaders/parameters, dynamic base selection and
+unsupported proxy blocks are not blanket-accepted. A visible base image is not
+Source lighting, blending, animation or full shader support.
 
 ## Static prop preview
 

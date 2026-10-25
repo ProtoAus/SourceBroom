@@ -82,7 +82,8 @@ Result<void> MapWindowManager::loadDocument(
   const mdl::GameInfo& gameInfo,
   mdl::MapFormat mapFormat,
   const vm::bbox3d& worldBounds,
-  std::filesystem::path path)
+  std::filesystem::path path,
+  const bool readOnlyVmfPreview)
 {
   if (shouldCreateWindowForDocument())
   {
@@ -93,7 +94,8 @@ Result<void> MapWindowManager::loadDocument(
              worldBounds,
              std::move(path),
              m_appController.taskManager(),
-             m_appController.glManager().resourceManager())
+             m_appController.glManager().resourceManager(),
+             readOnlyVmfPreview)
            | kdl::transform([&](auto document) { createMapWindow(std::move(document)); });
   }
 
@@ -105,7 +107,8 @@ Result<void> MapWindowManager::loadDocument(
     gameInfo,
     mapFormat,
     worldBounds,
-    std::move(path));
+    std::move(path),
+    readOnlyVmfPreview);
 }
 
 bool MapWindowManager::allMapWindowsClosed() const
@@ -121,8 +124,9 @@ void MapWindowManager::onFocusChange(QWidget* /* old */, QWidget* now)
     // child widgets, so get the top-level widget with QWidget::window()
     if (auto* mapWindow = dynamic_cast<MapWindow*>(now->window()))
     {
-      if (auto it = std::ranges::find(m_mapWindows, mapWindow);
-          it != m_mapWindows.end() && it != m_mapWindows.begin())
+      if (
+        auto it = std::ranges::find(m_mapWindows, mapWindow);
+        it != m_mapWindows.end() && it != m_mapWindows.begin())
       {
         std::rotate(m_mapWindows.begin(), it, std::next(it));
       }

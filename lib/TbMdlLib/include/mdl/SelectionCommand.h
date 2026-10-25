@@ -64,6 +64,7 @@ public:
   SelectionCommand(
     Action action, std::vector<Node*> nodes, std::vector<BrushFaceHandle> faces);
   ~SelectionCommand() override;
+  bool canExecuteInReadOnlyPreview() const override { return true; }
 
 private:
   static std::string makeName(Action action, size_t nodeCount, size_t faceCount);

@@ -53,6 +53,8 @@ public:
   virtual bool performDo(Map& map);
 
   virtual bool isModification() const;
+  // Default deny: non-modifying commands can still change visibility or structure.
+  virtual bool canExecuteInReadOnlyPreview() const;
 
 private:
   virtual bool doPerformDo(Map& map) = 0;

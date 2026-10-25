@@ -187,7 +187,8 @@ public:
     const vm::bbox3d& worldBounds,
     std::filesystem::path path,
     kdl::task_manager& taskManager,
-    gl::ResourceManager& resourceManager);
+    gl::ResourceManager& resourceManager,
+    bool readOnlyVmfPreview = false);
 
   ~MapDocument();
 
@@ -202,7 +203,8 @@ public:
     const mdl::GameInfo& gameInfo,
     mdl::MapFormat mapFormat,
     const vm::bbox3d& worldBounds,
-    std::filesystem::path path);
+    std::filesystem::path path,
+    bool readOnlyVmfPreview = false);
 
   Result<void> reload();
 

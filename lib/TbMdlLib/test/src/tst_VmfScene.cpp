@@ -12,11 +12,13 @@
 #include "mdl/Map_Geometry.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
+#include "mdl/NodeContents.h"
 #include "mdl/SourceEditorMetadata.h"
 #include "mdl/VmfScene.h"
 
 #include "vm/mat.h"
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <stdexcept>
@@ -80,6 +82,114 @@ void translate(BrushNode& node)
   node.setBrush(std::move(b));
 }
 } // namespace
+
+TEST_CASE("VmfScene read-only compatibility preview", "[vmf]")
+{
+  const auto bounds = vm::bbox3d{4096};
+  auto source = fixture();
+  auto expectedOmissions = size_t{0};
+  auto strictRefuses = false;
+  auto unlocated = false;
+  SECTION("valid control is explicitly immutable too") {}
+  SECTION("duplicate IDs are preserved, never repaired")
+  {
+    const auto at = source.find("\"id\" \"9\"");
+    REQUIRE(at != std::string::npos);
+    source.replace(at, std::string{"\"id\" \"9\""}.size(), "\"id\" \"0002\"");
+    strictRefuses = true;
+  }
+  SECTION("invalid UV omits its entire solid, not just the failed side")
+  {
+    const auto at = source.find("[1 0 0 0.1] 0.25");
+    REQUIRE(at != std::string::npos);
+    source.replace(at, std::string{"[1 0 0 0.1] 0.25"}.size(), "[1 0 0 0.1] 0");
+    expectedOmissions = 1;
+    strictRefuses = true;
+  }
+  SECTION("incomplete solid has no proxy hull")
+  {
+    const auto first = source.find("side {");
+    const auto last = source.find('}', first);
+    REQUIRE(last != std::string::npos);
+    source.erase(first, last - first + 1);
+    expectedOmissions = 1;
+    strictRefuses = true;
+  }
+  SECTION("an invalid first plane is explicitly unlocated")
+  {
+    const auto at = source.find("(0 0 0)");
+    REQUIRE(at != std::string::npos);
+    source.replace(at, 7, "(nan 0 0)");
+    expectedOmissions = 1;
+    strictRefuses = true;
+    unlocated = true;
+  }
+  SECTION("an all-invalid brush entity does not become a fake point")
+  {
+    const auto oldWorld =
+      std::string{"world { \"id\" \"1\" \"classname\" \"worldspawn\""};
+    const auto at = source.find(oldWorld);
+    REQUIRE(at != std::string::npos);
+    source.replace(
+      at,
+      oldWorld.size(),
+      oldWorld + " }\r\nentity { \"id\" \"10\" \"classname\" \"func_detail\"");
+    const auto uv = source.find("[1 0 0 0.1] 0.25");
+    REQUIRE(uv != std::string::npos);
+    source.replace(uv, std::string{"[1 0 0 0.1] 0.25"}.size(), "[1 0 0 0.1] 0");
+    expectedOmissions = 1;
+    strictRefuses = true;
+  }
+  if (strictRefuses)
+  {
+    CHECK_THROWS_AS(VmfScene::read(source, bounds), std::invalid_argument);
+  }
+  else
+  {
+    const auto strict = VmfScene::read(source, bounds);
+    CHECK_FALSE(strict.isReadOnlyPreview());
+    CHECK(strict.serialize(strict.world()) == source);
+  }
+  auto scene = VmfScene::readReadOnlyPreview(source, bounds);
+  CHECK(scene.isReadOnlyPreview());
+  CHECK(scene.unprojectedSolidCount() == expectedOmissions);
+  CHECK(scene.document().source() == source);
+  CHECK(scene.serialize(scene.world()) == source);
+  const auto& children = scene.world().defaultLayer()->children();
+  REQUIRE(children.size() == (expectedOmissions ? 1u : 2u));
+  if (expectedOmissions)
+  {
+    CHECK(std::ranges::none_of(children, [](const auto* node) {
+      return dynamic_cast<const BrushNode*>(node) != nullptr;
+    }));
+    const auto omitted = std::ranges::find_if(
+      scene.diagnostics(), [](const auto& d) { return d.unprojectedSolid; });
+    REQUIRE(omitted != scene.diagnostics().end());
+    CHECK(omitted->planeSample.has_value() == !unlocated);
+  }
+  auto* point = dynamic_cast<EntityNode*>(children.back());
+  REQUIRE(point);
+  CHECK(point->entity().classname() == "info_target");
+  const auto binding = point->lineNumber();
+  CHECK_THROWS_AS(scene.validateDuplication({point}), std::invalid_argument);
+  CHECK_THROWS_AS(
+    scene.validateAdditions(*scene.world().defaultLayer(), {point}, true),
+    std::invalid_argument);
+  CHECK_THROWS_AS(scene.registerAdditions({point}, true), std::invalid_argument);
+  CHECK_THROWS_AS(scene.validateRemoval({point}), std::invalid_argument);
+  CHECK_THROWS_AS(
+    scene.validateReparent(*scene.world().defaultLayer(), {point}),
+    std::invalid_argument);
+  CHECK_THROWS_AS(
+    scene.validateContents(*point, NodeContents{point->entity()}, bounds),
+    std::invalid_argument);
+  CHECK(point->lineNumber() == binding);
+  CHECK(scene.serialize(scene.world()) == source);
+  auto changed = point->entity();
+  changed.addOrUpdateProperty("targetname", "preview_must_not_save");
+  point->setEntity(std::move(changed));
+  CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+}
 
 TEST_CASE("VmfScene", "[vmf]")
 {

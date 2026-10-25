@@ -65,6 +65,7 @@
 #include "mdl/PointTrace.h"
 #include "mdl/Transaction.h"
 #include "mdl/UpdateBrushFaceAttributes.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 #include "prefs/Preferences.h"
 #include "render/Compass.h"
@@ -723,7 +724,7 @@ void MapViewBase::createBrushEntity(const mdl::EntityDefinition& definition)
 bool MapViewBase::canCreateBrushEntity()
 {
   const auto& map = m_document.map();
-  return map.selection().hasOnlyGeometryNodes();
+  return !map.isReadOnlyVmfPreview() && map.selection().hasOnlyGeometryNodes();
 }
 
 void MapViewBase::toggleTagVisible(const mdl::SmartTag& tag)
@@ -1038,6 +1039,7 @@ void MapViewBase::renderContents(gl::Gl& gl)
   renderPointFile(renderContext, renderBatch);
   renderPortalFile(renderContext, renderBatch);
   renderCompass(renderBatch);
+  renderVmfCompatibilityPreview(renderContext, renderBatch);
   renderFPS(renderContext, renderBatch);
 
   renderBatch.render(renderContext);
@@ -1148,9 +1150,56 @@ void MapViewBase::renderCompass(render::RenderBatch& renderBatch)
   }
 }
 
+void MapViewBase::renderVmfCompatibilityPreview(
+  render::RenderContext& renderContext, render::RenderBatch& renderBatch)
+{
+  const auto* scene = m_document.map().vmfScene();
+  if (!scene || !scene->isReadOnlyPreview())
+  {
+    return;
+  }
+  auto service = render::RenderService{renderContext, renderBatch};
+  service.setForegroundColor(RgbaF{1.0f, 0.55f, 0.15f, 1.0f});
+  service.setShowOccludedObjects();
+  auto unlocated = size_t{0};
+  auto drawn = size_t{0};
+  constexpr auto MaxMarkers = size_t{128};
+  for (const auto& diagnostic : scene->diagnostics())
+  {
+    if (!diagnostic.unprojectedSolid)
+    {
+      continue;
+    }
+    if (!diagnostic.planeSample)
+    {
+      ++unlocated;
+    }
+    else if (drawn < MaxMarkers)
+    {
+      const auto position = vm::vec3f{*diagnostic.planeSample};
+      service.renderHandle(position);
+      service.renderString(
+        "UNPROJECTED VMF entry " + std::to_string(diagnostic.entry)
+          + " (source-plane sample)",
+        position);
+      ++drawn;
+    }
+  }
+  service.renderHeadsUp(
+    "READ ONLY - VMF COMPATIBILITY PREVIEW\n"
+    + std::to_string(scene->unprojectedSolidCount()) + " solids NOT PROJECTED; "
+    + std::to_string(unlocated) + " unlocated\n"
+    + std::to_string(drawn) + " source-plane markers shown (maximum 128)\n"
+      "No repairs or edits. Save unchanged native copy only.");
+}
+
 void MapViewBase::renderFPS(
   render::RenderContext& renderContext, render::RenderBatch& renderBatch)
 {
+  if (m_document.map().isReadOnlyVmfPreview())
+  {
+    return;
+  }
   if (pref(Preferences::ShowFPS))
   {
     auto renderService = render::RenderService{renderContext, renderBatch};
@@ -1265,8 +1314,9 @@ void MapViewBase::showPopupMenuLater()
   }
 
   const auto moveSelectionToItems = moveSelectionTo->actions();
-  moveSelectionTo->setEnabled(std::ranges::any_of(
-    moveSelectionToItems, [](QAction* action) { return action->isEnabled(); }));
+  moveSelectionTo->setEnabled(
+    std::ranges::any_of(
+      moveSelectionToItems, [](QAction* action) { return action->isEnabled(); }));
 
   if (selectedObjectLayers.size() == 1u)
   {
@@ -1318,13 +1368,14 @@ void MapViewBase::showPopupMenuLater()
       menu.addAction(tr("Make Structural"), this, &MapViewBase::makeSelectionStructural);
     moveToWorldAction->setEnabled(canMakeSelectionStructural());
 
-    const auto isEntity = newNodeParent.accept(kdl::overload(
-      [](const mdl::WorldNode&) { return false; },
-      [](const mdl::LayerNode&) { return false; },
-      [](const mdl::GroupNode&) { return false; },
-      [](const mdl::EntityNode&) { return true; },
-      [](const mdl::BrushNode&) { return false; },
-      [](const mdl::PatchNode&) { return false; }));
+    const auto isEntity = newNodeParent.accept(
+      kdl::overload(
+        [](const mdl::WorldNode&) { return false; },
+        [](const mdl::LayerNode&) { return false; },
+        [](const mdl::GroupNode&) { return false; },
+        [](const mdl::EntityNode&) { return true; },
+        [](const mdl::BrushNode&) { return false; },
+        [](const mdl::PatchNode&) { return false; }));
 
     if (isEntity)
     {
@@ -1411,10 +1462,16 @@ void MapViewBase::beforePopupMenu() {}
  */
 void MapViewBase::dragEnterEvent(QDragEnterEvent* dragEnterEvent)
 {
-  if (dragEnter(
-        static_cast<float>(dragEnterEvent->position().x()),
-        static_cast<float>(dragEnterEvent->position().y()),
-        dragEnterEvent->mimeData()->text().toStdString()))
+  if (m_document.map().isReadOnlyVmfPreview())
+  {
+    dragEnterEvent->ignore();
+    return;
+  }
+  if (
+    dragEnter(
+      static_cast<float>(dragEnterEvent->position().x()),
+      static_cast<float>(dragEnterEvent->position().y()),
+      dragEnterEvent->mimeData()->text().toStdString()))
   {
     dragEnterEvent->acceptProposedAction();
   }
@@ -1427,6 +1484,11 @@ void MapViewBase::dragLeaveEvent(QDragLeaveEvent*)
 
 void MapViewBase::dragMoveEvent(QDragMoveEvent* dragMoveEvent)
 {
+  if (m_document.map().isReadOnlyVmfPreview())
+  {
+    dragMoveEvent->ignore();
+    return;
+  }
   dragMove(
     static_cast<float>(dragMoveEvent->position().x()),
     static_cast<float>(dragMoveEvent->position().y()),
@@ -1436,6 +1498,11 @@ void MapViewBase::dragMoveEvent(QDragMoveEvent* dragMoveEvent)
 
 void MapViewBase::dropEvent(QDropEvent* dropEvent)
 {
+  if (m_document.map().isReadOnlyVmfPreview())
+  {
+    dropEvent->ignore();
+    return;
+  }
   dragDrop(
     static_cast<float>(dropEvent->position().x()),
     static_cast<float>(dropEvent->position().y()),
@@ -1458,8 +1525,9 @@ QMenu* MapViewBase::makeEntityGroupsMenu(const mdl::EntityDefinitionType type)
   }
 
   const auto enableMakeBrushEntity = canCreateBrushEntity();
-
   const auto& map = m_document.map();
+  const auto editable = !map.isReadOnlyVmfPreview();
+  menu->setEnabled(editable);
   for (const auto& group : map.entityDefinitionManager().groups())
   {
     auto creatableDefinitions =
@@ -1485,6 +1553,7 @@ QMenu* MapViewBase::makeEntityGroupsMenu(const mdl::EntityDefinitionType type)
         case mdl::EntityDefinitionType::Point:
           action = groupMenu->addAction(
             label, this, qOverload<>(&MapViewBase::createPointEntity));
+          action->setEnabled(editable);
           break;
         case mdl::EntityDefinitionType::Brush:
           action = groupMenu->addAction(
@@ -1608,8 +1677,9 @@ mdl::Node& MapViewBase::findNewParentEntityForNodes(
     pickResult().first(type(mdl::BrushNode::BrushHitType | mdl::PatchNode::PatchHitType));
   if (auto* hitNode = mdl::hitToNode(hit))
   {
-    if (auto* newParent = mdl::findContainingEntity(*hitNode);
-        newParent && newParent != &map.worldNode() && canReparentNodes(nodes, newParent))
+    if (
+      auto* newParent = mdl::findContainingEntity(*hitNode);
+      newParent && newParent != &map.worldNode() && canReparentNodes(nodes, newParent))
     {
       return *newParent;
     }

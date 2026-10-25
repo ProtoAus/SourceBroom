@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.2 native-authoring candidate
+# Try the Windows SourceBroom A5.3 compatibility candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -19,6 +19,26 @@ FTESurf is an optional runtime, not an editor dependency.
 4. Move an existing plain ramp one small grid step, undo/redo, and Save As.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
+
+## If a VMF cannot open for editing
+
+The editor first attempts its normal strict loader. On a native refusal, it
+now offers **Open read-only preview**; **Cancel** remains the default. This is
+an explicit, possibly partial inspection mode, not automatic repair.
+
+- Duplicate native IDs and all source bytes remain unchanged. A failed solid is
+  not given invented UVs, a substitute hull or a fake point-entity representation.
+- The title, status bar and viewport say **READ ONLY** and report unprojected
+  solids. Orange markers are labelled **source-plane samples**, not solid bounds.
+  At most 128 markers draw; omissions without a reliable sample are counted as
+  **unlocated**. Missing geometry is not claimed to be visible.
+- Camera movement and selection/undo/redo remain available. Creation, dragging
+  entities into the view, editing, normal Save, export, compile and launch are
+  disabled. Inspection is not a way to compile a repaired map.
+- **File -> Save unchanged native copy…** writes the loaded native bytes to a
+  **new** filename only. It cannot overwrite any existing file and does not
+  change which source file the preview is inspecting. Repair the source in an
+  appropriate editor and reopen normally if editable loading is needed.
 
 ## Basic native authoring to try
 
@@ -43,9 +63,19 @@ loose-directory indexing errors are reported without rescanning healthy mounts.
 The shared GUI/checker preview envelope is now **+/-131072 units**. It is an
 editor preview policy, not a promise that every Source branch compiles or plays
 at that size. Open/incomplete brushes, duplicate IDs and invalid UVs still refuse
-rather than being silently repaired or dropped. More detailed brush diagnostics
-include the underlying failure reason. Retry a failing map on a copy in this
-candidate and report its exact diagnostic if it still refuses.
+**editable** loading rather than being silently repaired. The optional read-only
+mode above reports omissions instead. Syntax/structure and resource limits remain
+in effect. Retry a failing map on a copy and report its exact diagnostic if both
+modes refuse.
+
+Texture processing now resumes beyond a busy queue prefix, retires unused
+catalog resources in one compaction pass, and avoids re-sorting the whole browser
+on loading/failure/upload notifications whose layout dimensions did not change.
+Additional enumerated PBR/tint/tree-sway metadata is ignored only for the stated
+base-image preview; it does not add those Source shader effects. Catalog entries
+are not pruned, and pixel loading stays demand-driven. Initial content mounting
+still takes seconds in a large installation; no whole-startup speedup or
+Hammer++ performance advantage is claimed.
 
 ## New tools to try
 
@@ -104,16 +134,21 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   whose behavior must be checked.
 - Base texture/static model preview is not full Source shader/game parity.
 - All 38 supplied maps pass lossless syntax/no-edit checks; **35/38** construct
-  scenes. Three still refuse for duplicate IDs, invalid UV scale or an incomplete
-  brush; the editor does not silently discard those objects.
-- Current four-suite regression evidence is **250/250 passed**: Fs20, Gl21,
-  Mdl167 and Ui42. A prior untouched Windows preference replacement failure
+  strict editable scenes. **38/38** open with explicit read-only preview, where
+  omitted solids remain in the original document but are not scene geometry.
+  This is not all-map compatibility or editable repair.
+- Current four-suite regression evidence is **252/252 passed**: Fs20, Gl21,
+  Mdl169 and Ui42. A prior untouched Windows preference replacement failure
   passed in this run but remains a known intermittent finding, not a claimed fix.
   Details and prior A4 evidence are in [VALIDATION.md](VALIDATION.md).
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep the older A4 package as recovery; do not merge different package DLL sets.
+  Keep the older A5.2 package as recovery; do not merge different package DLL sets.
 
-For the quickest feedback, try the new-map brush/point workflow above and reopen
-its saved copy in Hammer++. Also retry one familiar prop-containing map. Report the game/profile and the
-exact observation, not a blanket compatibility verdict. No performance advantage
+For quick A5.3 feedback, retry one previously refused copied VMF, accept the
+read-only preview and confirm the warning/counts and camera/selection behavior.
+Then open a familiar map and briefly scroll the material browser: report whether
+textures progress and the UI feels less stuck. These observations are not measured
+speedup, complete-map rendering or shader parity. The native authoring/Hammer++
+checks above also remain pending. Report the game/profile and exact observation,
+not a blanket compatibility verdict. No performance advantage
 over Hammer++ or all-branch compatibility has been measured.

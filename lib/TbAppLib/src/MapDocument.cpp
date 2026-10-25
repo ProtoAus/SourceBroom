@@ -96,11 +96,17 @@ Result<std::unique_ptr<MapDocument>> MapDocument::loadDocument(
   const vm::bbox3d& worldBounds,
   std::filesystem::path path,
   kdl::task_manager& taskManager,
-  gl::ResourceManager& resourceManager)
+  gl::ResourceManager& resourceManager,
+  const bool readOnlyVmfPreview)
 {
   auto document = std::make_unique<MapDocument>(taskManager, resourceManager);
   return document->load(
-           environmentConfig, gameInfo, mapFormat, worldBounds, std::move(path))
+           environmentConfig,
+           gameInfo,
+           mapFormat,
+           worldBounds,
+           std::move(path),
+           readOnlyVmfPreview)
          | kdl::transform([&]() { return std::move(document); });
 }
 
@@ -142,7 +148,8 @@ Result<void> MapDocument::load(
   const mdl::GameInfo& gameInfo,
   mdl::MapFormat mapFormat,
   const vm::bbox3d& worldBounds,
-  std::filesystem::path path)
+  std::filesystem::path path,
+  const bool readOnlyVmfPreview)
 {
   return mdl::Map::loadMap(
            environmentConfig,
@@ -153,7 +160,8 @@ Result<void> MapDocument::load(
            std::move(path),
            *m_taskManager,
            *m_resourceManager,
-           logger())
+           logger(),
+           readOnlyVmfPreview)
          | kdl::transform([&](auto map) {
              setMap(std::move(map));
              documentWasLoadedNotifier();

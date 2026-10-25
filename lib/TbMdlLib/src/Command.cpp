@@ -19,6 +19,9 @@
 
 #include "mdl/Command.h"
 
+#include "base/Logger.h"
+#include "mdl/Map.h"
+
 #include <string>
 
 namespace tb::mdl
@@ -44,6 +47,12 @@ const std::string& Command::name() const
 
 bool Command::performDo(Map& map)
 {
+  if (map.isReadOnlyVmfPreview() && !canExecuteInReadOnlyPreview())
+  {
+    map.logger().warn() << "Read-only VMF compatibility preview refused command: "
+                        << m_name;
+    return false;
+  }
   m_state = CommandState::Doing;
   const auto result = doPerformDo(map);
   m_state = result ? CommandState::Done : CommandState::Default;
@@ -51,6 +60,11 @@ bool Command::performDo(Map& map)
 }
 
 bool Command::isModification() const
+{
+  return false;
+}
+
+bool Command::canExecuteInReadOnlyPreview() const
 {
   return false;
 }

@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.2 native-authoring follow-up to the A5 candidate:
+**Status:** Windows A5.3 compatibility/responsiveness follow-up to the A5 candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -18,8 +18,18 @@ Native authoring keeps stable independent object/side IDs and preserves original
 VMF data without a MAP conversion; arbitrary topology and opaque-reference edits
 remain gated. The retained usability fixes remove a redundant Source-content
 scan and quadratic material-folder lookup, and accept larger finite Source
-preview worlds without weakening geometry/save guards. The supplied scene corpus now constructs **35/38** maps;
-all **38/38** remain lossless at the document level.
+preview worlds without weakening geometry/save guards. A5.3 adds fair texture
+queue progress, linear unused-resource cleanup and fewer full-browser relayouts.
+Initial content indexing can still take seconds; a whole-startup speedup is not
+established.
+
+Strict editable loading still constructs **35/38** supplied maps. After explicit
+permission, a clearly labelled **read-only compatibility preview** opens all
+**38/38**, preserving duplicate IDs and original bytes while counting any solids
+it cannot project. It does not repair data or pretend that omitted geometry is
+present. Editing, normal save, export and compile are disabled in this mode;
+**Save unchanged native copy** creates a new byte-identical file only. All
+**38/38** remain lossless at the document level.
 
 - [Try the Windows alpha and understand its limits](docs/sourcebroom/ALPHA.md)
 - [Native authoring, properties, outputs, props, metadata and custom packages](docs/sourcebroom/SOURCE_TOOLS.md)

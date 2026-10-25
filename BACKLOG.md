@@ -3,20 +3,24 @@
 Later requested feature work belongs in [the roadmap](docs/sourcebroom/ROADMAP.md).
 These are observed limitations/follow-ups, not a claim that all have a product fix.
 
-- **Scene compatibility — `lib/TbMdlLib/src/VmfScene.cpp`.** After the larger
-  finite A5.1 preview envelope, three of 38 supplied external VMFs still refuse:
-  duplicate IDs, an invalid UV scale and an incomplete brush. All 38 pass the
-  lossless syntax/no-edit checks. Preserve diagnostics and input hashes;
-  obtain a minimal licensed/authored reproducer before changing tolerances.
-  Falsifier: production `SourceBroomVmfCheck --scene` must accept the reproducer
-  with correct bounds/UVs and no silently dropped object; malformed controls
-  must remain refused. External map contents/names/logs stay out of public Git.
+- **Editable scene compatibility — `lib/TbMdlLib/src/VmfScene.cpp`.** Three of
+  38 supplied external VMFs still refuse strict editable loading: duplicate IDs,
+  invalid UV scale and an incomplete brush. A5.3 explicitly previews all 38 read-only,
+  preserving native bytes and reporting unprojected solids without invented
+  geometry. This is not a strict-loader fix or repair. All 38 pass lossless checks.
+  Preserve diagnostics/input hashes and obtain a minimal licensed/authored
+  reproducer before changing strict tolerances. Falsifier: production strict
+  `SourceBroomVmfCheck --scene` accepts correct bounds/UVs with no silently dropped
+  object; malformed controls still refuse. External names/content/logs stay private.
 - **Initial Source content latency — `mdl/GameFileSystem.cpp`,
   `mdl/LoadMaterialCollections.cpp`.** A5.1 removes the redundant initial rescan
   and quadratic browser membership lookup, without dropping catalog entries.
-  The measured large installed-content sample still spends about 5.6 seconds
-  on its first mount/index and 3.8 seconds building 66,741 material registrations.
-  This is one host/workload, not a latency guarantee or a Hammer++ comparison.
+  A5.3 fixes queue starvation, quadratic retirement and redundant browser relayouts;
+  catalog enumeration measured about 3.14s instead of 3.89s for 66,741 registrations.
+  Initial mounting remained several seconds and was slower in those subject runs
+  (about 6.51s vs 5.23s). Whole-startup improvement is not established. These are
+  two fresh processes per arm on one host with OS caches unflushed, not a latency
+  guarantee or Hammer++ comparison.
   Falsifier for further optimization: same complete catalog/name signature,
   zero metadata-triggered pixel decodes, explicit-reload add/remove freshness,
   and lower measured initial latency. Do not use a stale cache or prune content
@@ -38,9 +42,10 @@ These are observed limitations/follow-ups, not a claim that all have a product f
 - **Windows preference regression check — `test/src/tst_QPreferenceStore.cpp`,
   replacement/reload sections.** The A5 full UI run passed 41/42, with this
   untouched test throwing rename `Access is denied` in its task-owned Unicode
-  fixture; one narrow rerun repeated it. The A5.1 full run passes 42/42 including
-  this test, but that single pass does not establish a fix. Earlier runs observed intermittent
-  sharing failures. The host/watcher cause is not conclusively diagnosed and no
+  fixture; one narrow rerun repeated it. Later A5.1/A5.3 full runs pass 42/42,
+  but A5.3 also observed another full-run failure followed by an isolated pass.
+  These passes do not establish a fix. Earlier runs observed intermittent sharing
+  failures. The host/watcher cause is not conclusively diagnosed and no
   unrelated product/test code was changed to conceal it. Falsifier: a bounded
   same-host control consistently performs both atomic replacements, observes
   the actual reload notifications/values, and preserves missing/malformed-file

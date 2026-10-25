@@ -8,6 +8,14 @@ save/reopen. The existing authored-room fixture may additionally opt into
 create-new `SOURCEBROOM_A4_OUTPUT`; it emits a production-saved room with a fresh
 brush/point after duplicate/delete controls for external compiler checks.
 
+A5.3 adds explicit immutable compatibility loading; strict admission remains the
+default. Read-only commands/undo default-deny except selection-only operations,
+native admissions reject before allocating identities, and serialization rejects
+all native deltas. Normal save/export/build are not unchanged-copy operations.
+The separately labelled copy uses create-new atomic native saving, does not
+rebind history/path, and refuses an existing target. Scene omissions stay outside
+the editable node hierarchy; diagnostics are samples, never proxy hulls.
+
 Read [the ordered alpha roadmap](ROADMAP.md) and [alpha limits](ALPHA.md) first.
 The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
@@ -51,8 +59,21 @@ value-token edit took effect without touching any file. `--scene` additionally
 checks the production scene bridge and reports explicitly refused geometry.
 The default +/-131072 preview envelope matches the GUI. Use, for example,
 `--scene --world-bounds 65536` for a smaller-envelope control; the finite positive
-extent is bounded by 1048576 and requires `--scene`. It is not an engine limit.
-The checker does not invoke compilers, write a VMF, or decompile BSPs.
+extent is bounded by 1048576 and requires a scene mode. It is not an engine limit.
+`--read-only-preview` explicitly checks immutable partial projection and reports
+`unprojected_solids` plus omission locations/diagnostics. It never promotes the
+scene to editable, repairs IDs/UVs, or declares absent geometry present. Strict
+`--scene` remains the compatibility control; a partial-preview pass is not a
+strict-scene pass. The checker does not invoke compilers, write a VMF, or
+decompile BSPs.
+
+After public C++ class/layout changes, verify that affected translation units
+actually recompile. One measured MSVC incremental-build failure retained an old
+Source connection test object whose tracking log omitted its direct MapFixture,
+Map and VmfScene headers, causing three ABI-related crashes. Retiring only that
+verified disposable object rebuilt it, restored all three tracked dependencies,
+and passed the full model suite. Preserve the failure and inspect tracking or use
+a supported clean target rebuild; do not change tests to hide a stale object.
 
 ## A5.1 content/startup checks
 
@@ -72,6 +93,23 @@ ordered selection/name signatures, proves catalog registration did not decode
 pixels, then explicitly requests a texture to prove the loader acts. Keep game
 files/logs private and report the workload; this is not an end-to-end benchmark
 or a substitute for visual acceptance.
+
+## A5.3 texture progress controls
+
+Resource-manager tests prove progress past a busy prefix, cursor survival across
+removal/appending, and retirement of an unused on-demand catalog without decoding.
+The browser tracks weak texture resources and only invalidates layout when a
+tracked size changes; loading/failure/upload/unrelated events still repaint.
+Root-mounted VFS lookup keeps original suffix spelling/case and explicit reload
+freshness. New optional VMT parameters are enumerated and preview-only.
+
+The existing opt-in catalog profiling case also accepts
+`SOURCEBROOM_PROFILE_MATERIAL` for one explicit registered material name. It still
+requires one actual decode and unchanged full-catalog signatures, never an empty
+or skipped catalog. `SOURCEBROOM_RESOURCE_GC_COUNT` selects the bounded count for
+the existing unused-catalog graphics test; its default is small. Timing is
+reported, not a portable pass/fail deadline. See [validation](VALIDATION.md) for
+both gains and the lack of a whole-startup improvement claim.
 
 ## A5 tool checks
 

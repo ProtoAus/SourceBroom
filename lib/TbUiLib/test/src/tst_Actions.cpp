@@ -42,10 +42,11 @@ namespace
 auto collectMenuActionInfos(const ActionManager& actionManager)
 {
   auto actions = std::vector<const Action*>{};
-  actionManager.visitMainMenu(kdl::overload(
-    [](const MenuSeparator&) {},
-    [&](const MenuAction& actionItem) { actions.push_back(&actionItem.action); },
-    [](const auto& thisLambda, const Menu& menu) { menu.visitEntries(thisLambda); }));
+  actionManager.visitMainMenu(
+    kdl::overload(
+      [](const MenuSeparator&) {},
+      [&](const MenuAction& actionItem) { actions.push_back(&actionItem.action); },
+      [](const auto& thisLambda, const Menu& menu) { menu.visitEntries(thisLambda); }));
 
   return actions | std::views::transform([](const auto* action) {
            return ActionInfo{
@@ -115,6 +116,42 @@ TEST_CASE("Actions")
 {
   const auto actionManager = ActionManager{};
 
+  SECTION("read-only VMF navigation allowlist defaults unknown edits to denied")
+  {
+    for (const auto* path :
+         {"Menu/File/Save as...",
+          "Menu/File/Open...",
+          "Menu/Edit/Select All",
+          "Menu/Edit/Undo",
+          "Menu/Edit/Copy",
+          "Menu/View/Camera/Focus on Selection",
+          "Controls/Map view/View Filter > Show textures",
+          "Controls/Map view/Cancel"})
+    {
+      INFO(path);
+      CHECK(readOnlyVmfActionAllowed(path));
+    }
+    for (const auto* path :
+         {"Menu/File/Save",
+          "Menu/File/Export/Map...",
+          "Menu/File/Export/Wavefront OBJ...",
+          "Menu/Run/Compile...",
+          "Menu/Run/Launch...",
+          "Menu/Run/Rerun...",
+          "Menu/Edit/Paste",
+          "Menu/Edit/Duplicate",
+          "Menu/View/Hide",
+          "Menu/View/Isolate",
+          "Menu/View/Show All",
+          "Controls/Map view/Create brush",
+          "Controls/Map view/Perform clip",
+          "Controls/Map view/Move objects left",
+          "Future/Unknown edit"})
+    {
+      INFO(path);
+      CHECK_FALSE(readOnlyVmfActionAllowed(path));
+    }
+  }
   SECTION("Default actions have no conflicts")
   {
     const auto allActionInfos = collectAllActionInfos(actionManager);

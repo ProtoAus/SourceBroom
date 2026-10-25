@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom A4/A5/A5.2 candidates
+# Human acceptance — SourceBroom A4/A5/A5.3 candidates
 
 No owner confirmation has been received for the following checks. Do not turn
 an automated build/screenshot into a human pass. Use newly authored maps/copies;
@@ -33,6 +33,22 @@ remain pending until actually observed and confirmed.
 - [ ] Open the material browser, scroll briefly and select a familiar material.
   Report whether startup/map opening and browser responsiveness feel improved;
   this observation does not establish a measured speedup or visual parity.
+
+## A5.3 compatibility and texture feedback — pending
+
+The owner again reports that many maps do not load and textures feel very slow.
+This is qualitative prior-build feedback, not A5.3 acceptance or measured timing.
+
+- [ ] On a **copy** of one previously refused VMF, choose the correct game profile,
+  accept **Open read-only preview**, and confirm the persistent READ ONLY warning,
+  missing-solid/unlocated counts, camera movement and selection/undo. Some geometry
+  may intentionally be absent. Confirm entity dragging/creation is unavailable.
+  If desired, save an unchanged native copy under a **new** name; do not overwrite
+  the input. Report an exact diagnostic if it still refuses.
+- [ ] Open a familiar normally editable CSS or Momentum map, browse/scroll a small
+  set of materials and select one. Report whether textures progress and interaction
+  feels less stuck. Do not turn this into numerical startup/FPS, shader-parity or
+  long-session residency evidence.
 
 ## A5.2 basic native authoring — pending
 

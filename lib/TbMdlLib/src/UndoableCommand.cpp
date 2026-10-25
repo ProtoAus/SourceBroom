@@ -19,6 +19,7 @@
 
 #include "mdl/UndoableCommand.h"
 
+#include "base/Logger.h"
 #include "mdl/Map.h"
 
 #include "kd/contracts.h"
@@ -53,6 +54,11 @@ bool UndoableCommand::performDo(Map& map)
 
 bool UndoableCommand::performUndo(Map& map)
 {
+  if (map.isReadOnlyVmfPreview() && !canExecuteInReadOnlyPreview())
+  {
+    map.logger().warn() << "Read-only VMF compatibility preview refused undo: " << m_name;
+    return false;
+  }
   m_state = CommandState::Undoing;
   const auto result = doPerformUndo(map);
   if (result)

@@ -77,6 +77,13 @@ public:
       m_commands, [](const auto& command) { return command->isModification(); });
   }
 
+  bool canExecuteInReadOnlyPreview() const override
+  {
+    return std::ranges::all_of(m_commands, [](const auto& command) {
+      return command->canExecuteInReadOnlyPreview();
+    });
+  }
+
 private:
   bool doPerformDo(Map& map) override
   {

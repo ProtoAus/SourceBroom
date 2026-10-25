@@ -21,6 +21,9 @@ struct VmfSceneDiagnostic
 {
   VmfEntryId entry;
   std::string message;
+  // A labelled source-plane sample, never a proxy hull or an editable node.
+  std::optional<vm::vec3d> planeSample = std::nullopt;
+  bool unprojectedSolid = false;
 };
 
 /** Native-backed preview and restricted existing-object editing. No filesystem writes.
@@ -34,6 +37,8 @@ private:
   std::unique_ptr<WorldNode> m_world;
   std::unique_ptr<WorldNode> m_original;
   std::vector<VmfSceneDiagnostic> m_diagnostics;
+  bool m_readOnlyPreview = false;
+  size_t m_unprojectedSolidCount = 0;
 
   enum class GeneratedKind
   {
@@ -59,6 +64,12 @@ private:
   std::string m_nextSideId = "1";
 
   explicit VmfScene(VmfDocument document);
+  static VmfScene readImpl(
+    std::string source,
+    const vm::bbox3d& worldBounds,
+    EntityPropertyConfig config,
+    bool readOnlyPreview);
+  void requireEditing() const;
   std::optional<VmfEntryId> prototype(size_t binding) const;
   void checkGeometryReferences(VmfEntryId object) const;
   void nodeEdits(
@@ -84,6 +95,13 @@ public:
    */
   static VmfScene read(
     std::string source, const vm::bbox3d& worldBounds, EntityPropertyConfig config = {});
+
+  /** Explicit partial, immutable preview. Duplicate native IDs stay unchanged;
+   * invalid solids are reported and not projected. Never an editable fallback. */
+  static VmfScene readReadOnlyPreview(
+    std::string source, const vm::bbox3d& worldBounds, EntityPropertyConfig config = {});
+  bool isReadOnlyPreview() const { return m_readOnlyPreview; }
+  size_t unprojectedSolidCount() const { return m_unprojectedSolidCount; }
 
   WorldNode& world();
   const WorldNode& world() const;

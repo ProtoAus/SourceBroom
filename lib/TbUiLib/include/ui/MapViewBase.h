@@ -352,6 +352,8 @@ private: // implement RenderView interface
 
   void renderCompass(render::RenderBatch& renderBatch);
   void renderFPS(render::RenderContext& renderContext, render::RenderBatch& renderBatch);
+  void renderVmfCompatibilityPreview(
+    render::RenderContext& renderContext, render::RenderBatch& renderBatch);
 
 public: // implement InputEventProcessor interface
   void processEvent(const KeyEvent& event) override;

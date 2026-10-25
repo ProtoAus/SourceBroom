@@ -6,6 +6,16 @@ been exercised; independent Hammer reopening and owner visual/in-game acceptance
 remain pending. See [current validation](VALIDATION.md). No compiler or game
 asset is bundled.
 
+## Read-only compatibility previews are not build inputs
+
+A5.3 can explicitly open an immutable, possibly partial compatibility preview
+after strict editable loading refuses. That document's normal save, export,
+compile, rerun and launch actions are disabled. **Save unchanged native copy**
+is not a repair or a successful preserving edit; it only writes original loaded
+bytes to a new filename. Repair in a suitable source editor and reopen normally
+before using this integrated build workflow. The standalone backend still
+preflights its actual input bytes; previewing a file does not certify it.
+
 ## Integration API
 
 `ui/SourceBuildDialog.h` exports:

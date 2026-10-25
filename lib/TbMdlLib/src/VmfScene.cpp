@@ -501,7 +501,23 @@ VmfScene::~VmfScene() = default;
 VmfScene VmfScene::read(
   std::string source, const vm::bbox3d& bounds, EntityPropertyConfig config)
 {
+  return readImpl(std::move(source), bounds, std::move(config), false);
+}
+
+VmfScene VmfScene::readReadOnlyPreview(
+  std::string source, const vm::bbox3d& bounds, EntityPropertyConfig config)
+{
+  return readImpl(std::move(source), bounds, std::move(config), true);
+}
+
+VmfScene VmfScene::readImpl(
+  std::string source,
+  const vm::bbox3d& bounds,
+  EntityPropertyConfig config,
+  const bool readOnlyPreview)
+{
   auto scene = VmfScene{VmfDocument::parse(std::move(source))};
+  scene.m_readOnlyPreview = readOnlyPreview;
   const auto& d = scene.m_document;
   auto worldId = std::optional<VmfEntryId>{};
   // Hammer allocates face IDs independently of world/entity/solid/group IDs.
@@ -536,7 +552,12 @@ VmfScene VmfScene::read(
       auto& ids = name == "side" ? sideIds : objectIds;
       if (!ids.insert(native).second)
       {
-        refuse(id, "duplicate native ID within object/face namespace");
+        if (!readOnlyPreview)
+        {
+          refuse(id, "duplicate native ID within object/face namespace");
+        }
+        scene.m_diagnostics.push_back(
+          {id, "Duplicate native ID preserved unchanged; read-only preview"});
       }
     }
     const auto editableConnections =
@@ -557,9 +578,8 @@ VmfScene VmfScene::read(
   }
   scene.m_diagnostics.push_back(
     {*worldId,
-     "Restricted native editing: existing plain brush values, entity properties and "
-     "ordered outputs; no object creation/deletion, reparenting, hidden-state editing, "
-     "or opaque transforms. "
+     "Basic native brush/point authoring and bounded existing-object edits; "
+     "opaque geometry, hidden-state authoring and unsupported attachments remain gated. "
      "UV axes parsed as doubles; offsets/scales/rotation use the scene float projection. "
      "Unchanged native numeric tokens remain authoritative."});
   for (const auto root : d.roots())
@@ -599,6 +619,7 @@ VmfScene VmfScene::read(
       {
         node->setVisibilityState(VisibilityState::Hidden);
       }
+      const auto omissionsBefore = scene.m_unprojectedSolidCount;
       for (const auto child : d.entries()[id].children)
       {
         if (d.entries()[child].isBlock())
@@ -606,80 +627,121 @@ VmfScene VmfScene::read(
           self(self, child, *node, hidden);
         }
       }
+      if (node->childCount() == 0 && scene.m_unprojectedSolidCount > omissionsBefore)
+      {
+        scene.m_diagnostics.push_back(
+          {id,
+           "Brush entity not projected: all native solids failed; not a point entity"});
+        return;
+      }
       parent.addChild(node.release());
     }
     else if (name == "solid")
     {
-      auto faces = std::vector<BrushFace>{};
-      for (const auto side : d.entries()[id].children)
+      try
       {
-        if (!d.entries()[side].isBlock() || key(d, side) != "side")
+        auto faces = std::vector<BrushFace>{};
+        for (const auto side : d.entries()[id].children)
         {
-          continue;
+          if (!d.entries()[side].isBlock() || key(d, side) != "side")
+          {
+            continue;
+          }
+          const auto p = numbers(value(d, side, "plane"), "(nnn)(nnn)(nnn)", side);
+          const auto u = numbers(value(d, side, "uaxis"), "[nnnn]n", side);
+          const auto v = numbers(value(d, side, "vaxis"), "[nnnn]n", side);
+          const auto r = numbers(value(d, side, "rotation"), "n", side);
+          const auto uv = UvAttributes{
+            {checkedFloat(u[3], side), checkedFloat(v[3], side)},
+            {checkedFloat(u[4], side), checkedFloat(v[4], side)},
+            checkedFloat(r[0], side)};
+          if (!uv.valid())
+          {
+            refuse(side, "invalid UV scale");
+          }
+          const auto ua = vm::vec3d{u[0], u[1], u[2]};
+          const auto va = vm::vec3d{v[0], v[1], v[2]};
+          if (
+            vm::squared_length(ua) == 0 || vm::squared_length(va) == 0
+            || !std::isfinite(vm::squared_length(ua))
+            || !std::isfinite(vm::squared_length(va))
+            || !std::isfinite(vm::squared_length(vm::cross(ua, va)))
+            || vm::squared_length(vm::cross(ua, va)) == 0)
+          {
+            refuse(side, "degenerate UV axes");
+          }
+          // Source and TB Valve faces both use clockwise points viewed from outside.
+          auto result = BrushFace::createFromValve(
+            {p[0], p[1], p[2]},
+            {p[3], p[4], p[5]},
+            {p[6], p[7], p[8]},
+            value(d, side, "material"),
+            uv,
+            {},
+            ua,
+            va,
+            MapFormat::Valve,
+            true);
+          if (result.is_error())
+          {
+            refuse(side, "invalid Source face plane");
+          }
+          auto face = std::move(result).value();
+          face.setFilePosition(side + 1, 1);
+          faces.push_back(std::move(face));
         }
-        const auto p = numbers(value(d, side, "plane"), "(nnn)(nnn)(nnn)", side);
-        const auto u = numbers(value(d, side, "uaxis"), "[nnnn]n", side);
-        const auto v = numbers(value(d, side, "vaxis"), "[nnnn]n", side);
-        const auto r = numbers(value(d, side, "rotation"), "n", side);
-        const auto uv = UvAttributes{
-          {checkedFloat(u[3], side), checkedFloat(v[3], side)},
-          {checkedFloat(u[4], side), checkedFloat(v[4], side)},
-          checkedFloat(r[0], side)};
-        if (!uv.valid())
-        {
-          refuse(side, "invalid UV scale");
-        }
-        const auto ua = vm::vec3d{u[0], u[1], u[2]};
-        const auto va = vm::vec3d{v[0], v[1], v[2]};
-        if (
-          vm::squared_length(ua) == 0 || vm::squared_length(va) == 0
-          || !std::isfinite(vm::squared_length(ua))
-          || !std::isfinite(vm::squared_length(va))
-          || !std::isfinite(vm::squared_length(vm::cross(ua, va)))
-          || vm::squared_length(vm::cross(ua, va)) == 0)
-        {
-          refuse(side, "degenerate UV axes");
-        }
-        // Source and TB Valve faces both use clockwise points viewed from outside.
-        auto result = BrushFace::createFromValve(
-          {p[0], p[1], p[2]},
-          {p[3], p[4], p[5]},
-          {p[6], p[7], p[8]},
-          value(d, side, "material"),
-          uv,
-          {},
-          ua,
-          va,
-          MapFormat::Valve,
-          true);
+        const auto count = faces.size();
+        auto result = Brush::create(bounds, std::move(faces));
         if (result.is_error())
         {
-          refuse(side, "invalid Source face plane");
+          refuse(
+            id,
+            "invalid or unbounded Source solid: " + std::get<Error>(result.error()).msg);
         }
-        auto face = std::move(result).value();
-        face.setFilePosition(side + 1, 1);
-        faces.push_back(std::move(face));
+        auto brush = std::move(result).value();
+        if (brush.faceCount() != count || !brush.closed() || !brush.fullySpecified())
+        {
+          refuse(id, "solid construction discarded or clipped a native side");
+        }
+        auto node = std::make_unique<BrushNode>(std::move(brush));
+        node->setFilePosition(id + 1, 1);
+        if (hidden)
+        {
+          node->setVisibilityState(VisibilityState::Hidden);
+        }
+        parent.addChild(node.release());
       }
-      const auto count = faces.size();
-      auto result = Brush::create(bounds, std::move(faces));
-      if (result.is_error())
+      catch (const std::invalid_argument& e)
       {
-        refuse(
-          id,
-          "invalid or unbounded Source solid: " + std::get<Error>(result.error()).msg);
+        if (!readOnlyPreview)
+        {
+          throw;
+        }
+        auto sample = std::optional<vm::vec3d>{};
+        for (const auto side : d.entries()[id].children)
+        {
+          if (d.entries()[side].isBlock() && key(d, side) == "side")
+          {
+            try
+            {
+              const auto p = numbers(value(d, side, "plane"), "(nnn)(nnn)(nnn)", side);
+              const auto point = vm::vec3d{p[0], p[1], p[2]};
+              if (bounds.contains(point))
+              {
+                sample = point;
+              }
+            }
+            catch (const std::invalid_argument&)
+            {
+              // No reliable plane sample: this omission remains explicitly unlocated.
+            }
+            break;
+          }
+        }
+        ++scene.m_unprojectedSolidCount;
+        scene.m_diagnostics.push_back(
+          {id, std::string{"Native solid not projected: "} + e.what(), sample, true});
       }
-      auto brush = std::move(result).value();
-      if (brush.faceCount() != count || !brush.closed() || !brush.fullySpecified())
-      {
-        refuse(id, "solid construction discarded or clipped a native side");
-      }
-      auto node = std::make_unique<BrushNode>(std::move(brush));
-      node->setFilePosition(id + 1, 1);
-      if (hidden)
-      {
-        node->setVisibilityState(VisibilityState::Hidden);
-      }
-      parent.addChild(node.release());
     }
   };
   for (const auto child : d.entries()[*worldId].children)
@@ -712,6 +774,14 @@ VmfScene VmfScene::read(
   }
   return scene;
 }
+void VmfScene::requireEditing() const
+{
+  if (m_readOnlyPreview)
+  {
+    refuse(0, "read-only compatibility preview cannot author native data");
+  }
+}
+
 WorldNode& VmfScene::world()
 {
   return *m_world;
@@ -767,6 +837,7 @@ void VmfScene::checkGeometryReferences(const VmfEntryId object) const
 }
 void VmfScene::validateDuplication(const std::vector<Node*>& nodes) const
 {
+  requireEditing();
   if (!nodes.empty())
   {
     requireEditableVersion(m_document);
@@ -802,6 +873,7 @@ void VmfScene::validateAdditions(
 {
   if (!nodes.empty())
   {
+    requireEditing();
     requireEditableVersion(m_document);
   }
   const auto* owner = &parent;
@@ -879,6 +951,7 @@ void VmfScene::validateAdditions(
 }
 void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool duplication)
 {
+  requireEditing();
   struct Assignment
   {
     Node* node;
@@ -963,6 +1036,10 @@ void VmfScene::validateRemoval(const std::vector<Node*>& removalClosure) const
 {
   if (!removalClosure.empty())
   {
+    requireEditing();
+  }
+  if (!removalClosure.empty())
+  {
     requireEditableVersion(m_document);
   }
   const auto check = [&](auto&& self, const Node& node) -> void {
@@ -991,6 +1068,7 @@ void VmfScene::validateRemoval(const std::vector<Node*>& removalClosure) const
 }
 void VmfScene::validateReparent(const Node& parent, const std::vector<Node*>& nodes) const
 {
+  requireEditing();
   if (!nodes.empty())
   {
     requireEditableVersion(m_document);
@@ -1038,6 +1116,7 @@ void VmfScene::validateReparent(const Node& parent, const std::vector<Node*>& no
 void VmfScene::validateContents(
   const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const
 {
+  requireEditing();
   requireEditableVersion(m_document);
   auto copy = std::unique_ptr<Node>{node.clone(worldBounds)};
   if (const auto* entity = std::get_if<Entity>(&contents.get()))
@@ -1655,6 +1734,7 @@ std::string VmfScene::serialize(const WorldNode& world) const
   }
   if (!edits.empty() || !structural.empty())
   {
+    requireEditing();
     requireEditableVersion(d);
   }
   return d.serialize(edits, structural);

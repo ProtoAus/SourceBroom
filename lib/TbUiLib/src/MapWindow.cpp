@@ -72,6 +72,7 @@
 #include "mdl/PasteType.h"
 #include "mdl/PatchNode.h"
 #include "mdl/VisualEffect.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 #include "prefs/Preferences.h"
 #include "ui/Action.h"
@@ -308,10 +309,20 @@ void MapWindow::updateTitle()
 {
   const auto& map = m_document->map();
   setWindowModified(map.modified());
-  setWindowTitle((map.worldNode().mapFormat() == mdl::MapFormat::SourceVMF
-                    ? tr("%1[*] - SourceBroom alpha | VMF base-texture preview")
-                    : tr("%1[*] - SourceBroom alpha"))
-                   .arg(pathAsQString(map.filename())));
+  if (map.isReadOnlyVmfPreview())
+  {
+    setWindowTitle(
+      tr("%1 - SourceBroom | READ ONLY compatibility preview | %2 solids not projected")
+        .arg(pathAsQString(map.filename()))
+        .arg(qulonglong(map.vmfScene()->unprojectedSolidCount())));
+  }
+  else
+  {
+    setWindowTitle((map.worldNode().mapFormat() == mdl::MapFormat::SourceVMF
+                      ? tr("%1[*] - SourceBroom alpha | VMF base-texture preview")
+                      : tr("%1[*] - SourceBroom alpha"))
+                     .arg(pathAsQString(map.filename())));
+  }
   setWindowFilePath(pathAsQPath(map.path()));
 }
 
@@ -353,6 +364,13 @@ void MapWindow::updateActionState()
     {
       // These are handled specially for performance reasons.
       continue;
+    }
+    if (tAction->preference().path == "Menu/File/Save as...")
+    {
+      qAction->setText(
+        m_document->map().isReadOnlyVmfPreview()
+          ? tr("Save unchanged native copy...")
+          : QString::fromStdString(tAction->label()));
     }
     qAction->setEnabled(tAction->enabled(context));
     if (qAction->isCheckable())
@@ -761,7 +779,13 @@ QString describeSelection(const mdl::Map& map)
 
 void MapWindow::updateStatusBar()
 {
-  m_statusBarLabel->setText(QString{describeSelection(m_document->map())});
+  const auto& map = m_document->map();
+  const auto prefix =
+    map.isReadOnlyVmfPreview()
+      ? tr("READ ONLY | %1 solids not projected | unchanged native copy only | ")
+          .arg(qulonglong(map.vmfScene()->unprojectedSolidCount()))
+      : QString{};
+  m_statusBarLabel->setText(prefix + QString{describeSelection(map)});
 }
 
 void MapWindow::updateStatusBarDelayed()
@@ -1030,16 +1054,24 @@ bool MapWindow::saveDocumentAs()
 {
   auto& map = m_document->map();
 
-  const auto defaultPath = map.persistent()
-                             ? map.path()
-                             : m_appController.environmentConfig().userDataFolderPath;
-
+  const auto unchangedCopy = map.isReadOnlyVmfPreview();
+  auto defaultPath = map.persistent()
+                       ? map.path()
+                       : m_appController.environmentConfig().userDataFolderPath;
+  if (unchangedCopy)
+  {
+    defaultPath =
+      defaultPath.parent_path() / (defaultPath.stem().string() + "-native-copy.vmf");
+  }
   const auto newFileName = QFileDialog::getSaveFileName(
     this,
-    tr("Save map file"),
+    unchangedCopy ? tr("Save unchanged native VMF copy (new file only)")
+                  : tr("Save map file"),
     pathAsQPath(defaultPath),
     map.worldNode().mapFormat() == mdl::MapFormat::SourceVMF ? "Source VMF (*.vmf)"
-                                                             : "Map files (*.map)");
+                                                             : "Map files (*.map)",
+    nullptr,
+    unchangedCopy ? QFileDialog::DontConfirmOverwrite : QFileDialog::Options{});
   if (newFileName.isEmpty())
   {
     return false;
@@ -1048,10 +1080,12 @@ bool MapWindow::saveDocumentAs()
   const auto path = pathFromQString(newFileName);
 
   const auto startTime = std::chrono::high_resolution_clock::now();
-  return map.saveAs(path) | kdl::transform([&]() {
+  auto saved = unchangedCopy ? map.saveOriginalVmfCopy(path) : map.saveAs(path);
+  return saved | kdl::transform([&]() {
            const auto endTime = std::chrono::high_resolution_clock::now();
 
-           logger().info() << "Saved " << map.path() << " in "
+           logger().info() << (unchangedCopy ? "Saved unchanged native copy " : "Saved ")
+                           << path << " in "
                            << std::chrono::duration_cast<std::chrono::milliseconds>(
                                 endTime - startTime)
                                 .count()
@@ -1062,7 +1096,7 @@ bool MapWindow::saveDocumentAs()
                this,
                "",
                QString::fromStdString(
-                 fmt::format("Error while saving {}: ", path, e.msg)),
+                 fmt::format("Error while saving {}: {}", path, e.msg)),
                QMessageBox::Ok);
            })
          | kdl::is_success();
@@ -1473,6 +1507,10 @@ mdl::PasteType MapWindow::paste()
  */
 bool MapWindow::canPaste() const
 {
+  if (m_document->map().isReadOnlyVmfPreview())
+  {
+    return false;
+  }
   if (!widgetOrChildHasFocus(m_mapView) || !m_mapView->isCurrent())
   {
     return false;
@@ -1494,7 +1532,7 @@ void MapWindow::duplicateSelection()
 bool MapWindow::canDuplicateSelection() const
 {
   const auto& map = m_document->map();
-  return map.selection().hasNodes();
+  return !map.isReadOnlyVmfPreview() && map.selection().hasNodes();
 }
 
 void MapWindow::deleteSelection()
@@ -1529,6 +1567,10 @@ void MapWindow::deleteSelection()
 
 bool MapWindow::canDeleteSelection() const
 {
+  if (m_document->map().isReadOnlyVmfPreview())
+  {
+    return false;
+  }
   auto& toolBox = m_mapView->toolBox();
 
   if (toolBox.clipToolActive())
@@ -2103,6 +2145,11 @@ bool MapWindow::currentViewMaximized() const
 
 void MapWindow::showCompileDialog()
 {
+  if (m_document->map().isReadOnlyVmfPreview())
+  {
+    logger().warn() << "Read-only VMF compatibility preview cannot compile or run";
+    return;
+  }
   if (m_document->map().worldNode().mapFormat() == mdl::MapFormat::SourceVMF)
   {
     if (saveDocument())
@@ -2152,6 +2199,10 @@ void MapWindow::showCompileDialog()
 
 void MapWindow::rerunLastCompilation()
 {
+  if (m_document->map().isReadOnlyVmfPreview())
+  {
+    return;
+  }
   if (m_lastCompilationProfileName)
   {
     showCompileDialog();
@@ -2250,6 +2301,11 @@ bool MapWindow::closeCompileDialog()
 
 void MapWindow::showLaunchEngineDialog()
 {
+  if (m_document->map().isReadOnlyVmfPreview())
+  {
+    logger().warn() << "Read-only VMF compatibility preview cannot launch an engine";
+    return;
+  }
   auto dialog = LaunchGameEngineDialog{m_appController, document(), this};
   dialog.exec();
 }

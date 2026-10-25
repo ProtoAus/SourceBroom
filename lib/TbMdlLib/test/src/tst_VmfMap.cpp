@@ -12,6 +12,7 @@
 #include "mdl/EditorContext.h"
 #include "mdl/EntityDefinition.h"
 #include "mdl/EntityNode.h"
+#include "mdl/ExportOptions.h"
 #include "mdl/GameConfig.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
@@ -21,12 +22,14 @@
 #include "mdl/Map_CopyPaste.h"
 #include "mdl/Map_Entities.h"
 #include "mdl/Map_Geometry.h"
+#include "mdl/Map_NodeVisibility.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/Node.h"
 #include "mdl/NodeContents.h"
 #include "mdl/PasteType.h"
 #include "mdl/SwapNodeContentsCommand.h"
+#include "mdl/UndoableCommand.h"
 #include "mdl/VmfDocument.h"
 #include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
@@ -264,6 +267,138 @@ void checkOnlyPlaneTokensChanged(const std::string& original, const std::string&
   CHECK(before.serialize(edits) == saved);
 }
 } // namespace
+
+TEST_CASE("VmfMap read-only compatibility safety", "[vmf]")
+{
+  // A false modification flag must not grant access to map data.
+  class Probe : public UndoableCommand
+  {
+    int& m_calls;
+
+  public:
+    explicit Probe(int& calls)
+      : UndoableCommand{"read-only probe", false}
+      , m_calls{calls}
+    {
+    }
+    bool doPerformDo(Map& map) override
+    {
+      ++m_calls;
+      auto entity = map.worldNode().entity();
+      entity.addOrUpdateProperty("readonly_probe", "must_not_act");
+      map.worldNode().setEntity(std::move(entity));
+      return true;
+    }
+    bool doPerformUndo(Map&) override
+    {
+      ++m_calls;
+      return true;
+    }
+  };
+  const auto duplicateIds = GENERATE(false, true);
+  auto original = nativeRamp(false);
+  if (duplicateIds)
+  {
+    const auto at = original.find("\"id\" \"9\"");
+    REQUIRE(at != std::string::npos);
+    original.replace(at, std::string{"\"id\" \"9\""}.size(), "\"id\" \"0002\"");
+  }
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "read-only source.vmf";
+  writeBinary(path, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    path,
+    MapFixtureConfig{
+      .mapFormat = MapFormat::SourceVMF,
+      .worldBounds = vm::bbox3d{4096},
+      .readOnlyVmfPreview = true,
+    });
+  REQUIRE(map.isReadOnlyVmfPreview());
+  REQUIRE(map.vmfScene());
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  CHECK_FALSE(map.modified());
+  auto& node = ramp(map);
+  const auto before = node.brush();
+  const auto positions = filePositions(map);
+  selectNodes(map, {&node});
+  REQUIRE(node.selected());
+  REQUIRE(map.canUndoCommand());
+  map.undoCommand();
+  CHECK_FALSE(node.selected());
+  map.redoCommand();
+  REQUIRE(node.selected());
+  CHECK_FALSE(map.modified());
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  const auto history = *map.undoCommandName();
+  const auto count = map.modificationCount();
+  auto calls = 0;
+  Probe direct{calls};
+  CHECK_FALSE(direct.isModification());
+  CHECK_FALSE(direct.performDo(map));
+  CHECK_FALSE(direct.performUndo(map));
+  CHECK_FALSE(map.executeAndStore(std::make_unique<Probe>(calls)));
+  CHECK(calls == 0);
+  CHECK_FALSE(map.worldNode().entity().hasProperty("readonly_probe"));
+  CHECK_FALSE(setEntityProperty(map, "targetname", "not_allowed"));
+  CHECK_FALSE(transformSelection(
+    map, "Preview transform", vm::translation_matrix(vm::vec3d{16, 8, 4})));
+  hideNodes(map, {&node});
+  CHECK(node.visibilityState() == VisibilityState::Inherited);
+  checkReopenedBrush(node.brush(), before);
+  CHECK(filePositions(map) == positions);
+  CHECK(map.modificationCount() == count);
+  REQUIRE(map.undoCommandName());
+  CHECK(*map.undoCommandName() == history);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+
+  const auto copy = env.dir() / "unchanged native copy.vmf";
+  CHECK(map.save().is_error());
+  CHECK(map.saveAs(copy).is_error());
+  CHECK(map.saveTo(copy).is_error());
+  CHECK_FALSE(std::filesystem::exists(copy));
+  CHECK(
+    map.exportAs(MapExportOptions{env.dir() / "partial.map", false, {}, {}}).is_error());
+  CHECK(
+    map
+      .exportAs(
+        ObjExportOptions{env.dir() / "partial.obj", ObjMtlPathMode::RelativeToExportPath})
+      .is_error());
+  CHECK_FALSE(std::filesystem::exists(env.dir() / "partial.map"));
+  CHECK_FALSE(std::filesystem::exists(env.dir() / "partial.obj"));
+  CHECK(map.saveOriginalVmfCopy(path).is_error());
+  REQUIRE(map.saveOriginalVmfCopy(copy).is_success());
+  CHECK(readBinary(copy) == original);
+  CHECK(readBinary(path) == original);
+  CHECK(map.path() == path);
+  CHECK(map.vmfScene()->document().source() == original);
+  CHECK(map.modificationCount() == count);
+  CHECK_FALSE(map.modified());
+  CHECK(map.saveOriginalVmfCopy(copy).is_error());
+  CHECK(readBinary(copy) == original);
+  auto reloaded = map.reload() | kdl::value();
+  REQUIRE(reloaded->isReadOnlyVmfPreview());
+  CHECK(reloaded->vmfScene()->serialize(reloaded->worldNode()) == original);
+  CHECK(reloaded->save().is_error());
+
+  // A low-level caller bypassing command admission still cannot save a delta.
+  auto changed = map.worldNode().entity();
+  changed.addOrUpdateProperty("bypass_probe", "must_not_save");
+  map.worldNode().setEntity(std::move(changed));
+  const auto forbidden = env.dir() / "must not exist.vmf";
+  CHECK(map.saveOriginalVmfCopy(forbidden).is_error());
+  CHECK_FALSE(std::filesystem::exists(forbidden));
+  CHECK(readBinary(path) == original);
+
+  auto controlFixture = MapFixture{};
+  auto& control = controlFixture.create();
+  Probe acted{calls};
+  REQUIRE(acted.performDo(control));
+  CHECK(calls == 1);
+  CHECK(control.worldNode().entity().hasProperty("readonly_probe"));
+  REQUIRE(acted.performUndo(control));
+  CHECK(calls == 2);
+}
 
 TEST_CASE("VmfMap", "[vmf]")
 {

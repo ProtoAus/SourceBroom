@@ -26,6 +26,7 @@
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_2_1>
+#include <QPushButton>
 #include <QSurfaceFormat>
 #include <QTimer>
 
@@ -351,19 +352,50 @@ bool AppController::openDocument(const std::filesystem::path& path)
              const auto* gameInfo = gameManager().gameInfo(gameName);
              contract_assert(gameInfo != nullptr);
 
-             return m_mapWindowManager->loadDocument(
-                      *gameInfo,
-                      mapFormat,
-                      (mapFormat == mdl::MapFormat::SourceVMF
-                       || kdl::path_to_lower(absPath.extension()) == ".vmf")
-                        ? vm::
-                            bbox3d{-mdl::VmfScene::PreviewWorldExtent, mdl::VmfScene::PreviewWorldExtent}
-                        : MapDocument::DefaultWorldBounds,
-                      std::move(absPath))
-                    | kdl::transform([&]() {
-                        m_welcomeWindow->close();
-                        return true;
-                      });
+             const auto nativeVmf = mapFormat == mdl::MapFormat::SourceVMF
+                                    || kdl::path_to_lower(absPath.extension()) == ".vmf";
+             const auto bounds =
+               nativeVmf
+                 ? vm::
+                     bbox3d{-mdl::VmfScene::PreviewWorldExtent, mdl::VmfScene::PreviewWorldExtent}
+                 : MapDocument::DefaultWorldBounds;
+             auto loaded =
+               m_mapWindowManager->loadDocument(*gameInfo, mapFormat, bounds, absPath);
+             if (nativeVmf && loaded.is_error())
+             {
+               // error() returns a variant by value; retain an owning message copy.
+               const auto reason = std::get<Error>(loaded.error()).msg;
+               if (reason.starts_with("Native VMF load refused:"))
+               {
+                 auto prompt = QMessageBox{
+                   QMessageBox::Warning,
+                   tr("Native VMF compatibility preview"),
+                   QString::fromStdString(reason)
+                     + tr(
+                       "\n\nOpen a READ-ONLY, possibly partial compatibility preview?\n"
+                       "Native IDs, UVs and geometry will NOT be repaired. Failed solids "
+                       "may be absent and will be counted and labelled.\n\n"
+                       "Editing, normal saving, exporting and compiling are disabled. "
+                       "Only an unchanged native copy to a new file is permitted."),
+                   QMessageBox::Cancel,
+                   m_mapWindowManager->topMapWindow()};
+                 auto* previewButton = prompt.addButton(
+                   tr("Open read-only preview"), QMessageBox::AcceptRole);
+                 prompt.setDefaultButton(QMessageBox::Cancel);
+                 prompt.setEscapeButton(QMessageBox::Cancel);
+                 prompt.exec();
+                 if (prompt.clickedButton() != previewButton)
+                 {
+                   return Result<bool>{false};
+                 }
+                 loaded = m_mapWindowManager->loadDocument(
+                   *gameInfo, mapFormat, bounds, absPath, true);
+               }
+             }
+             return loaded | kdl::transform([&]() {
+                      m_welcomeWindow->close();
+                      return true;
+                    });
            })
          | kdl::transform_error([&](const auto& e) {
              QMessageBox::critical(

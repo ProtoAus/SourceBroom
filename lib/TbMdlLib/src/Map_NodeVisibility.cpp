@@ -42,6 +42,10 @@ namespace tb::mdl
 
 void isolateSelectedNodes(Map& map)
 {
+  if (map.isReadOnlyVmfPreview())
+  {
+    return;
+  }
   auto selectedNodes = std::vector<Node*>{};
   auto unselectedNodes = std::vector<Node*>{};
 
@@ -56,19 +60,22 @@ void isolateSelectedNodes(Map& map)
     }
   };
 
-  map.worldNode().accept(kdl::overload(
-    [](auto&& thisLambda, WorldNode& worldNode) { worldNode.visitChildren(thisLambda); },
-    [](auto&& thisLambda, LayerNode& layerNode) { layerNode.visitChildren(thisLambda); },
-    [&](auto&& thisLambda, GroupNode& groupNode) {
-      collectNode(groupNode);
-      groupNode.visitChildren(thisLambda);
-    },
-    [&](auto&& thisLambda, EntityNode& entityNode) {
-      collectNode(entityNode);
-      entityNode.visitChildren(thisLambda);
-    },
-    [&](BrushNode& brushNode) { collectNode(brushNode); },
-    [&](PatchNode& patchNode) { collectNode(patchNode); }));
+  map.worldNode().accept(
+    kdl::overload(
+      [](
+        auto&& thisLambda, WorldNode& worldNode) { worldNode.visitChildren(thisLambda); },
+      [](
+        auto&& thisLambda, LayerNode& layerNode) { layerNode.visitChildren(thisLambda); },
+      [&](auto&& thisLambda, GroupNode& groupNode) {
+        collectNode(groupNode);
+        groupNode.visitChildren(thisLambda);
+      },
+      [&](auto&& thisLambda, EntityNode& entityNode) {
+        collectNode(entityNode);
+        entityNode.visitChildren(thisLambda);
+      },
+      [&](BrushNode& brushNode) { collectNode(brushNode); },
+      [&](PatchNode& patchNode) { collectNode(patchNode); }));
 
   auto transaction = Transaction{map, "Isolate Objects"};
   map.executeAndStore(SetVisibilityCommand::hide(unselectedNodes));
@@ -83,6 +90,10 @@ void hideSelectedNodes(Map& map)
 
 void hideNodes(Map& map, std::vector<Node*> nodes)
 {
+  if (map.isReadOnlyVmfPreview())
+  {
+    return;
+  }
   auto transaction = Transaction{map, "Hide Objects"};
 
   // Deselect any selected nodes inside `nodes`

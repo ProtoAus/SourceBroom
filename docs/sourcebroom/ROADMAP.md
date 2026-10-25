@@ -18,8 +18,10 @@ compatible merely because they also use VMF.
 - **A2 implemented and verified:** native-backed VMF scene construction, stable
   bindings, Source UVs, explicit opaque-feature restrictions, and GUI opening.
   The 38-file supplied corpus remains byte-identical; the A5.1 larger finite
-  preview envelope now constructs 35 scenes. Three are explicitly refused with
-  ID/geometry/UV diagnostics rather than silently pruned.
+  preview envelope constructs 35 strict editable scenes. Three remain refused
+  for editable loading. A5.3's separate, explicitly chosen read-only preview opens
+  all 38 with original bytes/IDs intact and clearly counted unprojected solids;
+  this is not editable repair or a complete-scene claim.
 - **A3 implemented for the first alpha:** game-configurable loose/VPK content,
   bounded VTF/VMT base-texture preview, CSS/Momentum/generic Source 1 profiles,
   and demand-driven pixel loading. Actual CSS and Momentum GUI previews render
@@ -41,8 +43,12 @@ compatible merely because they also use VMF.
   quadratic enabled-folder selection. A5.2 adds bounded native new-map/brush/point
   creation, plain-object duplication/deletion and brush-entity ownership, with
   side-identity admission, stable ID allocation and preserving undo/save.
+  A5.3 adds an immutable partial compatibility preview with default-deny commands,
+  no-delta/exclusive-copy safeguards, and persistent omission diagnostics. Texture
+  work resumes fairly, dead catalog resources compact once, and the browser
+  avoids unnecessary full relayouts; large initial mounts still take seconds.
   Current [validation](VALIDATION.md) records
-  Fs20/Gl21/Mdl167/Ui42 passing (250 entries). The earlier preference-test failure
+  Fs20/Gl21/Mdl169/Ui42 passing (252 entries). The earlier preference-test failure
   passed this run but remains an unresolved intermittent finding, not a fix.
   Independent Hammer++/owner checks remain pending.
 - A6 is not implemented. No Source compiler, Valve content, or third-party/user

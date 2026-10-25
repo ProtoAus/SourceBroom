@@ -56,6 +56,7 @@ struct MapFixtureConfig
   GameInfo gameInfo = DefaultGameInfo;
   EnvironmentConfig environmentConfig = {};
   vm::bbox3d worldBounds = vm::bbox3d{8129.0};
+  bool readOnlyVmfPreview = false; // Load-only explicit compatibility mode.
 };
 
 inline const MapFixtureConfig QuakeFixtureConfig = MapFixtureConfig{

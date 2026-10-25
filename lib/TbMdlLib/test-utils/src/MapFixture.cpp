@@ -87,7 +87,8 @@ Map& MapFixture::load(const std::filesystem::path& path, MapFixtureConfig config
       absPath,
       *m_taskManager,
       *m_resourceManager,
-      *m_logger)
+      *m_logger,
+      m_config->readOnlyVmfPreview)
     | kdl::transform([&](auto map) {
         m_map = std::move(map);
         m_map->setIsCommandCollationEnabled(false);

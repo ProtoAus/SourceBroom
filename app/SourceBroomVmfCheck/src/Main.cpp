@@ -48,12 +48,15 @@ namespace fs = std::filesystem;
 void usage()
 {
   std::cout
-    << "SourceBroomVmfCheck [--probe-edit] [--scene] [--world-bounds extent] "
+    << "SourceBroomVmfCheck [--probe-edit] [--scene|--read-only-preview] [--world-bounds "
+       "extent] "
        "[--] <file.vmf|directory>...\n"
        "Read-only native syntax/byte-preservation checker.\n"
        "--probe-edit tests a surgical value edit in memory only.\n"
        "--scene loads the production plain-brush scene (default bounds +/-131072)\n"
        "and checks its unchanged serialization; not a BSP/gameplay validator.\n"
+       "--read-only-preview explicitly permits an immutable partial scene; reports\n"
+       "every unprojected solid. It does not repair IDs, UVs or geometry.\n"
        "--world-bounds sets an explicit preview extent, not a Source branch contract.\n";
 }
 
@@ -111,16 +114,30 @@ void probeEdit(const tb::mdl::VmfDocument& document)
   }
 }
 
-std::array<size_t, 3> probeScene(
-  const tb::mdl::VmfDocument& document, const double worldExtent)
+std::array<size_t, 4> probeScene(
+  const tb::mdl::VmfDocument& document,
+  const double worldExtent,
+  const bool readOnlyPreview)
 {
-  const auto scene =
-    tb::mdl::VmfScene::read(document.source(), vm::bbox3d{-worldExtent, worldExtent});
+  const auto bounds = vm::bbox3d{-worldExtent, worldExtent};
+  const auto scene = readOnlyPreview
+                       ? tb::mdl::VmfScene::readReadOnlyPreview(document.source(), bounds)
+                       : tb::mdl::VmfScene::read(document.source(), bounds);
   if (scene.serialize(scene.world()) != document.source())
   {
     throw std::runtime_error{"Unedited native scene differs from input"};
   }
-  auto counts = std::array<size_t, 3>{};
+  auto counts = std::array<size_t, 4>{};
+  counts[3] = scene.unprojectedSolidCount();
+  for (const auto& diagnostic : scene.diagnostics())
+  {
+    if (diagnostic.unprojectedSolid)
+    {
+      std::cerr << "PREVIEW_DIAGNOSTIC\tentry=" << diagnostic.entry
+                << "\tunprojected_solid=1\tlocated=" << (diagnostic.planeSample ? 1 : 0)
+                << '\t' << diagnostic.message << '\n';
+    }
+  }
   const auto count = [&](const auto& self, const tb::mdl::Node& node) -> void {
     ++counts[0];
     if (const auto* brush = dynamic_cast<const tb::mdl::BrushNode*>(&node))
@@ -138,7 +155,11 @@ std::array<size_t, 3> probeScene(
 }
 
 size_t checkFile(
-  const fs::path& path, const bool probe, const bool sceneCheck, const double worldExtent)
+  const fs::path& path,
+  const bool probe,
+  const bool sceneCheck,
+  const double worldExtent,
+  const bool readOnlyPreview)
 {
   auto stream = std::ifstream{path, std::ios::binary};
   if (!stream)
@@ -175,8 +196,8 @@ size_t checkFile(
     probeEdit(document);
   }
 
-  const auto sceneCounts =
-    sceneCheck ? probeScene(document, worldExtent) : std::array<size_t, 3>{};
+  const auto sceneCounts = sceneCheck ? probeScene(document, worldExtent, readOnlyPreview)
+                                      : std::array<size_t, 4>{};
   auto blocks = size_t{0};
   auto solids = size_t{0};
   auto sides = size_t{0};
@@ -203,11 +224,12 @@ size_t checkFile(
             << "\tentries=" << document.entries().size() << "\tblocks=" << blocks
             << "\tsolids=" << solids << "\tsides=" << sides
             << "\tdisplacements=" << displacements << "\toutputs=" << outputs
-            << "\tedit=" << (probe ? "pass" : "not-run")
-            << "\tscene=" << (sceneCheck ? "pass" : "not-run")
+            << "\tedit=" << (probe ? "pass" : "not-run") << "\tscene="
+            << (sceneCheck ? (readOnlyPreview ? "read-only-preview" : "pass") : "not-run")
             << "\tscene_nodes=" << sceneCounts[0] << "\tscene_brushes=" << sceneCounts[1]
-            << "\tscene_faces=" << sceneCounts[2] << '\t' << std::quoted(path.string())
-            << '\n';
+            << "\tscene_faces=" << sceneCounts[2]
+            << "\tunprojected_solids=" << sceneCounts[3] << '\t'
+            << std::quoted(path.string()) << '\n';
   return document.source().size();
 }
 
@@ -217,6 +239,7 @@ int main(const int argc, char* argv[])
 {
   auto probe = false;
   auto sceneCheck = false;
+  auto readOnlyPreview = false;
   auto worldExtent = tb::mdl::VmfScene::PreviewWorldExtent;
   auto customWorldExtent = false;
   auto options = true;
@@ -236,6 +259,11 @@ int main(const int argc, char* argv[])
     else if (options && arg == "--scene")
     {
       sceneCheck = true;
+    }
+    else if (options && arg == "--read-only-preview")
+    {
+      sceneCheck = true;
+      readOnlyPreview = true;
     }
     else if (options && arg == "--world-bounds")
     {
@@ -331,7 +359,7 @@ int main(const int argc, char* argv[])
   {
     try
     {
-      bytes += checkFile(file, probe, sceneCheck, worldExtent);
+      bytes += checkFile(file, probe, sceneCheck, worldExtent, readOnlyPreview);
     }
     catch (const std::exception& e)
     {
@@ -340,6 +368,9 @@ int main(const int argc, char* argv[])
     }
   }
   std::cout << "SUMMARY\tfiles=" << files.size() << "\tpassed=" << files.size() - failed
-            << "\tfailed=" << failed << "\tpassed_bytes=" << bytes << '\n';
+            << "\tfailed=" << failed << "\tpassed_bytes=" << bytes << "\tscene_mode="
+            << (sceneCheck ? (readOnlyPreview ? "read-only-preview" : "strict")
+                           : "not-run")
+            << '\n';
   return failed == 0 ? 0 : 1;
 }

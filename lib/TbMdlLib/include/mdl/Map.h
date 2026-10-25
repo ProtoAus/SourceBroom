@@ -230,7 +230,8 @@ public: // misc
     std::filesystem::path path,
     kdl::task_manager& taskManager,
     gl::ResourceManager& resourceManager,
-    Logger& logger);
+    Logger& logger,
+    bool readOnlyVmfPreview = false);
 
   Logger& logger();
 
@@ -270,6 +271,7 @@ public: // misc
 
   VmfScene* vmfScene() { return m_vmfScene.get(); }
   const VmfScene* vmfScene() const { return m_vmfScene.get(); }
+  bool isReadOnlyVmfPreview() const;
 
   NodeHandleManager& nodeHandles();
   const NodeHandleManager& nodeHandles() const;
@@ -300,6 +302,8 @@ public: // persistence
   Result<void> save();
   Result<void> saveAs(const std::filesystem::path& path);
   Result<void> saveTo(const std::filesystem::path& path) const;
+  // Exclusive, unchanged native copy; never changes the backing path or history.
+  Result<void> saveOriginalVmfCopy(const std::filesystem::path& path) const;
   Result<void> exportAs(const ExportOptions& options) const;
 
   bool persistent() const;

@@ -669,7 +669,8 @@ Result<std::unique_ptr<Map>> Map::loadMap(
   std::filesystem::path path,
   kdl::task_manager& taskManager,
   gl::ResourceManager& resourceManager,
-  Logger& logger)
+  Logger& logger,
+  const bool readOnlyVmfPreview)
 {
   if (!path.is_absolute())
   {
@@ -681,6 +682,10 @@ Result<std::unique_ptr<Map>> Map::loadMap(
   const auto nativeFormat =
     mapFormat == MapFormat::SourceVMF
     || (mapFormat == MapFormat::Unknown && kdl::path_to_lower(path.extension()) == ".vmf");
+  if (readOnlyVmfPreview && !nativeFormat)
+  {
+    return Error{"Read-only compatibility preview requires a native VMF document"};
+  }
   if (nativeFormat)
   {
     return fs::Disk::openFile(path)
@@ -688,15 +693,30 @@ Result<std::unique_ptr<Map>> Map::loadMap(
                try
                {
                  auto reader = file->reader().buffer();
-                 auto state = std::make_unique<VmfScene>(VmfScene::read(
-                   std::string{reader.stringView()},
-                   worldBounds,
-                   EntityPropertyConfig{
-                     gameInfo.gameConfig.entityConfig.scaleExpression,
-                     gameInfo.gameConfig.entityConfig.setDefaultProperties}));
-                 logger.warn() << "SourceBroom native VMF alpha: existing plain-object "
-                                  "edits only. Displacements are hull previews; "
-                                  "unsupported attachments remain preserved and guarded.";
+                 const auto config = EntityPropertyConfig{
+                   gameInfo.gameConfig.entityConfig.scaleExpression,
+                   gameInfo.gameConfig.entityConfig.setDefaultProperties};
+                 auto state = std::make_unique<VmfScene>(
+                   readOnlyVmfPreview
+                     ? VmfScene::readReadOnlyPreview(
+                         std::string{reader.stringView()}, worldBounds, config)
+                     : VmfScene::read(
+                         std::string{reader.stringView()}, worldBounds, config));
+                 if (readOnlyVmfPreview)
+                 {
+                   logger.warn()
+                     << "READ ONLY: partial native VMF compatibility preview; "
+                     << state->unprojectedSolidCount()
+                     << " native solids not projected. No repairs or edits; "
+                        "only an unchanged native copy may be saved.";
+                 }
+                 else
+                 {
+                   logger.warn()
+                     << "SourceBroom native VMF alpha: bounded brush/point "
+                        "authoring. Displacements are hull previews; "
+                        "unsupported attachments remain preserved and guarded.";
+                 }
                  logger.warn()
                    << "Source viewport: base-texture preview only. Source lighting, "
                       "transparency and shader effects are not reproduced.";
@@ -753,6 +773,11 @@ Result<std::unique_ptr<Map>> Map::loadMap(
 Logger& Map::logger()
 {
   return m_logger;
+}
+
+bool Map::isReadOnlyVmfPreview() const
+{
+  return m_vmfScene && m_vmfScene->isReadOnlyPreview();
 }
 
 kdl::task_manager& Map::taskManager()
@@ -937,7 +962,8 @@ Result<std::unique_ptr<Map>> Map::reload()
     m_path,
     taskManager(),
     m_resourceManager,
-    logger());
+    logger(),
+    isReadOnlyVmfPreview());
 }
 
 Result<void> Map::save()
@@ -961,6 +987,12 @@ Result<void> Map::saveAs(const std::filesystem::path& path)
 
 Result<void> Map::saveTo(const std::filesystem::path& path) const
 {
+  if (isReadOnlyVmfPreview())
+  {
+    return Error{
+      "Read-only VMF preview cannot save edits or overwrite; use Save unchanged native "
+      "copy"};
+  }
   if (!path.is_absolute())
   {
     return Error{"Path must be absolute"};
@@ -1015,8 +1047,36 @@ Result<void> Map::saveTo(const std::filesystem::path& path) const
   return Result<void>{};
 }
 
+Result<void> Map::saveOriginalVmfCopy(const std::filesystem::path& path) const
+{
+  if (!isReadOnlyVmfPreview())
+  {
+    return Error{"Unchanged-copy operation requires a read-only native VMF preview"};
+  }
+  if (!path.is_absolute())
+  {
+    return Error{"Path must be absolute"};
+  }
+  try
+  {
+    // The serializer rejects any delta, even from a caller bypassing commands.
+    const auto bytes = m_vmfScene->serialize(*m_worldNode);
+    return saveVmfFile(path, bytes) | kdl::transform([&](const auto&) {
+             m_logger.info() << "Saved unchanged native VMF copy to " << path;
+           });
+  }
+  catch (const std::exception& e)
+  {
+    return Error{std::string{"Unchanged native copy refused: "} + e.what()};
+  }
+}
+
 Result<void> Map::exportAs(const ExportOptions& options) const
 {
+  if (isReadOnlyVmfPreview())
+  {
+    return Error{"Read-only partial VMF preview cannot export an incomplete scene"};
+  }
   if (m_vmfScene && std::holds_alternative<MapExportOptions>(options))
   {
     return Error{
