@@ -12,6 +12,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include <iomanip>
 #include <limits>
 #include <locale>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -178,6 +179,13 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
   const auto startValues =
     numbers(startText.substr(first + 1, last - first - 1), 3, *start);
   result.m_start = {startValues[0].value, startValues[1].value, startValues[2].value};
+  result.m_startRow.entry = *start;
+  result.m_startRow.text = startText;
+  for (const auto& component : startValues)
+  {
+    result.m_startRow.spans.push_back(
+      {first + 1 + component.begin, first + 1 + component.end});
+  }
   if (const auto elevation = member(document, *block, "elevation", false))
   {
     result.m_elevation = numbers(value(document, *elevation), 1, *elevation)[0].value;
@@ -391,6 +399,40 @@ void SourceDisplacement::setDistance(
     throw;
   }
 }
+SourceDisplacement SourceDisplacement::translated(const vm::vec3d& delta) const
+{
+  if (!vm::is_finite(delta))
+  {
+    invalid(m_entry, "nonfinite translation");
+  }
+  auto result = *this;
+  result.m_start = result.m_start + delta;
+  for (auto& corner : result.m_corners)
+  {
+    corner = corner + delta;
+  }
+  result.rebuild();
+  return result;
+}
+
+std::optional<vm::vec3d> SourceDisplacement::baseTranslationFrom(
+  const SourceDisplacement& before) const
+{
+  const auto delta = m_start - before.m_start;
+  if (!vm::is_finite(delta))
+  {
+    return std::nullopt;
+  }
+  for (size_t i = 0; i < m_corners.size(); ++i)
+  {
+    if (!vm::is_equal(m_corners[i], before.m_corners[i] + delta, TranslationEpsilon))
+    {
+      return std::nullopt;
+    }
+  }
+  return delta;
+}
+
 std::optional<double> SourceDisplacement::intersect(const vm::ray3d& ray) const
 {
   auto result = std::optional<double>{};
@@ -412,43 +454,50 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   const SourceDisplacement& before) const
 {
   if (
-    m_entry != before.m_entry || m_power != before.m_power || m_start != before.m_start
-    || m_corners != before.m_corners || m_elevation != before.m_elevation
-    || m_directions != before.m_directions || m_offsets != before.m_offsets
-    || m_alphas != before.m_alphas || m_distanceRows != before.m_distanceRows)
+    m_entry != before.m_entry || m_power != before.m_power || !baseTranslationFrom(before)
+    || m_elevation != before.m_elevation || m_startRow != before.m_startRow
+    || m_faceNormal != before.m_faceNormal || m_worldBounds != before.m_worldBounds
+    || m_directions != before.m_directions || m_normalsBound != before.m_normalsBound
+    || m_offsets != before.m_offsets || m_alphas != before.m_alphas
+    || m_distanceRows != before.m_distanceRows)
   {
     invalid(m_entry, "unsupported displacement structure or provenance edit");
   }
   auto edits = std::vector<VmfValueEdit>{};
+  const auto editRow = [&](const Row& row, const auto& oldValues, const auto& newValues) {
+    auto text = std::string{};
+    size_t offset = 0;
+    auto changed = false;
+    for (size_t i = 0; i < newValues.size(); ++i)
+    {
+      if (newValues[i] != oldValues[i])
+      {
+        if (!row.entry || row.spans.size() != newValues.size())
+        {
+          invalid(m_entry, "missing native numeric binding");
+        }
+        text += row.text.substr(offset, row.spans[i].begin - offset);
+        text += numberText(newValues[i]);
+        offset = row.spans[i].end;
+        changed = true;
+      }
+    }
+    if (changed)
+    {
+      text += row.text.substr(offset);
+      edits.push_back({*row.entry, "\"" + text + "\""});
+    }
+  };
+  editRow(
+    before.m_startRow,
+    std::array{before.m_start.x(), before.m_start.y(), before.m_start.z()},
+    std::array{m_start.x(), m_start.y(), m_start.z()});
   for (size_t y = 0; y < m_size; ++y)
   {
-    const auto& row = before.m_distanceRows[y];
-    auto changed = false;
-    for (size_t x = 0; x < m_size; ++x)
-    {
-      changed = changed || distance(y, x) != before.distance(y, x);
-    }
-    if (!changed)
-    {
-      continue;
-    }
-    if (!row.entry || row.spans.size() != m_size)
-    {
-      invalid(m_entry, "missing native distance row binding");
-    }
-    auto text = std::string{};
-    size_t last = 0;
-    for (size_t x = 0; x < m_size; ++x)
-    {
-      text += row.text.substr(last, row.spans[x].begin - last);
-      text +=
-        distance(y, x) == before.distance(y, x)
-          ? row.text.substr(row.spans[x].begin, row.spans[x].end - row.spans[x].begin)
-          : numberText(distance(y, x));
-      last = row.spans[x].end;
-    }
-    text += row.text.substr(last);
-    edits.push_back({*row.entry, "\"" + text + "\""});
+    editRow(
+      before.m_distanceRows[y],
+      std::span{before.m_distances}.subspan(y * m_size, m_size),
+      std::span{m_distances}.subspan(y * m_size, m_size));
   }
   return edits;
 }

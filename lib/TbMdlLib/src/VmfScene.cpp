@@ -1424,6 +1424,70 @@ void VmfScene::nodeEdits(
         refuse(id, "duplicate face binding");
       }
     }
+    if (!displacementSides.empty())
+    {
+      auto translation = std::optional<vm::vec3d>{};
+      auto baseChanged = false;
+      for (const auto& face : b.faces())
+      {
+        const auto found = sides.find(face.lineNumber());
+        if (found == sides.end())
+        {
+          refuse(id, "face topology/binding changed");
+        }
+        const auto& current = *found->second;
+        baseChanged = baseChanged || face.points() != current.points();
+        if (const auto& mesh = face.sourceDisplacement())
+        {
+          if (!current.sourceDisplacement())
+          {
+            refuse(id, "displacement structure changed");
+          }
+          const auto delta = current.sourceDisplacement()->baseTranslationFrom(*mesh);
+          if (!delta)
+          {
+            refuse(id, "nonuniform displacement base transform");
+          }
+          if (translation)
+          {
+            // Tolerance handles arithmetic, never a moved/unchanged mismatch.
+            if (
+              ((*translation == vm::vec3d{}) != (*delta == vm::vec3d{}))
+              || !vm::is_equal(
+                *translation, *delta, SourceDisplacement::TranslationEpsilon))
+            {
+              refuse(id, "displacement bases moved differently");
+            }
+          }
+          else
+          {
+            translation = delta;
+          }
+        }
+      }
+      if (!translation)
+      {
+        refuse(id, "missing displacement base");
+      }
+      if (baseChanged != (*translation != vm::vec3d{}))
+      {
+        refuse(id, "displacement mesh and base must move together");
+      }
+      for (const auto& face : b.faces())
+      {
+        const auto& current = *sides.at(face.lineNumber());
+        for (size_t i = 0; i < face.points().size(); ++i)
+        {
+          if (!vm::is_equal(
+                current.points()[i],
+                face.points()[i] + *translation,
+                SourceDisplacement::TranslationEpsilon))
+          {
+            refuse(id, "displacement brush requires a uniform translation");
+          }
+        }
+      }
+    }
     for (const auto& f : b.faces())
     {
       const auto it = sides.find(f.lineNumber());
@@ -1477,12 +1541,6 @@ void VmfScene::nodeEdits(
       }
       if (f.points() != g.points())
       {
-        if (std::any_of(b.faces().begin(), b.faces().end(), [](const auto& face) {
-              return bool(face.sourceDisplacement());
-            }))
-        {
-          refuse(side, "displacement base transform is not yet supported");
-        }
         edit(side, "plane", planeText(g));
       }
       if (f.materialName() != g.materialName())

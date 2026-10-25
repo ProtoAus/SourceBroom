@@ -41,6 +41,7 @@ private:
   size_t m_power = 2;
   size_t m_size = 5;
   vm::vec3d m_start;
+  Row m_startRow;
   double m_elevation = 0;
   std::array<vm::vec3d, 4> m_corners;
   vm::vec3d m_faceNormal;
@@ -61,6 +62,7 @@ private:
 
 public:
   static constexpr size_t MaxPower = 6;
+  static constexpr double TranslationEpsilon = 0.000001;
 
   /** Corners are the underlying BrushFace's counter-clockwise vertex positions. */
   static std::optional<SourceDisplacement> read(
@@ -82,6 +84,9 @@ public:
   double distance(size_t row, size_t column) const;
   bool canEditDistances() const;
   void setDistance(size_t row, size_t column, double distance);
+  SourceDisplacement translated(const vm::vec3d& delta) const;
+  /** Only a uniform base translation, within plane-intersection roundoff. */
+  std::optional<vm::vec3d> baseTranslationFrom(const SourceDisplacement& before) const;
   std::optional<double> intersect(const vm::ray3d& ray) const;
 
   /** Changed samples replace only their numeric tokens, not untouched row spelling. */

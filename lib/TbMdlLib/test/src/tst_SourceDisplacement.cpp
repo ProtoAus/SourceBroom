@@ -104,6 +104,51 @@ TEST_CASE("SourceDisplacement")
     CHECK(edited == original);
     CHECK_THROWS_AS(edited.setDistance(5, 2, 0), std::out_of_range);
   }
+  SECTION("pure translation moves the mesh and patches only start coordinates")
+  {
+    const auto delta = vm::vec3d{16, 8, 4};
+    const auto moved = original.translated(delta);
+    REQUIRE(moved.baseTranslationFrom(original));
+    CHECK(*moved.baseTranslationFrom(original) == delta);
+    for (size_t i = 0; i < original.positions().size(); ++i)
+    {
+      CHECK(moved.positions()[i] == original.positions()[i] + delta);
+      CHECK(moved.basePositions()[i] == original.basePositions()[i] + delta);
+      CHECK(vm::is_equal(moved.normals()[i], original.normals()[i], 0.000001));
+    }
+    CHECK(moved.indices() == original.indices());
+    CHECK(moved.alphas() == original.alphas());
+    CHECK(moved.distance(2, 2) == 16);
+    CHECK(moved.bounds().max == original.bounds().max + delta);
+    const auto edits = moved.editsFrom(original);
+    REQUIRE(edits.size() == 1);
+    const auto saved = document.serialize(edits);
+    CHECK(saved == replaceOnce(source, "[0 0 0]", "[16 8 4]"));
+    const auto parsed = VmfDocument::parse(saved);
+    auto newCorners = corners;
+    for (auto& corner : newCorners)
+    {
+      corner = corner + delta;
+    }
+    const auto reopened =
+      SourceDisplacement::read(parsed, parsed.roots()[0], newCorners, {0, 0, 1}, bounds);
+    REQUIRE(reopened);
+    CHECK(reopened->positions() == moved.positions());
+    CHECK(moved.translated(-delta) == original);
+    CHECK(document.serialize(moved.translated(-delta).editsFrom(original)) == source);
+    CHECK_THROWS_AS(original.translated({1000, 0, 0}), std::invalid_argument);
+    CHECK_THROWS_AS(
+      original.translated({0, 0, std::numeric_limits<double>::infinity()}),
+      std::invalid_argument);
+    CHECK(original.positions()[12] == vm::vec3d{32, 32, 16});
+
+    const auto spelled = replaceOnce(source, "[0 0 0]", "[0.00  +0 0]");
+    const auto authored = loadDisplacement(spelled);
+    CHECK(
+      VmfDocument::parse(spelled).serialize(
+        authored.translated({0, 8, 0}).editsFrom(authored))
+      == replaceOnce(spelled, "[0.00  +0 0]", "[0.00  8 0]"));
+  }
   SECTION("offset and elevation act exactly once")
   {
     auto text = replaceOnce(

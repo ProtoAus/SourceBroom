@@ -210,6 +210,54 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
     node.setBrush(std::move(materialEdit));
     CHECK(scene.serialize(scene.world()).find("synthetic/changed") != std::string::npos);
   }
+  SECTION("whole base translation preserves the native grid block")
+  {
+    const auto delta = vm::vec3d{16.125, 8.25, 4.5};
+    const auto lockUv = GENERATE(false, true);
+    const auto base = mesh.basePositions()[12];
+    const auto expectedUv = face.uvCoords(lockUv ? base : base + delta);
+    auto moved = node.brush();
+    REQUIRE(moved.transform(bounds, vm::translation_matrix(delta), lockUv).is_success());
+    const auto movedFace = moved.findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(movedFace);
+    CHECK(
+      vm::is_equal(moved.face(*movedFace).uvCoords(base + delta), expectedUv, 0.0001f));
+    node.setBrush(std::move(moved));
+    CHECK(node.physicalBounds().max == vm::vec3d{80.125, 72.25, 84.5});
+    const auto saved = scene.serialize(scene.world());
+    auto expectedBlock = test::displacementBlock();
+    const auto start = expectedBlock.find("[0 0 64]");
+    REQUIRE(start != std::string::npos);
+    expectedBlock.replace(start, std::string{"[0 0 64]"}.size(), "[16.125 8.25 68.5]");
+    CHECK(saved.find(expectedBlock) != std::string::npos);
+    auto reopened = VmfScene::read(saved, bounds);
+    const auto index = brush(reopened.world()).brush().findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(index);
+    CHECK(
+      brush(reopened.world()).brush().face(*index).sourceDisplacement()->positions()[12]
+      == vm::vec3d{48.125, 40.25, 84.5});
+    CHECK(brush(reopened.world()).physicalBounds().max == node.physicalBounds().max);
+  }
+  SECTION("mesh-only and base-only movement refuse even below arithmetic tolerance")
+  {
+    const auto meshOnly = GENERATE(false, true);
+    const auto delta = GENERATE(vm::vec3d{16, 8, 4}, vm::vec3d{0.00000001, 0, 0});
+    auto changed = node.brush();
+    if (meshOnly)
+    {
+      changed.face(*faceIndex).setSourceDisplacement(mesh.translated(delta));
+    }
+    else
+    {
+      REQUIRE(
+        changed.transform(bounds, vm::translation_matrix(delta), false).is_success());
+      const auto movedFace = changed.findFace(vm::vec3d{0, 0, 1});
+      REQUIRE(movedFace);
+      changed.face(*movedFace).setSourceDisplacement(mesh);
+    }
+    node.setBrush(std::move(changed));
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+  }
   SECTION("malformed meshes refuse strictly and are counted as preview omissions")
   {
     auto invalid = source;
@@ -220,6 +268,61 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
     auto preview = VmfScene::readReadOnlyPreview(invalid, bounds);
     CHECK(preview.unprojectedSolidCount() == 1);
     CHECK(preview.serialize(preview.world()) == invalid);
+  }
+}
+
+TEST_CASE("VmfScene every displacement agrees with whole base movement", "[vmf]")
+{
+  const auto wholeBase = GENERATE(false, true);
+  const auto bounds = vm::bbox3d{4096};
+  auto source = fixture(false, test::displacementBlock());
+  auto bottom = test::displacementBlock();
+  const auto start = bottom.find("[0 0 64]");
+  REQUIRE(start != std::string::npos);
+  bottom.replace(start, std::string{"[0 0 64]"}.size(), "[0 0 0]");
+  const auto owner = std::string{"side { \"id\" \"7\""};
+  const auto where = source.find(owner);
+  REQUIRE(where != std::string::npos);
+  source.insert(where + owner.size(), "\n" + bottom + "\n");
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  auto displaced = std::vector<size_t>{};
+  for (size_t i = 0; i < node.brush().faceCount(); ++i)
+  {
+    if (node.brush().face(i).sourceDisplacement())
+    {
+      displaced.push_back(i);
+    }
+  }
+  REQUIRE(displaced.size() == 2);
+  CHECK(scene.serialize(scene.world()) == source);
+  auto changed = node.brush();
+  if (wholeBase)
+  {
+    REQUIRE(changed.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), false)
+              .is_success());
+    CHECK_NOTHROW(scene.validateContents(node, NodeContents{changed}, bounds));
+    node.setBrush(std::move(changed));
+    const auto saved = scene.serialize(scene.world());
+    CHECK(saved != source);
+    auto reopened = VmfScene::read(saved, bounds);
+    for (const auto index : displaced)
+    {
+      CHECK(
+        brush(reopened.world()).brush().face(index).sourceDisplacement()->positions()[12]
+        == node.brush().face(index).sourceDisplacement()->positions()[12]);
+    }
+  }
+  else
+  {
+    const auto later = displaced.back();
+    changed.face(later).setSourceDisplacement(
+      changed.face(later).sourceDisplacement()->translated({0.00000001, 0, 0}));
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{changed}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+    node.setBrush(std::move(changed));
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
 }
 

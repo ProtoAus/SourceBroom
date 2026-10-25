@@ -98,6 +98,21 @@ std::string nativeRamp(const bool fractional, const bool globalExtension = false
   return bytes;
 }
 
+std::string nativeDisplacementRoom()
+{
+  auto original = nativeRamp(false);
+  const auto plane = std::string{"(0 0 32) (0 64 32) (64 0 64)"};
+  const auto topPlane = original.find(plane);
+  REQUIRE(topPlane != std::string::npos);
+  original.replace(topPlane, plane.size(), "(0 0 64) (0 64 64) (64 0 64)");
+  const auto topSide = original.find("\"id\" \"8\"");
+  REQUIRE(topSide != std::string::npos);
+  const auto field = original.find("\"smoothing_groups\" \"0\"", topSide);
+  REQUIRE(field != std::string::npos);
+  original.insert(field, test::displacementBlock());
+  return original;
+}
+
 // TestEnvironment owns cleanup, but its text-mode createFile/loadFile translate
 // CRLF on Windows. Preservation assertions must exercise binary disk I/O.
 void writeBinary(const std::filesystem::path& path, const std::string_view bytes)
@@ -404,23 +419,86 @@ TEST_CASE("VmfMap read-only compatibility safety", "[vmf]")
   CHECK(calls == 2);
 }
 
+TEST_CASE("VmfMap displacement translation undo and continued saving", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto originalPath = env.dir() / "displacement.vmf";
+  const auto outputPath = env.dir() / "moved displacement.vmf";
+  const auto original = nativeDisplacementRoom();
+  writeBinary(originalPath, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    originalPath,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto& node = ramp(map);
+  selectNodes(map, {&node});
+  const auto count = map.modificationCount();
+  REQUIRE(translateSelection(map, {16, 8, 4}));
+  CHECK(map.modificationCount() == count + 1);
+  CHECK(node.brush().bounds().min == vm::vec3d{16, 8, 4});
+  CHECK(node.physicalBounds().max == vm::vec3d{80, 72, 84});
+  auto hits = PickResult{};
+  pick(map, vm::ray3d{{48, 40, 128}, {0, 0, -1}}, hits);
+  REQUIRE_FALSE(hits.empty());
+  CHECK(hits.all()[0].distance() == Catch::Approx(44));
+  CHECK(hits.all()[0].hitPoint() == vm::vec3d{48, 40, 84});
+  map.undoCommand();
+  CHECK(node.physicalBounds().max.z() == 80);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  map.redoCommand();
+  CHECK(node.physicalBounds().max.z() == 84);
+
+  const auto before = map.vmfScene()->serialize(map.worldNode());
+  const auto beforeCount = map.modificationCount();
+  const auto beforeHistory = map.undoCommandName();
+  CHECK_FALSE(rotateSelection(map, {0, 0, 0}, {0, 0, 1}, 1.0));
+  CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {2, 1, 1}));
+  CHECK_FALSE(flipSelection(map, {0, 0, 0}, vm::axis::x));
+  auto shear = vm::mat4x4d::identity();
+  shear[1][0] = 0.25;
+  CHECK_FALSE(transformSelection(map, "Unsupported displacement shear", shear));
+  CHECK_FALSE(translateSelection(map, {0, 0, 10000}));
+  CHECK(map.modificationCount() == beforeCount);
+  CHECK(map.undoCommandName() == beforeHistory);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+
+  const auto face = node.brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(face);
+  deselectAll(map);
+  selectBrushFaces(map, {BrushFaceHandle{node, *face}});
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24));
+  CHECK(node.physicalBounds().max.z() == 92);
+  REQUIRE(map.saveAs(outputPath).is_success());
+  const auto saved = readBinary(outputPath);
+  CHECK(saved.find("[16 8 68]") != std::string::npos);
+  CHECK(saved.find("+0  24  0") != std::string::npos);
+  CHECK(saved.find("untouched_marker") != std::string::npos);
+  CHECK(readBinary(originalPath) == original);
+  auto reopened = MapFixture{};
+  auto& loaded = reopened.load(
+    outputPath,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  CHECK(ramp(loaded).physicalBounds().max == vm::vec3d{80, 72, 92});
+  const auto reopenedFace = ramp(loaded).brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(reopenedFace);
+  CHECK(
+    ramp(loaded).brush().face(*reopenedFace).sourceDisplacement()->positions()[12]
+    == vm::vec3d{48, 40, 92});
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 32));
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(outputPath).find("+0  32  0") != std::string::npos);
+  map.undoCommand();
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(outputPath) == saved);
+  CHECK(readBinary(originalPath) == original);
+}
+
 TEST_CASE("VmfMap displacement distance undo and safe save", "[vmf]")
 {
   auto env = fs::TestEnvironment{};
   const auto originalPath = env.dir() / "displacement.vmf";
   const auto outputPath = env.dir() / "displacement edited.vmf";
-  auto original = nativeRamp(false);
-  const auto topPlane = original.find("(0 0 32) (0 64 32) (64 0 64)");
-  REQUIRE(topPlane != std::string::npos);
-  original.replace(
-    topPlane,
-    std::string{"(0 0 32) (0 64 32) (64 0 64)"}.size(),
-    "(0 0 64) (0 64 64) (64 0 64)");
-  const auto topSide = original.find("\"id\" \"8\"");
-  REQUIRE(topSide != std::string::npos);
-  const auto field = original.find("\"smoothing_groups\" \"0\"", topSide);
-  REQUIRE(field != std::string::npos);
-  original.insert(field, test::displacementBlock());
+  const auto original = nativeDisplacementRoom();
   writeBinary(originalPath, original);
   auto fixture = MapFixture{};
   auto& map = fixture.load(

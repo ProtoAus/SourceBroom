@@ -34,12 +34,14 @@
 #include "vm/bbox.h"
 #include "vm/intersection.h"
 #include "vm/mat.h"
+#include "vm/mat_ext.h"
 #include "vm/plane_io.h" // IWYU pragma: keep
 #include "vm/scalar.h"
 #include "vm/util.h"
 #include "vm/vec_io.h" // IWYU pragma: keep
 
 #include <algorithm>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -740,6 +742,28 @@ Result<void> BrushFace::transform(const vm::mat4x4d& transform, const bool lockA
 {
   using std::swap;
 
+  auto displacement = m_sourceDisplacement;
+  if (displacement)
+  {
+    const auto delta = transform * vm::vec3d{};
+    if (transform != vm::translation_matrix(delta))
+    {
+      return Error{"Displacement bases currently support translation only"};
+    }
+    if (delta != vm::vec3d{})
+    {
+      try
+      {
+        displacement =
+          std::make_shared<const SourceDisplacement>(displacement->translated(delta));
+      }
+      catch (const std::invalid_argument& error)
+      {
+        return Error{error.what()};
+      }
+    }
+  }
+
   const auto invariant = m_geometry ? center() : m_boundary.anchor();
   const auto oldBoundary = m_boundary;
 
@@ -774,6 +798,7 @@ Result<void> BrushFace::transform(const vm::mat4x4d& transform, const bool lockA
                invariant,
                m_preservePlanePrecision);
            }
+           m_sourceDisplacement = std::move(displacement);
          });
 }
 
