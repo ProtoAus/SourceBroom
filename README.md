@@ -38,10 +38,9 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-Development now includes bounded native displacement meshes (rendering, picking,
+The A5.8 candidate adds bounded native displacement meshes (rendering, picking,
 bounds and existing-vertex distance edits with undo/preserving save), and 13 more
-common integer VTF pixel layouts. The installed candidate remains A5.7 pending
-replacement verification. Sculpt/create/power/sew, base transforms, alpha-material
+common integer VTF pixel layouts. Keep A5.7 as recovery. Sculpt/create/power/sew, base transforms, alpha-material
 blending and full Source support are not complete; see the roadmap and validation
 for the exact automated controls and the retained preference-test failure.
 

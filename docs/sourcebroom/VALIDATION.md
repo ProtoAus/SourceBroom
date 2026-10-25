@@ -5,10 +5,10 @@ paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## Native mesh / integer VTF development (not yet packaged)
+## A5.8 native mesh / integer VTF controls
 
-The development branch adds bounded native displacement geometry and existing
-vertex-distance editing; A5.7 remains the installed candidate. Mesh triangles,
+The A5.8 candidate adds bounded native displacement geometry and existing
+vertex-distance editing; A5.7 remains recovery. Mesh triangles,
 base-position UVs, raised ray/rtree hits and bounds, surgical token save/reopen,
 undo/redo, malformed meshes, misplaced attachments and ordinary-face shared-edge
 ownership have acted synthetic controls. The real inspector test switches

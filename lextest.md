@@ -143,7 +143,7 @@ This is qualitative prior-build feedback, not A5.3 acceptance or measured timing
   folder. Confirm no installed stock content or original BSP was changed. This
   visual/manual check is not licence or complete-dependency certification.
 
-## Native displacement development — pending candidate delivery and owner check
+## A5.8 native displacements — pending owner check
 
 - [ ] Open a **copy** of a CSS or Momentum VMF with a raised displacement.
   Confirm the terrain is raised (not its old flat base) and face selection lands

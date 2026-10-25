@@ -64,7 +64,7 @@ compatible merely because they also use VMF.
   focused Gl990/Mdl7654 and GPU2539 assertions. The earlier intermittent Windows
   preference rename failure remains unfixed despite the current passing run.
   Final receipts retain the source/binary/run distinctions and appearance gates.
-- A6 has a bounded **native displacement foundation** in development: actual
+- A5.8 starts A6 with a bounded **native displacement foundation**: actual
   power2..6 mesh rendering/picking/bounds and selected-face distance edits through
   normal undo and preserving save. Sculpt/create/power/sew, alpha blending and
   base transforms remain gated; full A6 and complete Source support are not claimed.
@@ -73,7 +73,7 @@ compatible merely because they also use VMF.
   in 37 cases, plus 21 real inspector assertions. The current normal run is
   Fs20/Gl21/Mdl178 passes and Ui42/43, with the known untouched Windows preference
   rename failure preserved; the new native guard and inspector cases pass
-  separately. Last installed candidate remains A5.7 until replacement is verified.
+  separately. Native appearance/Hammer acceptance is pending; A5.7 is recovery.
   No Source compiler, Valve content, or third-party/user map is bundled. See
   [alpha instructions](ALPHA.md) for the owner test path.
 

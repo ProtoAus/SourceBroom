@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.7 custom-cutout candidate
+# Try the Windows SourceBroom A5.8 native-mesh candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,27 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.7: authored Source cutout thresholds
+## A5.8: native displacement meshes and more texture layouts
+
+Admitted native power2..6 displacements now draw their actual raised triangles,
+with base-position UVs, surface picking and expanded selection bounds. Select
+exactly one displacement **face** to use **Displacement vertex** in the face
+inspector: choose row/column, enter a small distance and click **Apply distance**.
+Normal undo/redo and preserving Save As retain the other native bytes. Incomplete
+or zero-direction authoring data does not enable the tool. Unknown attachments
+and references still refuse unsafe edits rather than discarding source data.
+
+The bounded VTF preview also decodes 13 more common integer channel layouts,
+including intensity, alpha-only and bluescreen formats, with an expansion-aware
+mip budget. This is not HDR/normal/animated texture support or a measured speedup.
+
+**Quick owner check:** open a **copy** with a raised displacement, confirm the
+surface and face-selection position, apply one small distance edit, undo/redo,
+and Save As a new VMF. Compare that vertex in matching Hammer++ when convenient.
+Sculpt/create/power/sew, arbitrary base transforms and blend-material parity are
+not implemented. Keep A5.7 as recovery; native visual/Hammer acceptance is pending.
+
+## Retained A5.7: authored Source cutout thresholds
 
 Fences, grates and similar alpha-tested brush/prop materials now use a supported
 explicit `$alphatestreference`, including values inherited or replaced through
@@ -211,8 +231,8 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 
 - Basic plain-brush/point-entity creation, duplication, deletion and limited
   brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
-  CSG/clipping, native editor-group/layer authoring, displacements, overlays and
-  instances remain unsupported. Common unsafe paths refuse before mutation;
+  CSG/clipping, native editor-group/layer authoring, displacement creation/sculpt/
+  power/sew/base transforms, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
   some upstream controls can remain visible and save guards stay authoritative.
 - Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
   does not apply cordon clipping itself; unchanged VMF is passed to external tools
@@ -222,14 +242,15 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current A5.7 filesystem/graphics/model/UI suites pass
-  **20/20, 21/21, 175/175, 43/43** (259 entries). The historically intermittent
-  Windows preference rename failure remains unfixed, not a preference-fix claim.
-  Focused graphics/model controls pass **990/7654 assertions**, and expanded
-  five-config GPU controls pass **2539**. [VALIDATION.md](VALIDATION.md) and package
+- The native baseline normal run passed **20/20 filesystem, 21/21 graphics and
+  178/178 model** entries; UI was **42/43**, retaining the untouched Windows
+  preference-file replacement failure. The later native guard and actual
+  inspector cases pass separately: **3,182 assertions/37 focused model cases**
+  and **21 inspector assertions**. Existing five-config GPU controls pass **2,539**.
+  The preference failure is preserved/unfixed, not an all-runs-green claim. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep prior A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
+  Keep prior A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.
