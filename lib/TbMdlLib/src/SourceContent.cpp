@@ -19,6 +19,8 @@
 
 #include "mdl/SourceContent.h"
 
+#include "fs/FileSystem.h"
+
 #include "kd/string_format.h"
 
 #include <algorithm>
@@ -26,6 +28,9 @@
 #include <charconv>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
+#include <map>
+#include <set>
 #include <stdexcept>
 
 namespace tb::mdl
@@ -166,18 +171,168 @@ std::string readText(const std::filesystem::path& path)
   std::ifstream stream{path, std::ios::binary};
   return {std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
 }
-} // namespace
-Result<SourceMaterialInfo> sourceMaterial(
-  std::string_view vmt, const SourceMaterialMode mode)
+constexpr size_t MaxMaterialFileSize = 1024u * 1024u;
+constexpr size_t MaxMaterialTextSize = 4u * MaxMaterialFileSize;
+constexpr size_t MaxMaterialIncludes = 16;
+using MaterialReader = std::function<Result<std::string>(const std::filesystem::path&)>;
+
+Entry resolveMaterial(
+  const std::string_view text,
+  const MaterialReader& read,
+  size_t& remaining,
+  std::vector<std::filesystem::path>& active)
+{
+  if (text.size() > MaxMaterialFileSize || text.size() > remaining)
+  {
+    throw std::runtime_error("Source material text budget exceeded");
+  }
+  remaining -= text.size();
+  auto entries = KeyValues{text}.parse();
+  if (entries.size() != 1 || !entries.front().block)
+  {
+    throw std::runtime_error("Invalid VMT shader block");
+  }
+  auto shader = std::move(entries.front());
+  if (shader.key != "patch")
+  {
+    return shader;
+  }
+  if (!read)
+  {
+    throw std::runtime_error("Source Patch requires a mounted include resolver");
+  }
+  auto commands = std::set<std::string>{};
+  auto parameters = std::set<std::string>{};
+  for (const auto& command : shader.children)
+  {
+    if (!commands.insert(command.key).second)
+    {
+      throw std::runtime_error("Repeated Source Patch command");
+    }
+    if (command.key == "include")
+    {
+      if (command.block || command.value.empty())
+      {
+        throw std::runtime_error("Invalid Source Patch include");
+      }
+    }
+    else if (command.key == "insert" || command.key == "replace")
+    {
+      if (!command.block)
+      {
+        throw std::runtime_error("Source Patch operation must be a block");
+      }
+      for (const auto& parameter : command.children)
+      {
+        if (parameter.block || parameter.value.empty())
+        {
+          throw std::runtime_error("Unsupported nested or empty Source Patch value");
+        }
+        // Refuse overlap as well as duplicates: no guessed cross-command order.
+        if (!parameters.insert(parameter.key).second)
+        {
+          throw std::runtime_error("Ambiguous Source Patch parameter");
+        }
+      }
+    }
+    else
+    {
+      throw std::runtime_error("Unsupported Source Patch command: " + command.key);
+    }
+  }
+  const auto* include = child(shader.children, "include");
+  if (!include)
+  {
+    throw std::runtime_error("Missing Source Patch include");
+  }
+  const auto name = slashes(kdl::str_to_lower(include->value));
+  auto path = std::filesystem::path{name};
+  if (
+    path.is_absolute() || path.has_root_name() || name.find(':') != std::string::npos
+    || path.extension() != ".vmt" || path.begin() == path.end()
+    || *path.begin() != "materials")
+  {
+    throw std::runtime_error("Source Patch include must be a relative materials VMT");
+  }
+  for (const auto& part : path)
+  {
+    if (part == "..")
+    {
+      throw std::runtime_error("Parent traversal in Source Patch include");
+    }
+  }
+  path = path.lexically_normal();
+  if (
+    active.size() >= MaxMaterialIncludes
+    || std::ranges::find(active, path) != active.end())
+  {
+    throw std::runtime_error("Source Patch include cycle or depth limit");
+  }
+  auto included = read(path);
+  if (included.is_error())
+  {
+    throw std::runtime_error(
+      "Cannot read Source Patch include: " + path.generic_string());
+  }
+  active.push_back(path);
+  auto base = resolveMaterial(included | kdl::value(), read, remaining, active);
+  active.pop_back();
+  struct Location
+  {
+    size_t index;
+    size_t count;
+  };
+  // Stable indices survive inserts; ordered lookup bounds work for many keys.
+  auto inherited = std::map<std::string, Location>{};
+  for (size_t i = 0; i < base.children.size(); ++i)
+  {
+    const auto [position, added] =
+      inherited.try_emplace(base.children[i].key, Location{i, 1});
+    if (!added)
+    {
+      ++position->second.count;
+    }
+  }
+  for (const auto& command : shader.children)
+  {
+    if (command.key == "include")
+    {
+      continue;
+    }
+    for (const auto& parameter : command.children)
+    {
+      const auto existing = inherited.find(parameter.key);
+      if (existing != inherited.end())
+      {
+        if (existing->second.count != 1)
+        {
+          throw std::runtime_error("Ambiguous inherited Source Patch parameter");
+        }
+        auto& entry = base.children[existing->second.index];
+        if (entry.block)
+        {
+          throw std::runtime_error("Cannot replace a Source Patch block with a scalar");
+        }
+        entry = parameter;
+      }
+      else if (command.key == "insert")
+      {
+        inherited.emplace(parameter.key, Location{base.children.size(), 1});
+        base.children.push_back(parameter);
+      }
+    }
+  }
+  return base;
+}
+
+Result<SourceMaterialInfo> parseMaterial(
+  const std::string_view vmt, const SourceMaterialMode mode, const MaterialReader& read)
 {
   try
   {
-    const auto entries = KeyValues{vmt}.parse();
-    if (entries.size() != 1 || !entries.front().block)
-    {
-      return Error{"Invalid VMT shader block"};
-    }
-    const auto& shader = entries.front();
+    auto remaining = MaxMaterialTextSize;
+    auto active = std::vector<std::filesystem::path>{};
+    const auto shader = resolveMaterial(vmt, read, remaining, active);
     if (
       shader.key != "lightmappedgeneric" && shader.key != "unlitgeneric"
       && shader.key != "vertexlitgeneric")
@@ -283,6 +438,43 @@ Result<SourceMaterialInfo> sourceMaterial(
   {
     return Error{e.what()};
   }
+}
+
+} // namespace
+
+Result<SourceMaterialInfo> sourceMaterial(
+  const std::string_view vmt, const SourceMaterialMode mode)
+{
+  return parseMaterial(vmt, mode, {});
+}
+
+Result<SourceMaterialInfo> loadSourceMaterial(
+  const std::filesystem::path& path,
+  const fs::FileSystem& fs,
+  const SourceMaterialMode mode)
+{
+  auto remainingReadBytes = MaxMaterialTextSize;
+  const auto read = [&](const std::filesystem::path& filePath) -> Result<std::string> {
+    return fs.openFile(filePath) | kdl::and_then([&](auto file) -> Result<std::string> {
+             const auto size = file->size();
+             if (size > MaxMaterialFileSize)
+             {
+               return Error{"Source material file size limit exceeded"};
+             }
+             if (size > remainingReadBytes)
+             {
+               return Error{"Source material text budget exceeded"};
+             }
+             remainingReadBytes -= size;
+             auto text = std::string(size, '\0');
+             auto reader = file->reader();
+             reader.read(text.data(), text.size());
+             return text;
+           });
+  };
+  return read(path) | kdl::and_then([&](const auto& text) {
+           return parseMaterial(text, mode, read);
+         });
 }
 
 Result<std::filesystem::path> sourceBaseTexture(

@@ -5,15 +5,16 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.4 rendering/material-mount follow-up to the A5 candidate:
+**Status:** Windows A5.5 Patch-material follow-up to the A5 candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
 FGD-backed properties and ordered Source outputs, preserving saves, external
 compile/play, capability preflight, read-only native metadata and an explicit
 custom-content distribution ZIP. CSS and Momentum are the first tested profiles,
-not the only configurable games. Independent Hammer++/owner acceptance remains
-pending; full A5, advanced native authoring and a general release are not claimed.
+not the only configurable games. Independent Hammer++ and detailed authoring
+acceptance remain pending; full A5, advanced native authoring and a general
+release are not claimed.
 Native authoring keeps stable independent object/side IDs and preserves original
 VMF data without a MAP conversion; arbitrary topology and opaque-reference edits
 remain gated. The retained usability fixes remove a redundant Source-content
@@ -28,7 +29,14 @@ shader-mask alpha for both brushes and props, while retaining editor fades.
 Source Material Collections settings now show a game/profile-named entry instead
 of every nested folder. The complete catalog and saved partial folder selections
 remain intact; choosing the entry explicitly enables/disables the whole mount.
-Correct full-map rendering still needs owner confirmation.
+The owner accepted the observed A5.4 visual retry; all-map/model/shader parity
+and the separate Hammer/authoring checks are not implied.
+
+A5.5 resolves bounded Source **Patch VMTs** on demand for brush and prop textures,
+including scalar inheritance/insert/replace through existing mounted search paths.
+No material-wide scan or persistent include cache is added. Unsupported nested,
+proxy, deletion or ambiguous operations still refuse; file/chain limits and final
+shader/alpha validation remain explicit.
 
 Strict editable loading still constructs **35/38** supplied maps. After explicit
 permission, a clearly labelled **read-only compatibility preview** opens all

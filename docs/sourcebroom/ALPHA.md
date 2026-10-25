@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.4 rendering/material candidate
+# Try the Windows SourceBroom A5.5 Patch-material candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,30 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.4: rendering and game-level material settings
+## A5.5: inherited Source Patch materials
+
+Brush and static-prop textures can now resolve a Source **Patch VMT** through the
+configured mounted filesystem, instead of rejecting that wrapper outright.
+`include` names a relative `materials/... .vmt` file; slash/case normalization and
+existing mount priority apply. Scalar `insert` adds or overwrites a parameter;
+`replace` updates only an existing parameter. Final supported-shader, base-texture
+and opacity checks still run after resolution. This is VMT inheritance, not a
+new geometry/displacement tool or complete shader support.
+
+Resolution happens only when the texture is demanded, with no global include
+scan or persistent cache. Limits are 1 MiB per file, 4 MiB combined text and
+16 included files. Explicit text reads are guarded; work internal to filesystem
+open/decompression is not a new whole-I/O guarantee. Cycles, unsafe paths,
+duplicate/overlapping commands/parameters, nested/proxy blocks, empty-value
+removal and unsupported final features produce diagnostics rather than guesses.
+Original material and map files are not rewritten.
+
+**Optional quick check:** if a familiar brush or prop uses a Patch-based material,
+open a copied map with matching content and compare that material with the game.
+Report the exact remaining fallback; a visible base image is not full shader
+fidelity. Keep the known-good A5.4 folder/ZIP separate as recovery.
+
+## Retained A5.4: rendering and game-level material settings
 
 - Source VTX triangles no longer receive an extra reversal. A real prop's outward
   normals and native brush-cache controls distinguish this from a blanket global
@@ -38,11 +61,10 @@ FTESurf is an optional runtime, not an editor dependency.
   This controls browsing of already mounted content, not a new cross-game mount
   manager. Read-only previews cannot change saved collection choices.
 
-**Quick check:** open a copy of the previously inside-out map with the matching
-profile. Look at a brush exterior and a familiar prop from outside, then inspect
-Material Collections and select a material. Confirm the front faces and game-level
-entry look right. Report the exact remaining visual issue rather than assume
-complete rendering or performance parity.
+The owner confirmed the observed A5.4 retry **looks good** on 2026-10-25.
+That is qualitative visual acceptance, not an individual attestation of every
+optional selection/undo action, all-map rendering or measured performance.
+Detailed/unrelated manual gates remain explicit in [lextest.md](../../lextest.md).
 
 ## If a VMF cannot open for editing
 
@@ -161,12 +183,14 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current four-suite regression evidence is **255/255 passed**: Fs20, Gl21,
-  Mdl171 and Ui43. A prior untouched Windows preference replacement failure
-  passed in this run but remains a known intermittent finding, not a claimed fix.
-  Details and prior A4 evidence are in [VALIDATION.md](VALIDATION.md).
+- Current A5.5 filesystem/graphics/model suites pass **20/20, 21/21, 173/173**.
+  Normal UI is **42/43**: the unchanged Windows preference rename failure also
+  failed its isolated retry. It remains unresolved, not an all-green claim or
+  an A5.5 preference fix. Focused Patch controls pass 974 assertions and existing
+  GPU controls pass 394; [VALIDATION.md](VALIDATION.md) distinguishes older 255
+  full-pass evidence and package receipts identify the actual installed checks.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep the older A5.3 package as recovery; do not merge different package DLL sets.
+  Keep the accepted A5.4 package as recovery; do not merge package DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

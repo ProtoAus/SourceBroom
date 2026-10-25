@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom A4/A5/A5.4 candidates
+# Human acceptance — SourceBroom A4/A5/A5.5 candidates
 
 Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
@@ -42,6 +42,14 @@ in material settings and request game-named material-root entries. This confirms
 that opening observation only: exact binary/profile hashes, complete geometry,
 correct rendering and improved texture latency were not independently confirmed.
 External map names/content stay out of public notes.
+
+## A5.5 inherited Patch material appearance — pending
+
+- [ ] If a familiar brush/prop uses a Source Patch VMT, open a **copied** map
+  with matching content. Confirm the inherited/replaced base image appears where
+  a fallback did previously and compare the actual game. Keep original materials
+  and maps unchanged. Report a remaining diagnostic, not a full shader/branch
+  verdict. This feature does not add displacement geometry or new map editing.
 
 ## A5.4 rendering/material retry — overall visual acceptance confirmed
 

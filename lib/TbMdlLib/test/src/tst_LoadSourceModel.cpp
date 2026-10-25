@@ -37,7 +37,8 @@ fs::TestFileSystem modelFileSystem(
   bool sidecars = true,
   bool mipmapped = false,
   const std::string& materialParameters = {},
-  const uint32_t textureFlags = 0)
+  const uint32_t textureFlags = 0,
+  const bool patchMaterial = false)
 {
   auto entries = std::vector<fs::Entry>{fs::FileEntry{"prop.mdl", file(prop.mdl)}};
   if (sidecars)
@@ -67,25 +68,45 @@ fs::TestFileSystem modelFileSystem(
     test::put(vtf, 18, 2, 2);
     test::put(vtf, 56, 2, 1);
   }
+  auto materials = std::vector<fs::Entry>{
+    fs::FileEntry{
+      "metal.vmt",
+      file(
+        patchMaterial ? "Patch { include materials/models/test/base.vmt replace { "
+                        "$basetexture Models/Test/Pixel } }"
+                      : "VertexLitGeneric { $basetexture Models/Test/Pixel "
+                          + materialParameters + " }")},
+    fs::FileEntry{
+      "other.vmt", file("VertexLitGeneric { $basetexture models/test/other }")},
+    fs::FileEntry{
+      "third.vmt", file("VertexLitGeneric { $basetexture models/test/third }")},
+    fs::FileEntry{"other.vtf", file(vtf)},
+    fs::FileEntry{"third.vtf", file(vtf)},
+    fs::FileEntry{"pixel.vtf", file(vtf)}};
+  if (patchMaterial)
+  {
+    auto baseImage = vtf;
+    baseImage.resize(96);
+    test::put(baseImage, 16, 2, 2);
+    test::put(baseImage, 18, 2, 2);
+    test::put(baseImage, 56, 1, 1);
+    for (const auto offset : {80, 84, 88, 92})
+    {
+      test::put(baseImage, offset, 0xffff0000);
+    }
+    materials.push_back(fs::FileEntry{"basepixel.vtf", file(baseImage)});
+    materials.push_back(
+      fs::FileEntry{
+        "base.vmt",
+        file(
+          "VertexLitGeneric { $basetexture Models/Test/BasePixel " + materialParameters
+          + " }")});
+  }
   entries.push_back(
     fs::DirectoryEntry{
       "materials",
       {fs::DirectoryEntry{
-        "models",
-        {fs::DirectoryEntry{
-          "test",
-          {fs::FileEntry{
-             "metal.vmt",
-             file(
-               "VertexLitGeneric { $basetexture Models/Test/Pixel " + materialParameters
-               + " }")},
-           fs::FileEntry{
-             "other.vmt", file("VertexLitGeneric { $basetexture models/test/other }")},
-           fs::FileEntry{
-             "third.vmt", file("VertexLitGeneric { $basetexture models/test/third }")},
-           fs::FileEntry{"other.vtf", file(vtf)},
-           fs::FileEntry{"third.vtf", file(vtf)},
-           fs::FileEntry{"pixel.vtf", file(vtf)}}}}}}});
+        "models", {fs::DirectoryEntry{"test", std::move(materials)}}}}});
   return fs::TestFileSystem{fs::DirectoryEntry{"", std::move(entries)}, {}};
 }
 } // namespace
@@ -275,12 +296,19 @@ TEST_CASE("Source VMT alpha controls brush and prop render policy")
   };
   auto taskManager = kdl::task_manager{2};
   auto logger = NullLogger{};
-  for (const auto flags : {0u, 0x1000u, 0x2000u})
+  for (const auto [flags, patched] :
+       {std::pair{0u, false},
+        std::pair{0x1000u, false},
+        std::pair{0x2000u, false},
+        std::pair{0u, true},
+        std::pair{0x1000u, true},
+        std::pair{0x2000u, true}})
   {
     for (const auto& [parameters, expected] : modes)
     {
-      CAPTURE(flags, parameters);
-      auto fs = modelFileSystem(test::SyntheticProp{}, true, false, parameters, flags);
+      CAPTURE(flags, parameters, patched);
+      auto fs =
+        modelFileSystem(test::SyntheticProp{}, true, false, parameters, flags, patched);
       const auto raw =
         loadTexture("materials/models/test/pixel.vtf", "raw", fs, {}) | kdl::value();
       CHECK(
@@ -311,6 +339,9 @@ TEST_CASE("Source VMT alpha controls brush and prop render policy")
       for (const auto* material : {brush, prop})
       {
         REQUIRE(material->texture());
+        // Patch base is2x2 and fallback32x32: only acted replacement decodes1x1.
+        CHECK(material->texture()->width() == 1);
+        CHECK(material->texture()->height() == 1);
         CHECK(material->texture()->alphaDomain() == expected);
         const auto blend = material->effectiveBlendFunc();
         CHECK(

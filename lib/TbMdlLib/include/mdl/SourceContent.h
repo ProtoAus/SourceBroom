@@ -24,6 +24,12 @@
 #include <filesystem>
 #include <string_view>
 #include <vector>
+
+namespace tb::fs
+{
+class FileSystem;
+}
+
 namespace tb::mdl
 {
 // Results are in Source search order (first entry has highest priority).
@@ -44,6 +50,11 @@ struct SourceMaterialInfo
 };
 Result<SourceMaterialInfo> sourceMaterial(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);
+// Resolve bounded scalar Patch chains using the mounted filesystem, on demand.
+Result<SourceMaterialInfo> loadSourceMaterial(
+  const std::filesystem::path& path,
+  const fs::FileSystem& fs,
+  SourceMaterialMode mode = SourceMaterialMode::Strict);
 Result<std::filesystem::path> sourceBaseTexture(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);
 // Explicit roots are manual overrides; otherwise inspect standard platform locations.

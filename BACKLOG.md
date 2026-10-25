@@ -28,7 +28,9 @@ These are observed limitations/follow-ups, not a claim that all have a product f
 - **Source alpha/shader fidelity — `mdl/SourceContent.cpp`, `shader/AlphaFunc.fragsh`.**
   A5.4 fixes shader-mask opacity and prop winding; its basic alpha hints do not
   implement arbitrary `$alphatestreference`, combined translucent/cutout blending,
-  scalar `$alpha`, proxies or full shader effects. Basic cutout uses 0.5. Falsifier
+  scalar `$alpha`, proxies or full shader effects. A5.5 resolves bounded scalar
+  Patch inheritance; nested/conditional/proxy/deletion and overlapping operations
+  remain unsupported rather than guessed. Basic cutout uses 0.5. Falsifier
   for expanding support: authored controls against the matching Source shader
   retain raw cutout ordering, actual opacity, editor fade, non-Source draw state
   and deferred loading without inventing unsupported effects.
@@ -52,7 +54,8 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   fixture; one narrow rerun repeated it. Later A5.1/A5.3 full runs pass 42/42,
   but A5.3 also observed another full-run failure followed by an isolated pass.
   A5.4 again failed the first full run, then passed alone and full 43/43.
-  These passes do not establish a fix. Earlier runs observed intermittent sharing
+  A5.5 observed full 42/43 and an isolated failure; both were preserved rather
+  than retried for green. These passes do not establish a fix. Earlier runs observed intermittent sharing
   failures. The host/watcher cause is not conclusively diagnosed and no
   unrelated product/test code was changed to conceal it. Falsifier: a bounded
   same-host control consistently performs both atomic replacements, observes

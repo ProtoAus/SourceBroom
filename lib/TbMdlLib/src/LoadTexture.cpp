@@ -52,11 +52,7 @@ Result<gl::Texture> loadTexture(
 {
   if (kdl::path_to_lower(path.extension()) == ".vmt")
   {
-    return fs.openFile(path) | kdl::and_then([&](auto file) {
-             auto reader = file->reader().buffer();
-             return sourceMaterial(
-               reader.readString(reader.size()), SourceMaterialMode::BaseTexturePreview);
-           })
+    return loadSourceMaterial(path, fs, SourceMaterialMode::BaseTexturePreview)
            | kdl::and_then([&](auto info) {
                return loadTexture(info.baseTexture, name, fs, palette)
                       | kdl::transform([&](auto texture) {

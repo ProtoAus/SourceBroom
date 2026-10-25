@@ -1,4 +1,4 @@
-# Native Source authoring tools — bounded A5.4 candidate
+# Native Source authoring tools — bounded A5.5 candidate
 
 SourceBroom edits native Source 1 VMF, not a converted Quake MAP. CSS and
 Momentum/Strata are the first tested profiles; generic Source paths and external
@@ -96,6 +96,15 @@ reproducing their effects. Strict material inspection still rejects those
 unsupported features. Unknown shaders/parameters, dynamic base selection and
 unsupported proxy blocks are not blanket-accepted. A visible base image is not
 Source lighting, blending, animation or full shader support.
+
+A5.5 brush/prop image loading resolves a bounded Source **Patch VMT** through
+configured mounted paths. Scalar insert adds/overwrites and replace changes only
+existing keys; final supported-shader/base-image/alpha policy still applies.
+Includes must stay in relative `materials/... .vmt` paths, with 1 MiB/file,
+4 MiB combined text and 16-include limits. Resolution is on demand, without a global include scan/cache
+or material-file writes. Nested/proxy, empty-value deletion, duplicate/overlapping
+operations and unsafe/missing/cyclic includes refuse explicitly. This does not
+add geometry patches, displacements or full shader/conditional semantics.
 
 ## Static prop preview
 

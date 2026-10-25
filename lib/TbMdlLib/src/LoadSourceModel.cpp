@@ -84,8 +84,7 @@ struct Materials
         {
           throw std::runtime_error("material not found: " + name);
         }
-        const auto vmt = readFile(fs, path, 1024u * 1024u);
-        auto base = sourceMaterial(vmt, SourceMaterialMode::BaseTexturePreview);
+        auto base = loadSourceMaterial(path, fs, SourceMaterialMode::BaseTexturePreview);
         if (base.is_error())
         {
           throw std::runtime_error("unsupported or invalid VMT: " + key);

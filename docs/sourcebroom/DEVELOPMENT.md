@@ -94,6 +94,30 @@ pixels, then explicitly requests a texture to prove the loader acts. Keep game
 files/logs private and report the workload; this is not an end-to-end benchmark
 or a substitute for visual acceptance.
 
+## A5.5 Patch material contracts / measured pitfalls
+
+`loadSourceMaterial` resolves only demanded scalar Patch chains through the
+existing mounted filesystem. Keep canonical relative materials VMT paths, cycle
+tracking, 1 MiB/file, 4 MiB combined text and 16-include guards, plus final shader/
+alpha validation. Byte limits guard explicit reads, not arbitrary `openFile` work.
+No global scan/cache, host-relative lookup or guessed missing-file fallback.
+Insert adds/overwrites; replace touches existing scalars only. Nested/proxy,
+empty/deletion and duplicate/overlapping operations intentionally refuse.
+
+Read exact owned bytes with `Reader::read`: `readString(size)` silently truncates
+at NUL and bypasses the parser's explicit rejection. Root and include controls
+must keep the valid counterpart. Do not replace the generic Reader contract.
+Use a resolver-local ordered index of inherited key positions/occurrence counts;
+count/find per operation is quadratic even under text limits. Stable numeric
+indices survive vector inserts; the 40k+40k control checks acted override, not a
+performance promise. No public Material/Texture class-layout change is needed.
+
+Tests must create fixture parent directories and compare exact before/after
+bytes, not LF literals with Windows text-mode files. Capture subprocess output
+as bytes/to-file: a default cp1252 reader lost UTF8 preference-failure output.
+Preserve native CTest LastTest/LastTestsFailed evidence if capture fails; never
+repeat passed suites or keep retrying the unrelated preference flake for green.
+
 ## A5.4 rendering / collection contracts
 
 Source VTX indices are already clockwise for the renderer. The authored prop

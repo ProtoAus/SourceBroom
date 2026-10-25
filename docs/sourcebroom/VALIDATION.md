@@ -1,4 +1,4 @@
-# SourceBroom validation — A5.4 rendering/material-mount follow-up
+# SourceBroom validation — A5.5 bounded Patch-material follow-up
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
@@ -29,8 +29,9 @@ not substituted for compilation or runtime checks.
 
 | Check | Actual result |
 | --- | --- |
-| Full filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 171/171 + 43/43 passed** (255 entries) |
-| Preference replacement history | The untouched test passes this full run; earlier A5 full/narrow runs failed with Windows rename `Access is denied`. One pass is not a fix or a claim of consistent host behavior |
+| Current filesystem / graphics / model CTest suites | **20/20 + 21/21 + 173/173 passed** |
+| Current normal UI / preference history | **42/43**; unchanged QPreferenceStore Windows rename failure also failed its isolated retry. Unfixed; earlier reviewed A5.4 Fs20/Gl21/Mdl171/Ui43 full255 pass remains historical, not an all-runs-green claim |
+| Focused Patch and rendering controls | **974 assertions /5 cases** and retained shared-alpha GPU **394 assertions /1 case** passed |
 | Focused accepted-fix UI controls | **4/4 passed**: property/I/O namespace controls, production build backend and metadata/package tools |
 | Lossless supplied corpus | **38/38 passed**, no-edit plus acted in-memory mutation; original SHA-256 unchanged |
 | Scene supplied corpus | Strict **35/38 constructed**, same three ID/geometry/UV refusals; explicit read-only preview **38/38**, counting/reporting unprojected solids with original hashes unchanged. Shared +/-131072 policy; retained smaller-envelope strict control was 32/38 |
@@ -48,10 +49,42 @@ installed-candidate reruns from retained checks. This sample is useful evidence,
 not all-map/all-game coverage. External map names, content and raw private logs
 are not public fixtures.
 
-### A5.4 orientation / material-root controls
+### A5.5 on-demand scalar Patch materials
 
-- Owner reports one previously refused map opens but looks inside out, including
-  props. This is actual qualitative opening/visual feedback, not a render pass.
+- Both brush and static-prop texture paths resolve bounded Patch includes using
+  existing mounted lookup priority. Scalar insert adds/overwrites, replace only
+  changes present keys. Final supported-shader/base-texture/alpha validation is
+  retained; pure-text inspection without a filesystem still refuses Patch.
+- Authored inherited/overridden/domain controls use actual production loaders:
+  a 2x2 base, 1x1 replacement and 32x32 fallback distinguish acted resolution from
+  placeholder success for 42 raw-VTF/domain combinations. Mount override, chained
+  inheritance, scalar rules and exact original-before/after bytes are checked.
+- Cycles, normalized path/parent/absolute/drive refusals, 16-vs-17 includes,
+  1 MiB-file and 4 MiB-total bounds have successful controls as well as refusals.
+  Guarding explicit text reads does not constrain filesystem open internals.
+  Nested/proxy/empty/deletion/duplicate/overlapping operations remain unsupported.
+- Initial fresh review found NUL truncation through `Reader::readString` and
+  quadratic repeated inherited-key searches. Both were accepted and fixed:
+  length-sized owned exact reads retain NUL rejection, and a resolver-local
+  ordered key/index/count map replaces full-vector searches. Root/include NUL
+  negatives have valid counterparts; 40,000 inherited plus 40,000 inserted keys
+  still apply the actual override. No timing/speedup claim or global cache.
+  Fresh localized closure review accepts both fixes; not independent execution.
+- Early test setup failures (macro precedence, missing parent directory and
+  Windows LF/CRLF literal comparison) were preserved and corrected in fixtures,
+  not product contracts. A Python cp1252 capture failure during the known UI
+  failure was repaired by preserving native CTest logs and binary capture; no
+  passing suites were repeated or evidence dates changed to hide it.
+- Final package receipt, not this source-level evidence, identifies the clean
+  committed executable, installed checks and archive hashes. Original content
+  remains read-only. No initial-index/FPS/full-shader improvement is claimed.
+
+### A5.4 orientation / material-root controls (retained)
+
+- The owner previously reported one newly opening map looked inside out,
+  including props. After A5.4 delivery, the owner confirmed on 2026-10-25 that the
+  retry **looks good**. This is observed visual acceptance, not every detailed
+  authoring/Hammer/model/shader or performance gate.
 - A referenced real prop's triangle-cross/outward-normal control acts: the old
   importer produces 0 clockwise / 10,876 counterclockwise triangles; keeping VTX
   winding produces 10,876 / 0. Authored asymmetric list/strip and ownership/fixup
@@ -215,10 +248,10 @@ in [BACKLOG.md](../../BACKLOG.md); no universal startup-time promise is made.
   revalidated; a fresh bounded closure review found no remaining blocker. Parent
   pre/post SHA-256 attestation proved the exact reviewed code stayed unchanged.
 
-The historical preference replacement failure predates this follow-up; its
-implementation/fixture code remains untouched. Although the latest full run
-passes, a file watcher/sharing or host cause is not conclusively diagnosed. It
-remains recorded rather than being declared fixed or hidden by weakening a test.
+The preference replacement failure predates this follow-up; implementation and
+fixture code remain untouched. It recurred in current full 42/43 and isolated runs;
+earlier passes did not fix it. A watcher/sharing or host cause is not conclusively
+diagnosed. It remains recorded, not hidden by weakening a test or rerun campaign.
 See [BACKLOG.md](../../BACKLOG.md).
 
 ## Retained A4 evidence and manual gates

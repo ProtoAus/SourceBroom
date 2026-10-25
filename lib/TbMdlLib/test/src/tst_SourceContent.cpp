@@ -209,6 +209,209 @@ TEST_CASE("Source map initial catalog and explicit reload retain loose-file fres
   CHECK(map->materialManager().materials()[0]->name() == "two");
 }
 
+TEST_CASE("Source material Patch resolution")
+{
+  auto env = fs::TestEnvironment{};
+  env.createDirectory("materials");
+  env.createFile("gameinfo.txt", R"(GameInfo { FileSystem { SearchPaths {
+    game "|gameinfo_path|."
+  } } })");
+  env.createFile("materials/base.vmt", R"(VertexLitGeneric {
+    $basetexture wrong $translucent 1
+  })");
+  env.createFile("materials/middle.vmt", R"(Patch {
+    include "materials/base.vmt" replace { $basetexture brick/wall }
+  })");
+  const auto patch = R"(pAtCh {
+    include "MATERIALS\\middle.VMT"
+    insert { $translucent 0 $alphatest 1 $surfaceprop brick }
+  })";
+  env.createFile("materials/derived.vmt", patch);
+  REQUIRE(env.fileExists("materials/derived.vmt"));
+  auto fs = GameFileSystem{};
+  auto logger = NullLogger{};
+  REQUIRE(fs.initializeSource(env.dir(), logger).is_success());
+  const auto beforeFile = fs.openFile("materials/derived.vmt") | kdl::value();
+  const auto before = beforeFile->reader().readString(beforeFile->size());
+  CHECK(sourceMaterial(patch, SourceMaterialMode::BaseTexturePreview).is_error());
+  const auto result = loadSourceMaterial(
+    "materials/derived.vmt", fs, SourceMaterialMode::BaseTexturePreview);
+  INFO((result.is_error() ? std::get<Error>(result.error()).msg : "success"));
+  REQUIRE(result.is_success());
+  const auto info = result | kdl::value();
+  CHECK(info.baseTexture == "materials/brick/wall.vtf");
+  CHECK(info.alphaDomain == img::ImageAlphaDomain::Binary);
+  CHECK(loadSourceMaterial("materials/derived.vmt", fs).is_error());
+  const auto original = fs.openFile("materials/derived.vmt") | kdl::value();
+  CHECK(original->reader().readString(original->size()) == before);
+}
+
+TEST_CASE("Source material Patch safety and mounted precedence")
+{
+  auto env = fs::TestEnvironment{};
+  env.createDirectory("materials");
+  env.createFile("gameinfo.txt", R"(GameInfo { FileSystem { SearchPaths {
+    game "|gameinfo_path|."
+  } } })");
+  const auto base = std::string{"LightmappedGeneric { $basetexture root/base }"};
+  env.createFile("materials/base.vmt", base);
+  REQUIRE(env.fileExists("materials/base.vmt"));
+  const auto attempt = [&](const std::string& text) -> Result<SourceMaterialInfo> {
+    env.createFile("materials/patch.vmt", text);
+    REQUIRE(env.fileExists("materials/patch.vmt"));
+    auto fs = GameFileSystem{};
+    auto logger = NullLogger{};
+    REQUIRE(fs.initializeSource(env.dir(), logger).is_success());
+    return loadSourceMaterial(
+      "materials/patch.vmt", fs, SourceMaterialMode::BaseTexturePreview);
+  };
+  SECTION("scalar operations act and missing replacement is not insertion")
+  {
+    for (const auto* operation : {"insert", "replace"})
+    {
+      const auto result = attempt(
+        "Patch { include materials/base.vmt " + std::string{operation}
+        + " { $basetexture new/path } }");
+      REQUIRE(result.is_success());
+      CHECK((result | kdl::value()).baseTexture == "materials/new/path.vtf");
+    }
+    const auto missing =
+      attempt("Patch { include materials/base.vmt replace { $alphatest 1 $unknown 1 } }");
+    REQUIRE(missing.is_success());
+    CHECK((missing | kdl::value()).alphaDomain == img::ImageAlphaDomain::Opaque);
+    const auto inserted =
+      attempt("Patch { include materials/base.vmt insert { $alphatest 1 } }");
+    REQUIRE(inserted.is_success());
+    CHECK((inserted | kdl::value()).alphaDomain == img::ImageAlphaDomain::Binary);
+  }
+  SECTION("unsupported and ambiguous patch structures refuse")
+  {
+    env.createFile("materials/water.vmt", "Water { $basetexture water/a }");
+    env.createFile("materials/proxy.vmt", "UnlitGeneric { $basetexture a Proxies {} }");
+    env.createFile(
+      "materials/ambiguous.vmt", "UnlitGeneric { $basetexture a $basetexture b }");
+    for (const auto* text :
+         {"Patch {}",
+          "Patch { include materials/missing.vmt }",
+          "Patch { include materials/water.vmt }",
+          "Patch { include materials/proxy.vmt }",
+          "Patch { include materials/base.vmt include materials/base.vmt }",
+          "Patch { include {} }",
+          "Patch { include materials/base.vmt insert 1 }",
+          "Patch { include materials/base.vmt insert {} insert {} }",
+          "Patch { include materials/base.vmt insert { $basetexture a $BaseTexture b } }",
+          "Patch { include materials/base.vmt replace { $basetexture a } insert { "
+          "$basetexture b } }",
+          "Patch { include materials/base.vmt insert { $basetexture \"\" } }",
+          "Patch { include materials/base.vmt insert { Proxies {} } }",
+          "Patch { include materials/base.vmt insert { $unknown 1 } }",
+          "Patch { include materials/base.vmt remove {} }",
+          "Patch { include materials/ambiguous.vmt replace { $basetexture x } }",
+          "Patch { include \"/materials/base.vmt\" }",
+          "Patch { include \"C:/materials/base.vmt\" }",
+          "Patch { include \"materials/../base.vmt\" }",
+          "Patch { include \"../materials/base.vmt\" }",
+          "Patch { include \"models/base.vmt\" }",
+          "Patch { include \"materials/base\" }"})
+    {
+      CAPTURE(text);
+      CHECK(attempt(text).is_error());
+    }
+    const auto normalized = attempt("Patch { include materials/./base.vmt }");
+    REQUIRE(normalized.is_success());
+    CHECK((normalized | kdl::value()).baseTexture == "materials/root/base.vtf");
+  }
+  SECTION("cycle and exact sixteen-include boundary")
+  {
+    env.createFile("materials/cycle.vmt", "Patch { include materials/./CYCLE.vmt }");
+    const auto cycle = attempt("Patch { include materials/cycle.vmt }");
+    REQUIRE(cycle.is_error());
+    CHECK(std::get<Error>(cycle.error()).msg.find("cycle") != std::string::npos);
+    for (size_t i = 0; i <= 16; ++i)
+    {
+      env.createFile(
+        "materials/depth" + std::to_string(i) + ".vmt",
+        i == 16 ? base
+                : "Patch { include materials/depth" + std::to_string(i + 1) + ".vmt }");
+    }
+    CHECK(attempt("Patch { include materials/depth0.vmt }").is_error());
+    env.createFile("materials/depth15.vmt", base);
+    const auto bounded = attempt("Patch { include materials/depth0.vmt }");
+    REQUIRE(bounded.is_success());
+    CHECK((bounded | kdl::value()).baseTexture == "materials/root/base.vtf");
+  }
+  SECTION("file and aggregate text limits have successful boundary controls")
+  {
+    constexpr size_t fileLimit = 1024u * 1024u;
+    auto large = base;
+    large.resize(fileLimit, ' ');
+    env.createFile("materials/large.vmt", large);
+    CHECK(attempt("Patch { include materials/large.vmt }").is_success());
+    large.push_back(' ');
+    env.createFile("materials/large.vmt", large);
+    CHECK(attempt("Patch { include materials/large.vmt }").is_error());
+    CHECK(attempt(large).is_error());
+    for (size_t i = 0; i < 4; ++i)
+    {
+      auto text = i == 3
+                    ? base
+                    : "Patch { include materials/bulk" + std::to_string(i + 1) + ".vmt }";
+      text.resize(fileLimit, ' ');
+      env.createFile("materials/bulk" + std::to_string(i) + ".vmt", text);
+    }
+    CHECK(attempt("Patch { include materials/bulk0.vmt }").is_error());
+    large = base;
+    large.resize(fileLimit, ' ');
+    env.createFile("materials/bulk2.vmt", large);
+    const auto bounded = attempt("Patch { include materials/bulk0.vmt }");
+    REQUIRE(bounded.is_success());
+    CHECK((bounded | kdl::value()).baseTexture == "materials/root/base.vtf");
+  }
+  SECTION("NUL bytes cannot hide trailing unsupported data in root or includes")
+  {
+    auto text = base;
+    text.push_back('\0');
+    text += "unparsed trailing bytes";
+    CHECK(sourceMaterial(text, SourceMaterialMode::BaseTexturePreview).is_error());
+    CHECK(attempt(text).is_error());
+    env.createFile("materials/nul.vmt", text);
+    CHECK(attempt("Patch { include materials/nul.vmt }").is_error());
+    CHECK(attempt(base).is_success());
+    CHECK(attempt("Patch { include materials/base.vmt }").is_success());
+  }
+  SECTION("many-key scalar patches use bounded indexed lookup")
+  {
+    auto manyBase = std::string{"LightmappedGeneric { $basetexture many/base "};
+    auto manyPatch = std::string{"Patch { include materials/many.vmt insert { "};
+    for (size_t i = 0; i < 40000; ++i)
+    {
+      manyBase += "%base" + std::to_string(i) + " 1 ";
+      manyPatch += "%patch" + std::to_string(i) + " 1 ";
+    }
+    manyBase += "}";
+    manyPatch += "$basetexture many/changed } }";
+    env.createFile("materials/many.vmt", manyBase);
+    const auto result = attempt(manyPatch);
+    REQUIRE(result.is_success());
+    CHECK((result | kdl::value()).baseTexture == "materials/many/changed.vtf");
+  }
+  SECTION("included base follows existing mount order not root host-relative lookup")
+  {
+    env.createDirectory("override");
+    env.createDirectory("override/materials");
+    env.createFile(
+      "override/materials/base.vmt", "UnlitGeneric { $basetexture priority/winner }");
+    REQUIRE(env.fileExists("override/materials/base.vmt"));
+    env.createFile("gameinfo.txt", R"(GameInfo { FileSystem { SearchPaths {
+      game "|gameinfo_path|override" game "|gameinfo_path|."
+    } } })");
+    const auto result = attempt("Patch { include materials/base.vmt }");
+    REQUIRE(result.is_success());
+    CHECK((result | kdl::value()).baseTexture == "materials/priority/winner.vtf");
+    CHECK(env.loadFile("materials/base.vmt") == base);
+  }
+}
+
 TEST_CASE("SourceContent")
 {
   SECTION("gameinfo search order and tokens")
