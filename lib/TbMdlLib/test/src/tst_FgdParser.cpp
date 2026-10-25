@@ -23,6 +23,7 @@
 #include "el/VariableStore.h"
 #include "fs/DiskIO.h"
 #include "fs/Reader.h"
+#include "fs/TestEnvironment.h"
 #include "fs/TraversalMode.h"
 #include "mdl/CatchConfig.h"
 #include "mdl/Entity.h"
@@ -30,6 +31,7 @@
 #include "mdl/EntityDefinitionTestUtils.h"
 #include "mdl/EntityPropertiesVariableStore.h"
 #include "mdl/FgdParser.h"
+#include "mdl/LoadEntityDefinitions.h"
 #include "mdl/ModelSpecification.h"
 #include "mdl/PropertyDefinition.h"
 
@@ -38,6 +40,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <string>
+#include <tuple>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -47,6 +50,132 @@ namespace tb::mdl
 
 TEST_CASE("FgdParser")
 {
+  SECTION("Source fixed studio literals follow entity skin without changing properties")
+  {
+    const auto* alias = GENERATE("studio", "studioprop");
+    const auto* literal = GENERATE(R"("models/probe.mdl")", "'models/probe.mdl'");
+    const auto source = std::string{"@PointClass "} + alias + "(" + literal
+                        + R"() = probe [ skin(integer) : "Skin" : 9 ])";
+    auto parser = FgdParser{source, RgbaF{1, 1, 1, 1}, {}, true};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 1);
+    auto entity =
+      Entity{{{"classname", "probe"}, {"unrelated", "01.000"}, {"scale", "7"}}};
+    entity.setDefinition(&definitions.front());
+    const auto originalProperties = entity.properties();
+    CHECK(entity.modelSpecification() == ModelSpecification{"models/probe.mdl", 0, 0});
+    CHECK(entity.properties() == originalProperties);
+    CHECK_FALSE(entity.hasProperty("skin")); // FGD default is not an authored value.
+    CHECK_FALSE(entity.hasProperty("model"));
+    for (const auto* raw :
+         {"0",
+          "1",
+          "0",
+          "2",
+          "1.75",
+          "-1",
+          "1e100",
+          "-1e100",
+          "inf",
+          "nan",
+          "invalid",
+          ""})
+    {
+      CAPTURE(alias, raw);
+      entity.addOrUpdateProperty("skin", raw);
+      const auto before = entity.properties();
+      const auto expectedSkin = std::string{raw} == "2" ? 2u
+                                : (std::string{raw} == "1" || std::string{raw} == "1.75")
+                                  ? 1u
+                                  : 0u;
+      CHECK(
+        entity.modelSpecification()
+        == ModelSpecification{"models/probe.mdl", expectedSkin, 0});
+      CHECK(entity.properties() == before);
+      CHECK(*entity.property("skin") == raw);
+    }
+    const auto& model = definitions.front().pointEntityDefinition->modelDefinition;
+    const auto variables = EntityPropertiesVariableStore{entity};
+    CHECK(model.scale(variables, std::nullopt) == vm::vec3d{1, 1, 1});
+    CHECK(model.scale(variables, el::lit(3)) == vm::vec3d{3, 3, 3});
+  }
+
+  SECTION("Source fixed studio normalization preserves other declaration semantics")
+  {
+    using T = std::tuple<std::string, bool, ModelSpecification>;
+    const auto [declaration, sourceMode, expected] = GENERATE(
+      values<T>({
+        {R"(studio("models/probe.mdl"))", false, {"models/probe.mdl", 0, 0}},
+        {R"(studioprop("models/probe.mdl"))", false, {"models/probe.mdl", 0, 0}},
+        {R"(model("models/probe.mdl"))", true, {"models/probe.mdl", 0, 0}},
+        {R"(sprite("models/probe.mdl"))", true, {"models/probe.mdl", 0, 0}},
+        {R"(iconsprite("models/probe.mdl"))", true, {"models/probe.mdl", 0, 0}},
+        {R"(studio({path: "models/probe.mdl", skin: 0, frame: 2}))",
+         true,
+         {"models/probe.mdl", 0, 2}},
+        {R"(studioprop({path: "models/probe.mdl", skin: 0}))",
+         true,
+         {"models/probe.mdl", 0, 0}},
+        {R"(studio("models/probe.mdl" 2 3))", true, {"models/probe.mdl", 2, 3}},
+        {R"(studioprop("models/probe.mdl" 2 3))", true, {"models/probe.mdl", 2, 3}},
+        {R"(studio(model))", true, {"models/entity.mdl", 0, 0}},
+        {R"(studio({{ skin == 1 -> "models/probe.mdl", model }}))",
+         true,
+         {"models/probe.mdl", 0, 0}},
+        {R"(studio("models/" + "probe.mdl"))", true, {"models/probe.mdl", 0, 0}},
+        {R"(studio(""))", true, {{}, 0, 0}},
+        {R"(studio())", true, {"models/entity.mdl", 1, 0}},
+        {R"(studio())", false, {"models/entity.mdl", 1, 0}},
+        {R"(studioprop())", true, {"models/entity.mdl", 1, 0}},
+      }));
+    CAPTURE(declaration, sourceMode);
+    const auto source = "@PointClass " + declaration + " = probe []";
+    auto parser = FgdParser{source, RgbaF{1, 1, 1, 1}, {}, sourceMode};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 1);
+    auto entity = Entity{{{"model", "models/entity.mdl"}, {"skin", "1"}, {"frame", "9"}}};
+    entity.setDefinition(&definitions.front());
+    const auto before = entity.properties();
+    CHECK(entity.modelSpecification() == expected);
+    CHECK(entity.properties() == before);
+  }
+
+  SECTION("loadEntityDefinitions transports Source normalization through includes")
+  {
+    auto env = fs::TestEnvironment{};
+    env.createFile("root.fgd", R"(@include "included.fgd")");
+    env.createFile("included.fgd", R"(
+      @PointClass studio("models/probe.mdl") = probe []
+      @PointClass studioprop("models/probe.mdl") = prop []
+    )");
+    const auto rootBefore = env.loadFile("root.fgd");
+    const auto includeBefore = env.loadFile("included.fgd");
+    for (const auto sourceMode : {false, true})
+    {
+      auto status = TestParserStatus{};
+      const auto definitions =
+        (sourceMode
+           ? loadEntityDefinitions(
+               env.dir() / "root.fgd", RgbaF{1, 1, 1, 1}, status, true)
+           : loadEntityDefinitions(env.dir() / "root.fgd", RgbaF{1, 1, 1, 1}, status))
+        | kdl::value();
+      REQUIRE(definitions.size() == 2);
+      CHECK(status.countStatus(LogLevel::Error) == 0);
+      for (const auto& definition : definitions)
+      {
+        auto entity = Entity{{{"skin", "1"}}};
+        entity.setDefinition(&definition);
+        CHECK(
+          entity.modelSpecification()
+          == ModelSpecification{"models/probe.mdl", sourceMode ? 1u : 0u, 0});
+      }
+    }
+    CHECK(env.loadFile("root.fgd") == rootBefore);
+    CHECK(env.loadFile("included.fgd") == includeBefore);
+  }
+
   SECTION("Source keyvalues inputs and outputs have independent namespaces")
   {
     const auto source = R"(

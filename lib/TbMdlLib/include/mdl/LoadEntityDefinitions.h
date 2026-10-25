@@ -32,8 +32,12 @@ class ParserStatus;
 namespace mdl
 {
 
+// Source preview normalization is default-off and applies only to FGD loading.
 Result<std::vector<EntityDefinition>> loadEntityDefinitions(
-  const std::filesystem::path& path, const Color& defaultColor, ParserStatus& status);
+  const std::filesystem::path& path,
+  const Color& defaultColor,
+  ParserStatus& status,
+  bool normalizeSourceStudioSkin = false);
 
 } // namespace mdl
 } // namespace tb

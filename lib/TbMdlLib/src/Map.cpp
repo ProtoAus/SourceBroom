@@ -1360,7 +1360,8 @@ void Map::loadEntityDefinitions()
     const auto& defaultColor = gameConfig.entityConfig.defaultColor;
     auto status = SimpleParserStatus{logger()};
 
-    mdl::loadEntityDefinitions(path, defaultColor, status)
+    mdl::loadEntityDefinitions(
+      path, defaultColor, status, m_worldNode->mapFormat() == MapFormat::SourceVMF)
       | kdl::transform([&](auto entityDefinitions) {
           logger().info() << fmt::format(
             "Loaded entity definition file {}", path.filename());

@@ -30,6 +30,7 @@
 
 #include "kd/contracts.h"
 #include "kd/invoke.h"
+#include "kd/overload.h"
 #include "kd/path_utils.h"
 #include "kd/ranges/contains.h"
 #include "kd/result.h"
@@ -208,9 +209,11 @@ FgdTokenizer::Token FgdTokenizer::emitToken()
 FgdParser::FgdParser(
   const std::string_view str,
   const Color& defaultEntityColor,
-  const std::filesystem::path& path)
+  const std::filesystem::path& path,
+  const bool normalizeSourceStudioSkin)
   : EntityDefinitionParser{defaultEntityColor}
   , m_tokenizer{FgdTokenizer{str}}
+  , m_normalizeSourceStudioSkin{normalizeSourceStudioSkin}
 {
   if (!path.empty() && path.is_absolute())
   {
@@ -502,6 +505,37 @@ ModelDefinition FgdParser::parseModel(
     }
     auto defaultExp = el::ExpressionNode{std::move(defaultModel), location};
     return ModelDefinition{std::move(defaultExp)};
+  }
+
+  if (sourceStudio && m_normalizeSourceStudioSkin)
+  {
+    const auto snapshot = m_tokenizer.snapshot();
+    const auto location = m_tokenizer.location();
+    auto expression =
+      parseElModelExpression(m_tokenizer, location, FgdToken::CParenthesis);
+    if (expression.is_success())
+    {
+      auto parsed = std::move(expression) | kdl::value();
+      // Inspect the unoptimized syntax: folded expressions and legacy skin/frame
+      // operands must not acquire entity-driven skin selection.
+      const auto fixedPath = parsed.accept(
+        kdl::overload(
+          [](const el::LiteralExpression& literal) {
+            return literal.value.type() == el::ValueType::String
+                   && !literal.value.stringValue().empty();
+          },
+          [](const auto&) { return false; }));
+      if (fixedPath)
+      {
+        return ModelDefinition{el::ExpressionNode{
+          el::MapExpression{{
+            {"path", std::move(parsed)},
+            {"skin", el::ExpressionNode{el::VariableExpression{"skin"}, location}},
+          }},
+          location}};
+      }
+    }
+    m_tokenizer.restore(snapshot);
   }
 
   return parseModelDefinition(m_tokenizer, status, FgdToken::CParenthesis)

@@ -2,18 +2,24 @@
  SPDX-License-Identifier: GPL-3.0-or-later */
 #include "SourceModelFixture.h"
 #include "TestEnvironment.h"
+#include "TestParserStatus.h"
 #include "base/Logger.h"
 #include "fs/DiskFileSystem.h"
 #include "fs/TestFileSystem.h"
 #include "gl/Material.h"
 #include "gl/MaterialCollection.h"
+#include "gl/MaterialIndexRangeRenderer.h"
 #include "gl/Resource.h"
 #include "gl/Texture.h"
+#include "mdl/Entity.h"
+#include "mdl/EntityDefinition.h"
+#include "mdl/FgdParser.h"
 #include "mdl/GameConfig.h"
 #include "mdl/LoadEntityModel.h"
 #include "mdl/LoadMaterialCollections.h"
 #include "mdl/LoadSourceModel.h"
 #include "mdl/LoadTexture.h"
+#include "mdl/ModelSpecification.h"
 
 #include "kd/task_manager.h"
 
@@ -22,6 +28,7 @@
 #include <tuple>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 namespace tb::mdl
 {
@@ -64,7 +71,8 @@ fs::TestFileSystem modelFileSystem(
   bool mipmapped = false,
   const std::string& materialParameters = {},
   const uint32_t textureFlags = 0,
-  const bool patchMaterial = false)
+  const bool patchMaterial = false,
+  const bool distinctSkinPixels = false)
 {
   auto entries = std::vector<fs::Entry>{fs::FileEntry{"prop.mdl", file(prop.mdl)}};
   if (sidecars)
@@ -94,6 +102,11 @@ fs::TestFileSystem modelFileSystem(
     test::put(vtf, 18, 2, 2);
     test::put(vtf, 56, 2, 1);
   }
+  auto otherVtf = vtf;
+  if (distinctSkinPixels)
+  {
+    test::put(otherVtf, 80, 0xff00ff00); // Green rather than family-zero red.
+  }
   auto materials = std::vector<fs::Entry>{
     fs::FileEntry{
       "metal.vmt",
@@ -103,10 +116,13 @@ fs::TestFileSystem modelFileSystem(
                       : "VertexLitGeneric { $basetexture Models/Test/Pixel "
                           + materialParameters + " }")},
     fs::FileEntry{
-      "other.vmt", file("VertexLitGeneric { $basetexture models/test/pixel }")},
+      "other.vmt",
+      file(
+        distinctSkinPixels ? "VertexLitGeneric { $basetexture models/test/other }"
+                           : "VertexLitGeneric { $basetexture models/test/pixel }")},
     fs::FileEntry{
       "third.vmt", file("VertexLitGeneric { $basetexture models/test/third }")},
-    fs::FileEntry{"other.vtf", file(vtf)},
+    fs::FileEntry{"other.vtf", file(otherVtf)},
     fs::FileEntry{"third.vtf", file(vtf)},
     fs::FileEntry{"pixel.vtf", file(vtf)}};
   if (patchMaterial)
@@ -140,6 +156,63 @@ TEST_CASE("loadSourceModel")
 {
   auto prop = test::SyntheticProp{};
   auto logger = NullLogger{};
+  SECTION("Source fixed FGD studio entity skin selects material identity and pixels")
+  {
+    const auto* alias = GENERATE("studio", "studioprop");
+    prop = withMaterialSkins(std::move(prop));
+    test::put(prop.mdl, 224, 2); // Only metal and other skin families.
+    auto fs = modelFileSystem(prop, true, false, {}, 0, false, true);
+    const auto source =
+      std::string{"@PointClass "} + alias + R"(("prop.mdl") = probe [])";
+    auto parser = FgdParser{source, RgbaF{1, 1, 1, 1}, {}, true};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 1);
+    auto entity = Entity{{{"skin", "0"}, {"unrelated", "01.000"}}};
+    entity.setDefinition(&definitions.front());
+    for (const auto* raw : {"0", "1", "0"})
+    {
+      CAPTURE(alias, raw);
+      entity.addOrUpdateProperty("skin", raw);
+      const auto before = entity.properties();
+      const auto spec = entity.modelSpecification() | kdl::value();
+      const auto green = std::string{raw} == "1";
+      CHECK(spec == ModelSpecification{"prop.mdl", green ? 1u : 0u, 0});
+      auto result = loadEntityModelSync(
+        fs,
+        MaterialConfig{},
+        spec.path,
+        [](const auto&) -> gl::Material {
+          throw std::runtime_error("unexpected legacy material callback");
+        },
+        logger);
+      INFO((result.is_error() ? std::get<Error>(result.error()).msg : "success"));
+      REQUIRE(!result.is_error());
+      const auto model = std::move(result) | kdl::value();
+      REQUIRE(model.data() != nullptr);
+      const auto& surface = model.data()->surface(0);
+      REQUIRE(surface.skinCount() == 2);
+      const auto* selected = surface.skin(spec.skinIndex);
+      REQUIRE(selected != nullptr);
+      CHECK(
+        selected->name()
+        == (green ? "materials/models/test/other.vmt" : "materials/models/test/metal.vmt"));
+      const auto* texture = selected->texture();
+      REQUIRE(texture != nullptr);
+      CHECK(texture->width() == 1);
+      CHECK(texture->height() == 1);
+      const auto& buffers = texture->buffersIfLoaded();
+      REQUIRE(buffers.size() == 1);
+      REQUIRE(buffers.front().size() == 4);
+      const auto pixels = std::vector<unsigned char>{
+        buffers.front().data(), buffers.front().data() + buffers.front().size()};
+      CHECK(
+        pixels
+        == (green ? std::vector<unsigned char>{0, 255, 0, 255} : std::vector<unsigned char>{255, 0, 0, 255}));
+      CHECK(model.data()->buildRenderer(spec.skinIndex, spec.frameIndex) != nullptr);
+      CHECK(entity.properties() == before);
+    }
+  }
   SECTION("registered sync loader resolves sidecars and Source VMT/VTF")
   {
     auto fs = modelFileSystem(prop);

@@ -89,12 +89,15 @@ private:
   std::filesystem::path m_basePath;
 
   FgdTokenizer m_tokenizer;
+  bool m_normalizeSourceStudioSkin;
 
 public:
+  // Opt in only for Source maps; other games retain fixed-string skin zero.
   FgdParser(
     std::string_view str,
     const Color& defaultEntityColor,
-    const std::filesystem::path& path);
+    const std::filesystem::path& path,
+    bool normalizeSourceStudioSkin = false);
   FgdParser(std::string_view str, const Color& defaultEntityColor);
 
   ~FgdParser() override;
