@@ -94,6 +94,35 @@ pixels, then explicitly requests a texture to prove the loader acts. Keep game
 files/logs private and report the workload; this is not an end-to-end benchmark
 or a substitute for visual acceptance.
 
+## A5.4 rendering / collection contracts
+
+Source VTX indices are already clockwise for the renderer. The authored prop
+fixture has explicit outward normals; do not silently change winding based on a
+synthetic fixture with unspecified normals. The opt-in `Source installed model
+winding opt-in` case accepts `SOURCEBROOM_WINDING_GAME` and
+`SOURCEBROOM_WINDING_MODEL` for one bounded read-only installed model. It compares
+actual submitted triangle crosses with VVD outward normals, including fixups.
+Use exact binary `Reader::read`, not `readString` (which stops at NUL).
+
+`sourceMaterial` separates basic VMT opacity from raw VTF alpha; `sourceBaseTexture`
+retains its existing path-only/strict interface. Deferred brush loading and prop
+cache hits retain VMT identity. `setAlphaFuncUniforms` sets Source-only opacity
+suppression for non-graduated VMTs, case-insensitively, AFTER raw alpha rejection.
+Do not disable Source blending globally: that breaks editor transparent-tag fade.
+
+The opt-in `Source alpha preview GPU controls opt-in` UI case uses an owned
+compatibility context, actual Face/EntityModel fragment programs and real material
+activation. It checks pixels plus draw blend/depth state for opaque/cutout/real
+opacity, editor fade and non-Source controls; forcing mask suppression off is an
+acted negative arm. It does not need game assets or owner-window interaction.
+ShaderManager passes `shader/name` into its locator, not a bare filename. New
+uniform/shader changes must ship together; a compiler-only pass is not GPU proof.
+
+Source collection grouping is presentation-only over existing material paths.
+Never migrate/expand a saved partial subset on dialog creation. Only explicit
+root enable/disable changes the saved choices; normal undo must restore them.
+Non-Source folder behavior and read-only-preview command safety remain controls.
+
 ## A5.3 texture progress controls
 
 Resource-manager tests prove progress past a busy prefix, cursor survival across

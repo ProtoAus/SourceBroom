@@ -69,7 +69,9 @@ struct Materials
     const auto key = path.empty() ? name : path.generic_string();
     if (const auto it = cache.find(key); it != cache.end())
     {
-      return gl::Material{key, it->second};
+      auto material = gl::Material{key, it->second};
+      material.setRelativePath(path);
+      return material;
     }
     if (cache.size() >= 256)
     {
@@ -83,13 +85,13 @@ struct Materials
           throw std::runtime_error("material not found: " + name);
         }
         const auto vmt = readFile(fs, path, 1024u * 1024u);
-        auto base = sourceBaseTexture(vmt, SourceMaterialMode::BaseTexturePreview);
+        auto base = sourceMaterial(vmt, SourceMaterialMode::BaseTexturePreview);
         if (base.is_error())
         {
           throw std::runtime_error("unsupported or invalid VMT: " + key);
         }
-        const auto bytes =
-          readFile(fs, std::move(base) | kdl::value(), SourceModelMaxFileSize);
+        const auto info = std::move(base) | kdl::value();
+        const auto bytes = readFile(fs, info.baseTexture, SourceModelMaxFileSize);
         auto reader = fs::Reader::from(bytes.data(), bytes.data() + bytes.size());
         auto decoded = loadVtfTexture(reader, remaining);
         if (decoded.is_error())
@@ -97,6 +99,7 @@ struct Materials
           throw std::runtime_error("unsupported or invalid VTF: " + key);
         }
         auto pixels = std::move(decoded) | kdl::value();
+        pixels.setAlphaDomain(info.alphaDomain);
         for (const auto& buffer : pixels.buffersIfLoaded())
         {
           remaining -= buffer.size();
@@ -124,7 +127,9 @@ struct Materials
       }
     }();
     cache.emplace(key, texture);
-    return gl::Material{key, std::move(texture)};
+    auto material = gl::Material{key, std::move(texture)};
+    material.setRelativePath(path);
+    return material;
   }
 };
 } // namespace

@@ -23,6 +23,8 @@
 #include "gl/Material.h"
 #include "gl/Texture.h"
 
+#include "kd/path_utils.h"
+
 namespace tb::gl
 {
 
@@ -58,6 +60,11 @@ void setAlphaFuncUniforms(ActiveShader& shader, const Material* material)
   const auto alphaFunc =
     material ? material->effectiveAlphaFunc() : std::optional<MaterialAlphaFunc>{};
   shader.set("EnableMasked", alphaFunc.has_value());
+  const auto* texture = material ? material->texture() : nullptr;
+  shader.set(
+    "IgnoreTextureAlpha",
+    texture && texture->alphaDomain() != img::ImageAlphaDomain::Graduated
+      && kdl::path_to_lower(material->relativePath().extension()) == ".vmt");
   if (alphaFunc)
   {
     shader.set("AlphaFuncCompare", static_cast<size_t>(alphaFunc->compare));

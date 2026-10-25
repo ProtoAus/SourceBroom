@@ -21,17 +21,31 @@
 #include <QComboBox>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
+#include <QListWidget>
 #include <QMenu>
 #include <QMimeData>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
+#include <QOpenGLFramebufferObject>
+#include <QOpenGLFunctions_2_1>
+#include <QOpenGLVersionFunctionsFactory>
 #include <QTimer>
 
 #include "TestEnvironment.h"
 #include "base/Result.h"
+#include "gl/ActiveShader.h"
 #include "gl/GlManager.h"
+#include "gl/Material.h"
+#include "gl/MaterialCollection.h"
+#include "gl/MaterialManager.h"
+#include "gl/MaterialRenderFunc.h"
 #include "gl/Resource.h"
 #include "gl/ResourceManager.h"
+#include "gl/ShaderManager.h"
+#include "gl/Shaders.h"
 #include "gl/TestGl.h"
 #include "gl/TestUtils.h"
+#include "gl/Texture.h"
 #include "mdl/BrushNode.h"
 #include "mdl/EntityDefinition.h"
 #include "mdl/EntityDefinitionManager.h"
@@ -40,16 +54,24 @@
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
 #include "mdl/MapFormat.h"
+#include "mdl/Map_Assets.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 #include "ui/AppControllerFixture.h"
 #include "ui/CatchConfig.h"
+#include "ui/GlQt.h"
 #include "ui/MapDocument.h"
 #include "ui/MapDocumentFixture.h"
 #include "ui/MapViewBase.h"
 #include "ui/MapWindow.h"
+#include "ui/MaterialCollectionEditor.h"
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
 
 #include <catch2/catch_test_macros.hpp>
@@ -303,6 +325,241 @@ TEST_CASE("MapWindow")
     REQUIRE(!appController.glManager().resourceManager().needsProcessing());
     CHECK(window.canReloadEntityDefinitions());
   }
+}
+
+TEST_CASE("Source material settings group game mounts without changing the catalog")
+{
+  const auto source = GENERATE(false, true);
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  auto document = MapDocument::createDocument(
+                    app.environmentConfig(),
+                    mdl::QuakeGameInfo,
+                    mdl::MapFormat::Valve,
+                    vm::bbox3d{8192},
+                    app.taskManager(),
+                    app.glManager().resourceManager())
+                  | kdl::value();
+  auto env = fs::TestEnvironment{};
+  if (source)
+  {
+    env.createFile("source.vmf", "world { id 1 classname worldspawn }\n");
+    const auto loaded = document->load(
+      app.environmentConfig(),
+      mdl::QuakeGameInfo,
+      mdl::MapFormat::SourceVMF,
+      vm::bbox3d{8192},
+      env.dir() / "source.vmf");
+    if (loaded.is_error())
+    {
+      INFO(std::get<Error>(loaded.error()).msg);
+    }
+    REQUIRE(loaded.is_success());
+  }
+  auto& map = document->map();
+  map.setIsCommandCollationEnabled(false);
+  auto collections = std::vector<gl::MaterialCollection>{};
+  for (const auto* path :
+       {"materials/brick", "materials/brick/nested", "materials/tools"})
+  {
+    auto materials = std::vector<gl::Material>{};
+    materials.emplace_back(
+      std::string{path} + "/control", gl::createTextureResource(gl::Texture{1, 1}));
+    collections.emplace_back(path, std::move(materials));
+  }
+  map.materialManager().setMaterialCollections(std::move(collections));
+  REQUIRE(map.materialManager().materials().size() == 3);
+  mdl::setEnabledMaterialCollections(map, {"materials/brick"});
+  const auto before = source ? map.vmfScene()->serialize(map.worldNode()) : std::string{};
+  auto editor = MaterialCollectionEditor{*document};
+  auto* available = editor.findChild<QListWidget*>("MaterialCollections_Available");
+  auto* enabled = editor.findChild<QListWidget*>("MaterialCollections_Enabled");
+  REQUIRE(available);
+  REQUIRE(enabled);
+  REQUIRE(enabled->count() == 1);
+  CHECK(available->count() == (source ? 1 : 2));
+  if (source)
+  {
+    CHECK(enabled->item(0)->text().toStdString() == mdl::QuakeGameInfo.gameConfig.name);
+    CHECK(enabled->item(0)->toolTip().contains("Material root:"));
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+  }
+  CHECK(
+    mdl::enabledMaterialCollections(map)
+    == std::vector<std::filesystem::path>{"materials/brick"});
+  available->setCurrentRow(0, QItemSelectionModel::ClearAndSelect);
+  available->itemDoubleClicked(available->item(0));
+  CHECK(mdl::enabledMaterialCollections(map).size() == (source ? 3 : 2));
+  CHECK(enabled->count() == (source ? 1 : 2));
+  CHECK(map.materialManager().materials().size() == 3);
+  map.undoCommand();
+  CHECK(
+    mdl::enabledMaterialCollections(map)
+    == std::vector<std::filesystem::path>{"materials/brick"});
+  if (source)
+  {
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+  }
+  map.redoCommand();
+  enabled->setCurrentRow(0, QItemSelectionModel::ClearAndSelect);
+  enabled->itemDoubleClicked(enabled->item(0));
+  CHECK(mdl::enabledMaterialCollections(map).size() == (source ? 0 : 1));
+  CHECK(map.materialManager().materials().size() == 3);
+  map.undoCommand();
+  CHECK(mdl::enabledMaterialCollections(map).size() == (source ? 3 : 2));
+  CHECK(map.materialManager().collections().size() == 3);
+}
+
+TEST_CASE("Source alpha preview GPU controls opt-in", "[.][source][render]")
+{
+  auto fixture = AppControllerFixture{};
+  auto format = QSurfaceFormat{};
+  format.setVersion(2, 1);
+  format.setProfile(QSurfaceFormat::CompatibilityProfile);
+  auto surface = QOffscreenSurface{};
+  surface.setFormat(format);
+  surface.create();
+  REQUIRE(surface.isValid());
+  auto context = QOpenGLContext{};
+  context.setFormat(surface.format());
+  REQUIRE(context.create());
+  REQUIRE(context.makeCurrent(&surface));
+  auto* functions = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_2_1>(&context);
+  REQUIRE(functions);
+  REQUIRE(functions->initializeOpenGLFunctions());
+  auto gl = GlQt{*functions};
+  auto target = QOpenGLFramebufferObject{8, 8};
+  REQUIRE(target.isValid());
+  REQUIRE(target.bind());
+  gl.viewport(0, 0, 8, 8);
+  const auto positions = std::array<float, 12>{-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0};
+  gl.enableClientState(GL_VERTEX_ARRAY);
+  gl.vertexPointer(3, GL_FLOAT, 0, positions.data());
+  auto env = fs::TestEnvironment{};
+  env.createFile("alpha-preview.vertsh", R"(#version 120
+varying vec4 modelCoordinates;
+varying vec3 modelNormal;
+varying vec4 faceColor;
+varying vec3 viewVector;
+varying vec4 worldCoordinates;
+void main() {
+  gl_Position = gl_Vertex;
+  gl_TexCoord[0] = vec4(0.5, 0.5, 0.0, 1.0);
+  modelCoordinates = worldCoordinates = vec4(0.0, 0.0, 0.0, 1.0);
+  modelNormal = viewVector = vec3(0.0, 0.0, 1.0);
+  faceColor = vec4(1.0);
+}
+)");
+  auto sourceRoot = std::filesystem::path{__FILE__};
+  for (size_t i = 0; i < 5; ++i)
+  {
+    sourceRoot = sourceRoot.parent_path();
+  }
+  const auto shaderDir = sourceRoot / "app/TrenchBroom/resources/shader";
+  REQUIRE(std::filesystem::is_regular_file(shaderDir / "Face.fragsh"));
+  auto manager = gl::ShaderManager{[&](const auto& path) {
+    const auto name = path.filename();
+    return name == "alpha-preview.vertsh" ? env.dir() / name : shaderDir / name;
+  }};
+  struct Scenario
+  {
+    img::ImageAlphaDomain domain;
+    uint8_t alpha;
+    float fade;
+  };
+  const auto scenarios = std::array<Scenario, 6>{
+    {{img::ImageAlphaDomain::Opaque, 51, 1.0f},
+     {img::ImageAlphaDomain::Opaque, 51, 0.4f},
+     {img::ImageAlphaDomain::Binary, 51, 0.4f},
+     {img::ImageAlphaDomain::Binary, 204, 0.4f},
+     {img::ImageAlphaDomain::Graduated, 51, 1.0f},
+     {img::ImageAlphaDomain::Graduated, 204, 0.4f}}};
+  for (auto config : {gl::Shaders::FaceShader, gl::Shaders::EntityModelShader})
+  {
+    const auto face = config.name == gl::Shaders::FaceShader.name;
+    config.vertexShaders = {"alpha-preview.vertsh"};
+    const auto loaded = manager.loadProgram(gl, config);
+    if (loaded.is_error())
+    {
+      FAIL(std::get<Error>(loaded.error()).msg);
+    }
+    REQUIRE(loaded.is_success());
+    auto shader = gl::ActiveShader{gl, manager, config};
+    shader.set("Brightness", 1.0f);
+    shader.set("Material", 0);
+    if (face)
+    {
+      shader.set("ApplyMaterial", true);
+    }
+    for (const auto* extension : {".vmt", ".VMT", ".png"})
+    {
+      for (const auto scenario : scenarios)
+      {
+        CAPTURE(config.name, extension, scenario.alpha, scenario.fade);
+        auto pixels = gl::TextureBuffer{4};
+        const auto rgba = std::array<uint8_t, 4>{255, 0, 0, scenario.alpha};
+        std::copy(rgba.begin(), rgba.end(), pixels.data());
+        auto texture = gl::Texture{
+          1,
+          1,
+          Color{RgbaF{1, 0, 0, 1}},
+          GL_RGBA,
+          gl::NoEmbeddedDefaults{},
+          std::move(pixels)};
+        texture.setAlphaDomain(scenario.domain);
+        auto resource = gl::createTextureResource(std::move(texture));
+        resource->uploadSync(gl);
+        auto material = gl::Material{"authored alpha control", resource};
+        material.setRelativePath(std::string{"control"} + extension);
+        const auto graduated = scenario.domain == img::ImageAlphaDomain::Graduated;
+        const auto editorFade = face && !graduated ? scenario.fade : 1.0f;
+        if (face)
+        {
+          shader.set("Alpha", editorFade);
+        }
+        gl::setAlphaFuncUniforms(shader, &material);
+        gl.clearColor(0, 0, 1, 1);
+        gl.clear(GL_COLOR_BUFFER_BIT);
+        gl.enable(GL_BLEND);
+        gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(editorFade < 1.0f ? GL_FALSE : GL_TRUE);
+        material.activate(gl, GL_NEAREST, GL_NEAREST);
+        CHECK(functions->glIsEnabled(GL_BLEND) == GL_TRUE);
+        auto depth = GLboolean{};
+        gl.getBooleanv(GL_DEPTH_WRITEMASK, &depth);
+        CHECK(depth == (graduated || editorFade < 1.0f ? GL_FALSE : GL_TRUE));
+        if (
+          scenario.domain == img::ImageAlphaDomain::Opaque
+          && std::string_view{extension} != ".png")
+        {
+          // Acted red arm: leaking the reserved texture alpha really changes pixels.
+          shader.set("IgnoreTextureAlpha", false);
+          gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+          auto rawPixel = std::array<uint8_t, 4>{};
+          functions->glReadPixels(4, 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rawPixel.data());
+          const auto rawRed = static_cast<int>(std::lround(scenario.alpha * editorFade));
+          CHECK(std::abs(int(rawPixel[0]) - rawRed) <= 2);
+          gl.clear(GL_COLOR_BUFFER_BIT);
+          gl::setAlphaFuncUniforms(shader, &material);
+        }
+        gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        auto pixel = std::array<uint8_t, 4>{};
+        functions->glReadPixels(4, 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+        const auto discard =
+          scenario.domain == img::ImageAlphaDomain::Binary && scenario.alpha < 128;
+        const auto sourceMask = std::string_view{extension} != ".png" && !graduated;
+        const auto opacity = discard      ? 0.0f
+                             : sourceMask ? editorFade
+                                          : scenario.alpha / 255.0f * editorFade;
+        const auto red = static_cast<int>(std::lround(255.0f * opacity));
+        CHECK(std::abs(int(pixel[0]) - red) <= 2);
+        CHECK(std::abs(int(pixel[2]) - (255 - red)) <= 2);
+        material.deactivate(gl);
+        resource->dropSync(gl);
+      }
+    }
+  }
+  CHECK(gl.getError() == GL_NO_ERROR);
 }
 
 } // namespace tb::ui

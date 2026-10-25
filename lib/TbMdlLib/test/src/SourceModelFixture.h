@@ -51,11 +51,12 @@ struct SyntheticProp
     put(vvd, 56, 64);
     put(vvd, 60, 256);
     const std::array<std::array<float, 3>, 4> positions = {
-      {{0, 0, 0}, {2, 0, 0}, {0, 3, 0}, {2, 3, 0}}};
+      {{0, 0, 0}, {0, 3, 0}, {2, 0, 0}, {2, 3, 0}}};
     for (size_t i = 0; i < 4; ++i)
     {
       for (size_t j = 0; j < 3; ++j)
         put(vvd, 64 + i * 48 + 16 + j * 4, std::bit_cast<uint32_t>(positions[i][j]));
+      put(vvd, 64 + i * 48 + 36, std::bit_cast<uint32_t>(1.0f)); // Outward +Z normal.
       put(vvd, 64 + i * 48 + 40, std::bit_cast<uint32_t>(float(i % 2)));
       put(vvd, 64 + i * 48 + 44, std::bit_cast<uint32_t>(float(i / 2)));
     }

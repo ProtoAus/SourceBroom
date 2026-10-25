@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.3 compatibility candidate
+# Try the Windows SourceBroom A5.4 rendering/material candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -19,6 +19,30 @@ FTESurf is an optional runtime, not an editor dependency.
 4. Move an existing plain ramp one small grid step, undo/redo, and Save As.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
+
+## A5.4: rendering and game-level material settings
+
+- Source VTX triangles no longer receive an extra reversal. A real prop's outward
+  normals and native brush-cache controls distinguish this from a blanket global
+  culling flip; Source coordinates, UVs and source bytes were not reflected.
+- Source VTF alpha can be a shader mask. Basic VMT `$translucent`/`$alphatest`
+  flags now control preview opacity/cutout instead of blindly blending that mask.
+  Raw alpha is tested before masking; surviving opaque/cutout pixels still accept
+  the editor's whole-brush fade. Actual GPU readbacks cover these cases, but this
+  is not full Source shader support, arbitrary cutout thresholds or lighting.
+- **Material Collections** settings show the active game/profile name for its
+  material root and mounted search paths, not thousands of nested folders.
+  The full catalog remains. Opening settings never rewrites a saved partial
+  selection. A partial legacy mount can appear in both available/enabled lists;
+  enable it to browse all folders, or disable it to hide the mount. Undo works.
+  This controls browsing of already mounted content, not a new cross-game mount
+  manager. Read-only previews cannot change saved collection choices.
+
+**Quick check:** open a copy of the previously inside-out map with the matching
+profile. Look at a brush exterior and a familiar prop from outside, then inspect
+Material Collections and select a material. Confirm the front faces and game-level
+entry look right. Report the exact remaining visual issue rather than assume
+complete rendering or performance parity.
 
 ## If a VMF cannot open for editing
 
@@ -137,14 +161,14 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current four-suite regression evidence is **252/252 passed**: Fs20, Gl21,
-  Mdl169 and Ui42. A prior untouched Windows preference replacement failure
+- Current four-suite regression evidence is **255/255 passed**: Fs20, Gl21,
+  Mdl171 and Ui43. A prior untouched Windows preference replacement failure
   passed in this run but remains a known intermittent finding, not a claimed fix.
   Details and prior A4 evidence are in [VALIDATION.md](VALIDATION.md).
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep the older A5.2 package as recovery; do not merge different package DLL sets.
+  Keep the older A5.3 package as recovery; do not merge different package DLL sets.
 
-For quick A5.3 feedback, retry one previously refused copied VMF, accept the
+For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.
 Then open a familiar map and briefly scroll the material browser: report whether
 textures progress and the UI feels less stuck. These observations are not measured

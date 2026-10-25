@@ -25,6 +25,14 @@ uniform bool EnableMasked;
 // 2 = Greater (keep if alpha > AlphaFuncThreshold)
 uniform int AlphaFuncCompare;
 uniform float AlphaFuncThreshold;
+uniform bool IgnoreTextureAlpha;
+
+// Use only after passesAlphaFunc: a cutout's surviving pixels are opaque, while
+// graduated materials retain their real opacity. Editor fades are applied later.
+float materialAlpha(float alpha)
+{
+  return IgnoreTextureAlpha ? 1.0 : alpha;
+}
 
 // Mirrors gl::MaterialAlphaFunc::Compare. Returns true if this fragment should be kept:
 // either alpha-testing is disabled (EnableMasked is false), or its alpha compares to

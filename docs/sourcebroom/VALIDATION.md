@@ -1,4 +1,4 @@
-# SourceBroom validation — A5.3 compatibility/responsiveness follow-up
+# SourceBroom validation — A5.4 rendering/material-mount follow-up
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
@@ -29,14 +29,14 @@ not substituted for compilation or runtime checks.
 
 | Check | Actual result |
 | --- | --- |
-| Full filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 169/169 + 42/42 passed** (252 entries) |
+| Full filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 171/171 + 43/43 passed** (255 entries) |
 | Preference replacement history | The untouched test passes this full run; earlier A5 full/narrow runs failed with Windows rename `Access is denied`. One pass is not a fix or a claim of consistent host behavior |
 | Focused accepted-fix UI controls | **4/4 passed**: property/I/O namespace controls, production build backend and metadata/package tools |
 | Lossless supplied corpus | **38/38 passed**, no-edit plus acted in-memory mutation; original SHA-256 unchanged |
 | Scene supplied corpus | Strict **35/38 constructed**, same three ID/geometry/UV refusals; explicit read-only preview **38/38**, counting/reporting unprojected solids with original hashes unchanged. Shared +/-131072 policy; retained smaller-envelope strict control was 32/38 |
 | Native edited ramp/entity/output save | Production native map save/reopen control changes actual ramp bounds, property data and one repeated-output delay; original/copy separation maintained |
 | Retained A5.2 installed CSS/Momentum pipeline | Production-saved room includes a fresh transformed brush and point after duplicate/delete controls; actual VBSP/VVIS/VRAD completes for CSS20 and Strata25, inputs unchanged; no game launched by this check |
-| A5.3 runtime-stage GUI smoke | Authored invalid-UV copy first refuses strict loading; explicit preview choice observed, READ ONLY title with one omitted solid, open/close exit zero and input unchanged. Title readiness is not visual/owner acceptance; final package receipt pins any installed rerun |
+| Retained A5.3 runtime-stage GUI smoke | Authored invalid-UV copy first refuses strict loading; explicit preview choice observed, READ ONLY title with one omitted solid, open/close exit zero and input unchanged. Title readiness is not visual/owner acceptance; final package receipt pins any installed rerun |
 | Build-tree A5.1 GUI smoke | Actual Momentum prop fixture and two external copied maps opened and closed with exit zero; inputs unchanged. Title readiness is not visual or owner acceptance |
 | Historical A5 installed GUI smoke | CSS/Momentum starter fixtures opened; the installed-prop description was overbroad because an unsupported input environment variable was ignored. Build-tree prop evidence is separate; installed A5.1 coverage belongs to its receipt |
 | Packaging implementation | Authored custom files and optional short-name synthetic BSP written to new ZIP; independent reader extracts exact bytes; no-overwrite/approval/snapshot/path/budget refusals exercised |
@@ -48,7 +48,43 @@ installed-candidate reruns from retained checks. This sample is useful evidence,
 not all-map/all-game coverage. External map names, content and raw private logs
 are not public fixtures.
 
-### A5.3 compatibility and texture controls
+### A5.4 orientation / material-root controls
+
+- Owner reports one previously refused map opens but looks inside out, including
+  props. This is actual qualitative opening/visual feedback, not a render pass.
+- A referenced real prop's triangle-cross/outward-normal control acts: the old
+  importer produces 0 clockwise / 10,876 counterclockwise triangles; keeping VTX
+  winding produces 10,876 / 0. Authored asymmetric list/strip and ownership/fixup
+  controls pass. Native box/ramp renderer-cache vertices remain outward clockwise,
+  with 12 actual triangles per brush and unchanged serialized native bytes.
+  No global culling, coordinate or UV reflection was used.
+- Authored VTF flag/VMT alpha matrices exercise actual brush collection and prop
+  loaders. Basic opaque, cutout and translucent hints override shader-mask flags;
+  direct VTF behavior remains. Unknown/repeated alpha flags refuse explicitly.
+- Fresh review found a fade regression in an initial `.vmt` blend-disable approach.
+  That approach was removed. A Source-only shader uniform now suppresses reserved
+  alpha **after** raw cutout rejection, preserving editor fades and ambient draw
+  state. Separate actual offscreen GPU controls compile both real fragment
+  programs, activate real materials, query blend/depth state and read back pixels
+  for lower/upper-case VMT and non-Source paths. The reserved-alpha negative arm
+  acts; opaque, below/above-cutout, true opacity and 0.4 editor fade pass (163
+  assertions). Bounded independent closure accepts the fix. This is not an entire
+  viewport screenshot, every shader or owner acceptance.
+- Actual Qt Source/non-Source collection-list controls prove one game-labelled
+  browsing entry versus ordinary folders, a nonempty complete catalog, unchanged
+  saved partial state on presentation, explicit all/none selection and undo/redo.
+  Read-only previews disable saved-choice actions. No catalog pruning or new
+  game-specific mount implementation was used.
+- Tooling controls preserved: a binary probe initially used text `readString`
+  (truncates at NUL), then matched production exact reads; the first GPU locator
+  missed ShaderManager's `shader/name` prefix. Neither failure was product proof.
+  Existing entrypoints were corrected, not bypassed with a wrapper chain.
+- The unchanged preference rename test failed in the first full UI run, passed
+  alone, then passed in the reviewed full 43/43 run. No preference product/test
+  code was changed or flake claimed fixed. Final package receipt identifies the
+  clean source/binaries and actual installed smoke separately from these checks.
+
+### A5.3 compatibility and texture controls (retained)
 
 - Synthetic valid/duplicate-ID/invalid-UV/incomplete/unlocated/all-invalid-brush-entity
   cases preserve native bytes in preview; strict controls act/refuse appropriately.

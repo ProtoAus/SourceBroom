@@ -54,11 +54,16 @@ Result<gl::Texture> loadTexture(
   {
     return fs.openFile(path) | kdl::and_then([&](auto file) {
              auto reader = file->reader().buffer();
-             return sourceBaseTexture(
+             return sourceMaterial(
                reader.readString(reader.size()), SourceMaterialMode::BaseTexturePreview);
            })
-           | kdl::and_then([&](auto texturePath) {
-               return loadTexture(texturePath, name, fs, palette);
+           | kdl::and_then([&](auto info) {
+               return loadTexture(info.baseTexture, name, fs, palette)
+                      | kdl::transform([&](auto texture) {
+                          // VTF alpha can be a shader mask, not transparency.
+                          texture.setAlphaDomain(info.alphaDomain);
+                          return texture;
+                        });
              });
   }
   if (isVtfTexture(path))

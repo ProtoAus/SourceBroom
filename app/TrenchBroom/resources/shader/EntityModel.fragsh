@@ -29,6 +29,7 @@ varying vec4 worldCoordinates;
 
 vec3 applySoftMapBoundsTint(vec3 inputFragColor, vec3 worldCoords);
 bool passesAlphaFunc(float alpha);
+float materialAlpha(float alpha);
 
 void main()
 {
@@ -39,7 +40,7 @@ void main()
     discard;
   }
 
-  gl_FragColor = vec4(vec3(Brightness / 2.0 * texel), texel.a);
+  gl_FragColor = vec4(vec3(Brightness / 2.0 * texel), materialAlpha(texel.a));
   gl_FragColor = vec4(clamp(2.0 * gl_FragColor.rgb, 0.0, 1.0), gl_FragColor.a);
 
   if (GrayScale)

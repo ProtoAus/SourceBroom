@@ -49,7 +49,9 @@ public:
 /**
  * Sets the EnableMasked/AlphaFuncCompare/AlphaFuncThreshold uniforms on shader from
  * material's effectiveAlphaFunc(), so the shader's alpha-test cutout matches the
- * material's derived or overridden alpha-test state. material may be null.
+ * material's derived or overridden alpha-test state. Also sets IgnoreTextureAlpha
+ * for Source opaque/cutout pixels after the cutout test, preserving editor fades without
+ * blending a shader mask as opacity. material may be null.
  */
 void setAlphaFuncUniforms(ActiveShader& shader, const Material* material);
 

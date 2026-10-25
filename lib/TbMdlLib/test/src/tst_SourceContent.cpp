@@ -291,6 +291,34 @@ TEST_CASE("SourceContent")
         sourceBaseTexture(unresolved, SourceMaterialMode::BaseTexturePreview).is_error());
     }
   }
+  SECTION("preview alpha flags are explicit and ambiguous flags refuse")
+  {
+    for (const auto* flag : {"$alphatest", "$translucent"})
+    {
+      for (const auto* value :
+           {"0", "1", "0.0", "1.0", "0.000000", "1.000000", "false", "true"})
+      {
+        const auto text =
+          std::string{"VertexLitGeneric { $basetexture x "} + flag + " " + value + " }";
+        CHECK(sourceMaterial(text).is_error());
+        const auto info = sourceMaterial(text, SourceMaterialMode::BaseTexturePreview);
+        REQUIRE(info.is_success());
+        const auto enabled =
+          std::string_view{value}.starts_with('1') || std::string_view{value} == "true";
+        CHECK((info | kdl::value()).alphaDomain
+          == (!enabled ? img::ImageAlphaDomain::Opaque
+              : std::string_view{flag} == "$alphatest" ? img::ImageAlphaDomain::Binary
+                                                       : img::ImageAlphaDomain::Graduated));
+      }
+      for (const auto* suffix :
+           {" $variable", " -1", " nan", " 1 $alphatest 0 $translucent 0"})
+      {
+        const auto text =
+          std::string{"VertexLitGeneric { $basetexture x "} + flag + suffix + " }";
+        CHECK(sourceMaterial(text, SourceMaterialMode::BaseTexturePreview).is_error());
+      }
+    }
+  }
   SECTION("base-image preview accepts enumerated optional PBR and tint metadata")
   {
     for (const auto* parameter :

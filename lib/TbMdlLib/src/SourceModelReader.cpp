@@ -351,11 +351,12 @@ SourceModelGeometry readSourceModel(
               result.indices.push_back(ic);
             }
           };
+          // VTX winding is already clockwise, as required by the renderer.
           if (flags == 1)
           {
             for (size_t i = 0; i < count; i += 3)
             {
-              emit(i, i + 2, i + 1);
+              emit(i, i + 1, i + 2);
             }
           }
           else
@@ -364,11 +365,11 @@ SourceModelGeometry readSourceModel(
             {
               if (i & 1)
               {
-                emit(i, i + 1, i + 2);
+                emit(i, i + 2, i + 1);
               }
               else
               {
-                emit(i, i + 2, i + 1);
+                emit(i, i + 1, i + 2);
               }
             }
           }

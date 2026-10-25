@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom A4/A5/A5.3 candidates
+# Human acceptance — SourceBroom A4/A5/A5.4 candidates
 
 No owner confirmation has been received for the following checks. Do not turn
 an automated build/screenshot into a human pass. Use newly authored maps/copies;
@@ -34,7 +34,27 @@ remain pending until actually observed and confirmed.
   Report whether startup/map opening and browser responsiveness feel improved;
   this observation does not establish a measured speedup or visual parity.
 
-## A5.3 compatibility and texture feedback — pending
+## Rendering/material feedback after A5.3 delivery — observed, limited
+
+The owner reports that one previously refused supplied map now loads, but geometry
+and prop models appear inside out. They also report an excessive per-folder list
+in material settings and request game-named material-root entries. This confirms
+that opening observation only: exact binary/profile hashes, complete geometry,
+correct rendering and improved texture latency were not independently confirmed.
+External map names/content stay out of public notes.
+
+## A5.4 rendering/material retry — pending
+
+- [ ] Open a **copy** of the reported map in the new candidate with matching
+  content configured. Look at a brush exterior and a familiar prop from outside.
+  Confirm faces no longer appear inside out or unexpectedly see-through; report
+  any remaining case. Do not infer all-model, lighting or complete-map parity.
+- [ ] Inspect Material Collections: confirm the game/profile-named root entry
+  replaces the long folder list and familiar materials remain selectable. Existing
+  partial selections should not change just by opening settings. On an editable
+  copy, optional enable/disable/undo should restore the previous selection.
+
+## A5.3 compatibility and texture feedback — still partly pending
 
 The owner again reports that many maps do not load and textures feel very slow.
 This is qualitative prior-build feedback, not A5.3 acceptance or measured timing.

@@ -1,4 +1,4 @@
-# Native Source authoring tools — bounded A5.3 candidate
+# Native Source authoring tools — bounded A5.4 candidate
 
 SourceBroom edits native Source 1 VMF, not a converted Quake MAP. CSS and
 Momentum/Strata are the first tested profiles; generic Source paths and external
@@ -67,6 +67,23 @@ all Source games. Native save guards remain authoritative.
 
 ## Material progress and base-image limits
 
+For native Source maps, Material Collections settings group the configured root
+and gameinfo-mounted content under the active **game/profile name**. This is a
+browsing entry, not one entry per nested folder or a new physical mount manager.
+All registered material names/paths remain available. Existing saved partial
+folder choices are unchanged by opening settings; a partial mount can be listed
+on both sides. Explicitly enabling the entry selects the full mount, disabling
+selects none, and undo restores the previous subset. Read-only previews cannot
+change these saved choices. Non-Source folder selection remains unchanged.
+
+VMT opacity is separate from a VTF's alpha-channel flag, which may describe a
+shader mask. The basic preview uses explicit `$translucent`/`$alphatest` hints;
+opaque mask alpha is not blended as transparency. Raw cutout rejection happens
+before surviving pixels become opaque, and editor whole-brush fading remains
+independent. Normal graduated opacity and non-Source material behavior remain.
+This is not arbitrary `$alphatestreference`, dual-mode blending, scalar `$alpha`
+or full shader equivalence; basic cutout uses the existing 0.5 threshold.
+
 Source catalogs remain complete and demand-loaded. Texture processing resumes
 across frames rather than repeatedly servicing a busy prefix; unused catalog
 resources compact in one pass. Browser resource notifications repaint without a
@@ -88,6 +105,11 @@ loose/VPK materials and VTF data are read through the configured Source content
 paths; nothing from an installed game is bundled with this editor. Unsupported
 versions/layouts or missing/mismatched/oversized data use a diagnostic fallback
 instead of pretending the model rendered. Check the console.
+
+A5.4 preserves the Source VTX clockwise order instead of reversing its faces.
+Actual outward-normal checks on one real model and authored list/strip controls
+cover this correction; native brush renderer winding and coordinates were left
+unchanged. This is orientation evidence, not all-model visual acceptance.
 
 This does not add skeletal animation, physics/collision authoring, full bodygroup
 or shader equivalence, or instance/displacement/overlay authoring. A static pose or

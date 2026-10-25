@@ -251,7 +251,6 @@ MaterialBlendFunc Material::effectiveBlendFunc() const
     return m_blendFunc;
   }
 
-
   if (
     const auto* texture = this->texture();
     texture && texture->alphaDomain() == img::ImageAlphaDomain::Graduated)

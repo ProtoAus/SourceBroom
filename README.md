@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.3 compatibility/responsiveness follow-up to the A5 candidate:
+**Status:** Windows A5.4 rendering/material-mount follow-up to the A5 candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -22,6 +22,13 @@ preview worlds without weakening geometry/save guards. A5.3 adds fair texture
 queue progress, linear unused-resource cleanup and fewer full-browser relayouts.
 Initial content indexing can still take seconds; a whole-startup speedup is not
 established.
+
+A5.4 fixes reversed Source prop triangles and separates VMT opacity from VTF
+shader-mask alpha for both brushes and props, while retaining editor fades.
+Source Material Collections settings now show a game/profile-named entry instead
+of every nested folder. The complete catalog and saved partial folder selections
+remain intact; choosing the entry explicitly enables/disables the whole mount.
+Correct full-map rendering still needs owner confirmation.
 
 Strict editable loading still constructs **35/38** supplied maps. After explicit
 permission, a clearly labelled **read-only compatibility preview** opens all

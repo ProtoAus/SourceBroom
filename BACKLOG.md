@@ -25,6 +25,13 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   zero metadata-triggered pixel decodes, explicit-reload add/remove freshness,
   and lower measured initial latency. Do not use a stale cache or prune content
   to manufacture an improvement.
+- **Source alpha/shader fidelity — `mdl/SourceContent.cpp`, `shader/AlphaFunc.fragsh`.**
+  A5.4 fixes shader-mask opacity and prop winding; its basic alpha hints do not
+  implement arbitrary `$alphatestreference`, combined translucent/cutout blending,
+  scalar `$alpha`, proxies or full shader effects. Basic cutout uses 0.5. Falsifier
+  for expanding support: authored controls against the matching Source shader
+  retain raw cutout ordering, actual opacity, editor fade, non-Source draw state
+  and deferred loading without inventing unsupported effects.
 - **Long-session texture residency — `gl/Resource.h`, `mdl/Map.cpp`.** Source
   catalogs no longer force pixel decoding for metadata. Pixels requested by
   scene references or viewport activation can still accumulate over a long
@@ -44,6 +51,7 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   untouched test throwing rename `Access is denied` in its task-owned Unicode
   fixture; one narrow rerun repeated it. Later A5.1/A5.3 full runs pass 42/42,
   but A5.3 also observed another full-run failure followed by an isolated pass.
+  A5.4 again failed the first full run, then passed alone and full 43/43.
   These passes do not establish a fix. Earlier runs observed intermittent sharing
   failures. The host/watcher cause is not conclusively diagnosed and no
   unrelated product/test code was changed to conceal it. Falsifier: a bounded

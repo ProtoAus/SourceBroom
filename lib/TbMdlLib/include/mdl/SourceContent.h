@@ -19,6 +19,7 @@
 
 #pragma once
 #include "base/Result.h"
+#include "img/ImageAlphaDomain.h"
 
 #include <filesystem>
 #include <string_view>
@@ -33,9 +34,16 @@ Result<std::vector<std::filesystem::path>> sourceSearchPaths(
 enum class SourceMaterialMode
 {
   Strict,
-  // Resolve only the base image, not shader equivalence or optional surface effects.
+  // Resolve the base image/basic alpha policy, not full shaders or surface effects.
   BaseTexturePreview
 };
+struct SourceMaterialInfo
+{
+  std::filesystem::path baseTexture;
+  img::ImageAlphaDomain alphaDomain;
+};
+Result<SourceMaterialInfo> sourceMaterial(
+  std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);
 Result<std::filesystem::path> sourceBaseTexture(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);
 // Explicit roots are manual overrides; otherwise inspect standard platform locations.

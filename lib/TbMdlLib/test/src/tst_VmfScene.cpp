@@ -4,6 +4,7 @@
  */
 #include "mdl/BrushFace.h"
 #include "mdl/BrushNode.h"
+#include "mdl/BrushRendererBrushCache.h"
 #include "mdl/EditorContext.h"
 #include "mdl/EntityNode.h"
 #include "mdl/LayerNode.h"
@@ -82,6 +83,38 @@ void translate(BrushNode& node)
   node.setBrush(std::move(b));
 }
 } // namespace
+
+TEST_CASE("VmfScene renderer vertices keep outward clockwise faces", "[vmf]")
+{
+  for (const auto ramp : {false, true})
+  {
+    const auto source = fixture(ramp);
+    auto scene = VmfScene::read(source, vm::bbox3d{4096});
+    auto cache = BrushRendererBrushCache{};
+    cache.validateVertexCache(brush(scene.world()));
+    const auto& vertices = cache.cachedVertices();
+    REQUIRE(vertices.size() == 24);
+    REQUIRE(cache.cachedFacesSortedByMaterial().size() == 6);
+    auto triangles = size_t{0};
+    for (const auto& face : cache.cachedFacesSortedByMaterial())
+    {
+      const auto first = face.indexOfFirstVertexRelativeToBrush;
+      const auto& a = vertices.at(first).attr;
+      const auto& normal = vertices.at(first).rest.attr;
+      const auto delta = vm::vec3d{normal} - face.face->normal();
+      CHECK(vm::dot(delta, delta) < 1e-10);
+      for (size_t i = 1; i + 1 < face.vertexCount; ++i)
+      {
+        const auto& b = vertices.at(first + i).attr;
+        const auto& c = vertices.at(first + i + 1).attr;
+        CHECK(vm::dot(vm::cross(b - a, c - a), normal) < 0.0f);
+        ++triangles;
+      }
+    }
+    CHECK(triangles == 12);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+}
 
 TEST_CASE("VmfScene read-only compatibility preview", "[vmf]")
 {

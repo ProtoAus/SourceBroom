@@ -6,9 +6,16 @@
 #include "fs/DiskFileSystem.h"
 #include "fs/TestFileSystem.h"
 #include "gl/Material.h"
+#include "gl/MaterialCollection.h"
+#include "gl/Resource.h"
+#include "gl/Texture.h"
 #include "mdl/GameConfig.h"
 #include "mdl/LoadEntityModel.h"
+#include "mdl/LoadMaterialCollections.h"
 #include "mdl/LoadSourceModel.h"
+#include "mdl/LoadTexture.h"
+
+#include "kd/task_manager.h"
 
 #include <algorithm>
 #include <set>
@@ -26,7 +33,11 @@ std::shared_ptr<fs::File> file(const std::string& bytes)
   return std::make_shared<fs::OwningBufferFile>(std::move(buffer), bytes.size());
 }
 fs::TestFileSystem modelFileSystem(
-  const test::SyntheticProp& prop, bool sidecars = true, bool mipmapped = false)
+  const test::SyntheticProp& prop,
+  bool sidecars = true,
+  bool mipmapped = false,
+  const std::string& materialParameters = {},
+  const uint32_t textureFlags = 0)
 {
   auto entries = std::vector<fs::Entry>{fs::FileEntry{"prop.mdl", file(prop.mdl)}};
   if (sidecars)
@@ -42,12 +53,13 @@ fs::TestFileSystem modelFileSystem(
   test::put(vtf, 12, 80);
   test::put(vtf, 16, 1, 2);
   test::put(vtf, 18, 1, 2);
+  test::put(vtf, 20, textureFlags);
   test::put(vtf, 24, 1, 2);
   test::put(vtf, 52, 0);
   test::put(vtf, 56, 1, 1);
   test::put(vtf, 57, 0xffffffff);
   test::put(vtf, 63, 1, 2);
-  test::put(vtf, 80, 0xff0000ff);
+  test::put(vtf, 80, textureFlags ? 0x800000ff : 0xff0000ff);
   if (mipmapped)
   {
     vtf.resize(100);
@@ -63,7 +75,10 @@ fs::TestFileSystem modelFileSystem(
         {fs::DirectoryEntry{
           "test",
           {fs::FileEntry{
-             "metal.vmt", file("VertexLitGeneric { $basetexture Models/Test/Pixel }")},
+             "metal.vmt",
+             file(
+               "VertexLitGeneric { $basetexture Models/Test/Pixel " + materialParameters
+               + " }")},
            fs::FileEntry{
              "other.vmt", file("VertexLitGeneric { $basetexture models/test/other }")},
            fs::FileEntry{
@@ -245,6 +260,72 @@ TEST_CASE("loadSourceModel")
     CHECK(pending().is_error());
     auto missing = modelFileSystem(test::SyntheticProp{}, false);
     CHECK(loadSourceModel("prop.mdl", missing, logger).is_error());
+  }
+}
+TEST_CASE("Source VMT alpha controls brush and prop render policy")
+{
+  const auto modes = std::vector<std::pair<std::string, img::ImageAlphaDomain>>{
+    {"", img::ImageAlphaDomain::Opaque},
+    {"$selfillum 1", img::ImageAlphaDomain::Opaque},
+    {"$translucent 0", img::ImageAlphaDomain::Opaque},
+    {"$alphatest 0", img::ImageAlphaDomain::Opaque},
+    {"$translucent 1", img::ImageAlphaDomain::Graduated},
+    {"$alphatest 1", img::ImageAlphaDomain::Binary},
+    {"$translucent 1 $alphatest 1", img::ImageAlphaDomain::Binary},
+  };
+  auto taskManager = kdl::task_manager{2};
+  auto logger = NullLogger{};
+  for (const auto flags : {0u, 0x1000u, 0x2000u})
+  {
+    for (const auto& [parameters, expected] : modes)
+    {
+      CAPTURE(flags, parameters);
+      auto fs = modelFileSystem(test::SyntheticProp{}, true, false, parameters, flags);
+      const auto raw =
+        loadTexture("materials/models/test/pixel.vtf", "raw", fs, {}) | kdl::value();
+      CHECK(
+        raw.alphaDomain()
+        == (flags == 0x2000u   ? img::ImageAlphaDomain::Graduated
+            : flags == 0x1000u ? img::ImageAlphaDomain::Binary
+                               : img::ImageAlphaDomain::Opaque));
+      auto config = MaterialConfig{};
+      config.root = "materials";
+      config.extensions = {".vmt"};
+      const auto collections =
+        loadMaterialCollections(
+          fs,
+          config,
+          [](auto loader) { return gl::createTextureResource(loader() | kdl::value()); },
+          taskManager,
+          logger)
+        | kdl::value();
+      auto brush = static_cast<const gl::Material*>(nullptr);
+      for (const auto& collection : collections)
+        for (const auto& material : collection.materials())
+          if (material.name() == "models/test/metal")
+            brush = &material;
+      REQUIRE(brush);
+      const auto model = loadSourceModel("prop.mdl", fs, logger) | kdl::value();
+      const auto* prop = model.surface(0).skin(0);
+      REQUIRE(prop);
+      for (const auto* material : {brush, prop})
+      {
+        REQUIRE(material->texture());
+        CHECK(material->texture()->alphaDomain() == expected);
+        const auto blend = material->effectiveBlendFunc();
+        CHECK(
+          blend.enable
+          == (expected == img::ImageAlphaDomain::Graduated ? gl::MaterialBlendFunc::Enable::UseFactors : gl::MaterialBlendFunc::Enable::UseDefault));
+        if (expected == img::ImageAlphaDomain::Graduated)
+        {
+          CHECK(blend.srcFactor == GL_SRC_ALPHA);
+          CHECK(blend.destFactor == GL_ONE_MINUS_SRC_ALPHA);
+        }
+        CHECK(
+          material->effectiveAlphaFunc().has_value()
+          == (expected == img::ImageAlphaDomain::Binary));
+      }
+    }
   }
 }
 } // namespace tb::mdl

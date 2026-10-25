@@ -26,6 +26,7 @@
 #include "base/PreferenceManager.h"
 #include "mdl/GameInfo.h"
 #include "mdl/Map.h"
+#include "mdl/MapFormat.h"
 #include "mdl/Map_Assets.h"
 #include "mdl/WorldNode.h" // IWYU pragma: keep
 #include "ui/BitmapButton.h"
@@ -58,6 +59,18 @@ void MaterialCollectionEditor::addSelectedMaterialCollections()
   const auto availableCollections = availableMaterialCollections();
   auto enabledCollections = enabledMaterialCollections();
 
+  if (m_document.map().worldNode().mapFormat() == mdl::MapFormat::SourceVMF)
+  {
+    if (!canAddMaterialCollections())
+    {
+      return;
+    }
+    enabledCollections.insert(
+      enabledCollections.end(), availableCollections.begin(), availableCollections.end());
+    setEnabledMaterialCollections(m_document.map(), enabledCollections);
+    return;
+  }
+
   for (auto* selectedItem : m_availableCollectionsList->selectedItems())
   {
     const auto index = size_t(m_availableCollectionsList->row(selectedItem));
@@ -71,6 +84,14 @@ void MaterialCollectionEditor::addSelectedMaterialCollections()
 
 void MaterialCollectionEditor::removeSelectedMaterialCollections()
 {
+  if (m_document.map().worldNode().mapFormat() == mdl::MapFormat::SourceVMF)
+  {
+    if (canRemoveMaterialCollections())
+    {
+      setEnabledMaterialCollections(m_document.map(), {});
+    }
+    return;
+  }
   auto enabledCollections = enabledMaterialCollections();
 
   auto selections = std::vector<int>{};
@@ -107,12 +128,14 @@ void MaterialCollectionEditor::enabledMaterialCollectionSelectionChanged()
 
 bool MaterialCollectionEditor::canAddMaterialCollections() const
 {
-  return !m_availableCollectionsList->selectedItems().empty();
+  return !m_document.map().isReadOnlyVmfPreview()
+         && !m_availableCollectionsList->selectedItems().empty();
 }
 
 bool MaterialCollectionEditor::canRemoveMaterialCollections() const
 {
-  return !m_enabledCollectionsList->selectedItems().empty();
+  return !m_document.map().isReadOnlyVmfPreview()
+         && !m_enabledCollectionsList->selectedItems().empty();
 }
 
 bool MaterialCollectionEditor::canReloadMaterialCollections() const
@@ -130,6 +153,7 @@ void MaterialCollectionEditor::createGui()
   availableCollectionsContainer->setAutoFillBackground(true);
 
   m_availableCollectionsList = new QListWidget{};
+  m_availableCollectionsList->setObjectName("MaterialCollections_Available");
   m_availableCollectionsList->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
   auto* availableCollectionsContainerLayout = new QVBoxLayout{};
@@ -144,6 +168,7 @@ void MaterialCollectionEditor::createGui()
   enabledCollectionsContainer->setAutoFillBackground(true);
 
   m_enabledCollectionsList = new QListWidget{};
+  m_enabledCollectionsList->setObjectName("MaterialCollections_Enabled");
   m_enabledCollectionsList->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
   auto* enabledCollectionsContainerLayout = new QVBoxLayout{};
@@ -255,7 +280,8 @@ void MaterialCollectionEditor::updateAllMaterialCollections()
 namespace
 {
 
-void updateListBox(QListWidget* box, const std::vector<std::filesystem::path>& paths)
+void updateListBox(
+  QListWidget* box, const std::vector<std::filesystem::path>& paths, const mdl::Map& map)
 {
   // We need to block QListWidget::itemSelectionChanged from firing while clearing and
   // rebuilding the list because it will cause debugUIConsistency() to fail, as the
@@ -264,6 +290,19 @@ void updateListBox(QListWidget* box, const std::vector<std::filesystem::path>& p
   auto blocker = QSignalBlocker{box};
 
   box->clear();
+  if (map.worldNode().mapFormat() == mdl::MapFormat::SourceVMF && !paths.empty())
+  {
+    // Presentation only: saved per-folder selections and catalog entries stay intact.
+    auto* item =
+      new QListWidgetItem{QString::fromStdString(map.gameInfo().gameConfig.name), box};
+    item->setToolTip(
+      QObject::tr(
+        "Material root: %1\nIncludes the game's mounted search paths.\n"
+        "Saved partial folder selections are retained. Enable this entry "
+        "to browse the whole mount; disable it to hide the mount.")
+        .arg(pathAsQString(map.gameInfo().gameConfig.materialConfig.root)));
+    return;
+  }
   for (const auto& path : paths)
   {
     box->addItem(pathAsQString(path));
@@ -274,12 +313,13 @@ void updateListBox(QListWidget* box, const std::vector<std::filesystem::path>& p
 
 void MaterialCollectionEditor::updateAvailableMaterialCollections()
 {
-  updateListBox(m_availableCollectionsList, availableMaterialCollections());
+  updateListBox(
+    m_availableCollectionsList, availableMaterialCollections(), m_document.map());
 }
 
 void MaterialCollectionEditor::updateEnabledMaterialCollections()
 {
-  updateListBox(m_enabledCollectionsList, enabledMaterialCollections());
+  updateListBox(m_enabledCollectionsList, enabledMaterialCollections(), m_document.map());
 }
 
 std::vector<std::filesystem::path> MaterialCollectionEditor::

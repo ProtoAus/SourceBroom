@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdlib>
 #include <fstream>
 #include <stdexcept>
@@ -166,7 +167,7 @@ std::string readText(const std::filesystem::path& path)
   return {std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
 }
 } // namespace
-Result<std::filesystem::path> sourceBaseTexture(
+Result<SourceMaterialInfo> sourceMaterial(
   std::string_view vmt, const SourceMaterialMode mode)
 {
   try
@@ -236,13 +237,59 @@ Result<std::filesystem::path> sourceBaseTexture(
         return Error{"Parent traversal in Source texture path"};
       }
     }
+    auto translucent = false;
+    auto alphaTest = false;
+    for (const auto* flag : {"$translucent", "$alphatest"})
+    {
+      if (std::ranges::count(shader.children, std::string{flag}, &Entry::key) > 1)
+      {
+        return Error{"Repeated Source alpha flag requires explicit resolution"};
+      }
+      if (const auto* entry = child(shader.children, flag))
+      {
+        const auto value = kdl::str_to_lower(entry->value);
+        auto enabled = value == "true";
+        if (value != "true" && value != "false")
+        {
+          auto number = float{};
+          const auto parsed =
+            std::from_chars(value.data(), value.data() + value.size(), number);
+          if (
+            parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()
+            || (number != 0.0f && number != 1.0f))
+          {
+            return Error{"Unsupported Source alpha flag: " + std::string{flag}};
+          }
+          enabled = number == 1.0f;
+        }
+        if (entry->key == "$alphatest")
+        {
+          alphaTest = enabled;
+        }
+        else
+        {
+          translucent = enabled;
+        }
+      }
+    }
     path.replace_extension(".vtf");
-    return std::filesystem::path{"materials"} / path;
+    return SourceMaterialInfo{
+      std::filesystem::path{"materials"} / path,
+      alphaTest     ? img::ImageAlphaDomain::Binary
+      : translucent ? img::ImageAlphaDomain::Graduated
+                    : img::ImageAlphaDomain::Opaque};
   }
   catch (const std::runtime_error& e)
   {
     return Error{e.what()};
   }
+}
+
+Result<std::filesystem::path> sourceBaseTexture(
+  std::string_view vmt, const SourceMaterialMode mode)
+{
+  return sourceMaterial(vmt, mode)
+         | kdl::transform([](auto info) { return std::move(info.baseTexture); });
 }
 Result<std::vector<std::filesystem::path>> sourceSearchPaths(
   std::string_view gameInfo,

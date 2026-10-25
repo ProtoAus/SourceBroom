@@ -47,8 +47,11 @@ compatible merely because they also use VMF.
   no-delta/exclusive-copy safeguards, and persistent omission diagnostics. Texture
   work resumes fairly, dead catalog resources compact once, and the browser
   avoids unnecessary full relayouts; large initial mounts still take seconds.
+  A5.4 corrects Source prop winding and VMT mask/opacity handling, preserving
+  editor fades with actual GPU controls. Material settings show game-level roots
+  without pruning the catalog or rewriting saved subsets on presentation.
   Current [validation](VALIDATION.md) records
-  Fs20/Gl21/Mdl169/Ui42 passing (252 entries). The earlier preference-test failure
+  Fs20/Gl21/Mdl171/Ui43 passing (255 entries). The earlier preference-test failure
   passed this run but remains an unresolved intermittent finding, not a fix.
   Independent Hammer++/owner checks remain pending.
 - A6 is not implemented. No Source compiler, Valve content, or third-party/user

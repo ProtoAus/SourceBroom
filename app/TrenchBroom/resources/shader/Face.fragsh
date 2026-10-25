@@ -43,6 +43,7 @@ vec3 applySoftMapBoundsTint(vec3 inputFragColor, vec3 worldCoords);
 vec3 adaptiveGridColor(vec3 background);
 float texturedGridAlpha(float alpha);
 bool passesAlphaFunc(float alpha);
+float materialAlpha(float alpha);
 
 void main()
 {
@@ -64,11 +65,9 @@ void main()
   gl_FragColor = vec4(vec3(Brightness / 2.0 * gl_FragColor), gl_FragColor.a);
   gl_FragColor = vec4(clamp(2.0 * gl_FragColor.rgb, 0.0, 1.0), gl_FragColor.a);
 
-  // Preserve the texture's real alpha (needed for translucent materials) rather than
-  // overwriting it -- opaque/alpha-tested materials always have alpha 1.0 at this point,
-  // so this is a no-op for them. Alpha is still the whole-object fade used for X-ray/
-  // hidden-brush preview.
-  gl_FragColor.a = gl_FragColor.a * Alpha;
+  // A Source alpha channel may be a shader mask. Cutout rejection above must see
+  // the raw alpha, but opaque/surviving cutout pixels use only the editor fade.
+  gl_FragColor.a = materialAlpha(gl_FragColor.a) * Alpha;
 
   if (GrayScale)
   {
