@@ -64,16 +64,20 @@ compatible merely because they also use VMF.
   focused Gl990/Mdl7654 and GPU2539 assertions. The earlier intermittent Windows
   preference rename failure remains unfixed despite the current passing run.
   Final receipts retain the source/binary/run distinctions and appearance gates.
-- A5.8 starts A6 with a bounded **native displacement foundation**: actual
-  power2..6 mesh rendering/picking/bounds and selected-face distance edits through
-  normal undo and preserving save. Sculpt/create/power/sew, alpha blending and
-  base transforms remain gated; full A6 and complete Source support are not claimed.
-  Common integer VTF channel layouts now have bounded RGBA8 conversion rather
-  than a missing-format fallback. Focused native/VTF controls pass 3,182 assertions
-  in 37 cases, plus 21 real inspector assertions. The current normal run is
-  Fs20/Gl21/Mdl178 passes and Ui42/43, with the known untouched Windows preference
-  rename failure preserved; the new native guard and inspector cases pass
-  separately. Native appearance/Hammer acceptance is pending; A5.7 is recovery.
+- A5.8 starts A6 with native power2..6 displacement meshes, picking/bounds and
+  selected-face distance editing; A5.9 adds **whole-base translation** with undo,
+  surgical start-coordinate save and continued editing. Every displacement must
+  share base movement intent, not merely lie within an arithmetic epsilon.
+  A5.9 also adds bounded Source-only entity skins for simple fixed FGD studio
+  paths, preserving other-game/explicit/legacy/dynamic declaration semantics.
+  Common integer VTF formats retain bounded RGBA8 preview. Full A6/Source support
+  is not claimed: native rotation/scale/shear, sculpt/create/power/sew, blend
+  materials, overlays/instances and broader shader/model tools remain pending.
+  All 181 model entries pass, affected UI 129 assertions/3 cases and GPU 2,539
+  pass; native scene/UV 233/1 and red->green two-mesh guard 16/1 act. Earlier
+  Fs20/Gl21 remain valid; the known untouched Windows preference failure is
+  preserved/unfixed, not all UI green. Native appearance/Hammer checks remain
+  pending; A5.8 is recovery.
   No Source compiler, Valve content, or third-party/user map is bundled. See
   [alpha instructions](ALPHA.md) for the owner test path.
 

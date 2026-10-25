@@ -1,11 +1,40 @@
-# SourceBroom validation — A5.7 bounded custom-cutout follow-up
+# SourceBroom validation — A5.9 bounded movement and skin preview
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.8 native mesh / integer VTF controls
+## A5.9 native translation / fixed-studio skin controls
+
+Pure displacement translation now uses existing brush/Map movement, including
+start-coordinate token preservation, raised mesh bounds/picking, undo/redo,
+locked/unlocked UVs, Save As/reopen and subsequent distance edits/repeated saves.
+All base planes and every displacement must share movement intent; arithmetic
+epsilon is not permission for an unchanged/moved mismatch. Independent review
+found that a later tiny mesh-only shift passed the original first-delta-only
+check. The new two-mesh control reproduced two missing refusals, then passed
+**16 assertions** after the minimum exact per-side zero-status correction.
+Unknown attachments/references, topology and nontranslation transforms stay gated.
+
+SourceVMF definition loading now opts into default-off fixed-literal studio skin
+normalization, including definitions from includes. Other-game, model()/sprite,
+explicit skin/frame, legacy and dynamic declaration controls retain behavior.
+Entity `0 -> 1 -> 0` resolves actual red/green/red canonical material identities and
+one-pixel bytes through the existing two-family model fixture. This does not
+establish external universal FGD/SDK, animation or bodygroup parity.
+
+Actual Release model/app/checker/UI builds pass without new compiler warnings.
+The final normal model suite passes **181/181**; affected UI passes **129/3**,
+native scene/UV case **233/1** and existing Windows GPU controls **2,539**.
+The earlier full UI 42/43 preference rename failure is untouched, preserved and
+unfixed; it was not rerun into green. Earlier Fs20/Gl21 evidence remains valid.
+The new code retains strict35/38 and explicit preview38/38 corpus results with
+all 38 original hashes unchanged; package receipts record the final installed
+boundary separately. Native appearance, movement feel and Hammer/game acceptance
+remain pending. A5.8 is recovery, not replaced in place.
+
+## Retained A5.8 native mesh / integer VTF controls
 
 The A5.8 candidate adds bounded native displacement geometry and existing
 vertex-distance editing; A5.7 remains recovery. Mesh triangles,
@@ -24,8 +53,9 @@ passes 2,539 assertions; this is not a new displacement visual/Hammer acceptance
 All 38 corpus originals keep their SHA256: document38/38, strict35/38 and explicit
 read-only38/38, with the same three strict refusals and no new loader regression.
 
-Displacement creation, sculpt/power/sew, native base transforms, alpha-material
-blending, overlay/instance authoring and full shader/model parity remain missing.
+Displacement creation, sculpt/power/sew, native rotation/scale/shear/flip,
+alpha-material blending, overlay/instance authoring and full shader/model parity
+remain missing; A5.9 adds only base translation, not arbitrary transforms.
 The integer-format work does not add HDR/palette/normal/animated/cubemap/volume
 support or claim a startup/whole-map speed gain. Independent review's two guard
 findings and the adjacent-edge selection defect were fixed with acted controls;
@@ -39,7 +69,7 @@ manual native mesh appearance and independent Hammer checks remain pending.
 | Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | Arbitrary topology, native editor-group/layer/displacement/overlay/instance authoring |
 | Compatibility preview | Explicit opt-in immutable partial reader; duplicate IDs/bytes unchanged; omitted-solid counts and labelled plane samples; selection-only commands; create-new unchanged copy | Editable repair, complete geometry, proxy hulls, normal save/export/build or relaxed syntax/resource limits |
 | Entity tools | FGD property hints, choices/flags and I/O metadata; ordered/repeated outputs; unknown data retained, definition defaults not blindly inserted | FGD completeness or correctness for every game; malformed data silently repaired |
-| Props/materials | Bounded static MDL44/48/49 with matching VVD/VTX, root/default pose, installed loose/VPK material lookup; explicit fallbacks | Animation, physics/bodygroup/shader parity or every model variant |
+| Props/materials | Bounded static MDL44/48/49 with matching VVD/VTX, root/default pose, installed loose/VPK materials; Source fixed-studio entity skins; explicit fallbacks | Animation, physics/bodygroup/shader parity or every model variant |
 | Native metadata | Read-only groups/visgroups/membership/hidden/cameras/cordons, known-reference diagnostics; camera-eye navigation | Scene parenting, visibility/cordon authoring or arbitrary compiler clipping behavior |
 | Build tools | Actual staged-byte preflight; bounded reader; CSS20/Strata25 per-stage BSP-header contracts; leak/coordinate diagnostics; fresh staging and stop-on-failure | Whole-BSP validation, every Source branch, successful runtime load from process creation alone |
 | Custom packages | Explicit custom-only root/rights acknowledgement, bounded discovery, reviewed immutable snapshots, separate approval, create-new distribution ZIP | Automatic stock/VPK redistribution, complete discovery, licence certification or BSP embedding |

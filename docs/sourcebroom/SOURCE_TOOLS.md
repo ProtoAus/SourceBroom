@@ -213,10 +213,15 @@ of licence rights, a self-contained map, valid gameplay or compatibility with
 another branch. Review exclusions and runtime dependencies, then test the package
 in the intended Source game with only its declared prerequisites installed.
 
-## A5.8 native displacement distance editing
+## A5.9 native displacement movement and distance editing
 
-The A5.8 candidate renders and picks admitted native power2..6 displacement
-meshes rather than their flat base faces. Select exactly one displacement **face**
+The A5.9 candidate renders and picks admitted native power2..6 displacement
+meshes rather than their flat base faces. In object mode, select the whole
+brush and move it normally: the base and raised grid now translate together.
+Undo/redo and preserving Save As retain the mesh; later distance edits still work.
+Rotation, scaling, shear/flip and face/vertex topology editing remain refused.
+
+Select exactly one displacement **face**
 to show a **Displacement vertex** row/column/distance section in the face inspector.
 Choose a grid row and column, enter a distance and click **Apply distance**. This
 uses normal undo/redo and preserving Save As. The row/column order is the native
@@ -227,12 +232,21 @@ Use a copy until manual/Hammer acceptance is recorded. Unknown attachments and
 references remain guarded; missing or malformed meshes are not silently replaced
 by a flat editable proxy. This is not a sculpt brush, creation/power/sew tool,
 blend-material preview or permission to transform arbitrary displacement bases.
-A5.7 remains the prior recovery package without native mesh editing.
+A5.8 remains recovery with native mesh/distance tools but without base movement.
+
+## Source model skins on fixed FGD paths
+
+In a SourceVMF map, a simple fixed nonempty `studio` or `studioprop` model path
+can now use the entity's `skin` property. With matching model/material assets and
+multiple skin families, changing `0 -> 1 -> 0` selects the corresponding preview skin.
+No MDL/VMT asset is edited. Other games, explicit skin/frame declarations and
+legacy/dynamic/model()/sprite forms keep their prior semantics; this is not
+animation, bodygroup or universal FGD/SDK parity.
 
 ## Still outside this candidate
 
 Basic plain-object authoring does not imply arbitrary topology or native
-editor-group/layer/instance/displacement/overlay authoring, full Source material
+editor-group/layer/instance/complete-displacement/overlay authoring, full Source material
 rendering or all-branch performance. Common unsupported operations are gated;
 some upstream actions can remain visible, but unsupported content changes must
 refuse before mutation and preserving-save remains the final backstop. Never ignore an error or assume an

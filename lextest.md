@@ -155,6 +155,17 @@ This is qualitative prior-build feedback, not A5.3 acceptance or measured timing
   transforms remain unsupported in this foundation; disabled/refused actions are
   not permission to convert through MAP or overwrite the original.
 
+## A5.9 translation / fixed-studio skins — pending owner check
+
+- [ ] On a **copied** VMF, select one whole raised displacement brush in object
+  mode. Move it a small grid step, confirm base/raised surface stay together,
+  undo/redo and Save As a new file. Compare its position in matching Hammer++.
+  Rotation/scale/shear/flip and sculpt/topology remain unsupported.
+- [ ] If using a Source FGD with a simple fixed studio/studioprop model path and
+  matching multi-skin assets, change the entity skin0->1->0 and compare the preview
+  with matching Hammer++. Explicit/legacy/dynamic declarations are separate
+  preserved forms, not newly certified. No asset or original VMF is a write target.
+
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation
 or support for other Source branches from a visual check.

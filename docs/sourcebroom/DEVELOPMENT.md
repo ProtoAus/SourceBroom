@@ -240,15 +240,45 @@ mutation. Sparse/missing/zero-direction authoring data does not enable this tool
 The inspector's queued selection refresh may lag a row-change signal: always
 check indices against the **current selected mesh**, not the old widget range.
 
+A5.9 adds pure native base translation through the existing brush/Map command.
+Retain startposition scalar spans and translate the start, corners, derived mesh
+and bounds before setting new face data. Directions/distances/offsets/elevation/
+alpha/tags remain unchanged. All base defining points must share the mesh delta
+(absolute1e-6 for arithmetic); **every mesh** must also agree on exact zero/nonzero
+movement. Comparing only the first delta lets a later1e-8 mesh-only edit pass an
+epsilon check. The two-mesh validateContents/save control reproduced that failure
+before the per-mesh intent guard, then passed with genuine whole-base movement.
+UV locked/unlocked behavior, undo/redo and continued saves after movement act.
+
 Only parser-admitted displacement sides relax the opaque-attachment check;
 misplaced/nested unparsed blocks remain opaque. Unknown fields, native geometry
-references, base transforms, duplication, deletion and topology remain guarded.
+references, rotation/scale/shear/flip, duplication, deletion and topology remain
+guarded. This is not bit-exact floating geometry across arbitrary edit histories.
 The native grid owns its wire edges; adjacent ordinary faces retain their own
 base boundary for selected-edge highlighting. Tests cover actual cache vertices,
 UVs and triangle indices, raised ray/rtree hits, bounds, one-token save/undo and
 real inspector Apply/undo plus the large-grid-to-small-grid queued-refresh case.
 This foundation is not sculpt/create/power/sew, alpha-material blending, overlays,
 instances or complete Source rendering. Build/test is not visual owner acceptance.
+
+## Source fixed-literal model skins
+
+`FgdParser` and `loadEntityDefinitions` have a default-off Source studio-skin
+option, enabled only by production `MapFormat::SourceVMF` loading and inherited
+by includes. Simple nonempty `studio("models/x.mdl")` / `studioprop(...)` string
+literals gain the entity `skin` lookup already used by empty studio declarations.
+Inspect unoptimized syntax; restore the tokenizer snapshot for other forms.
+Other games, `model()`, sprites, explicit map/skin/frame operands and legacy or
+dynamic expressions retain their existing behavior. Do not globally reinterpret
+all string-valued `ModelDefinition`s or override explicit authored choices.
+This is a bounded Source preview capability, not universal FGD/SDK certification.
+
+Controls attach parsed definitions to entities and edit0->1->0, including default-
+off/numeric/include/scale cases. The authored two-family MDL fixture proves actual
+red/green/red canonical `materials/...vmt` identities and pixel bytes through
+FGD/entity/model loading; a non-null renderer alone is insufficient. `kdl::overload`
+is a factory function, not a braced aggregate. The integration compile and initial
+noncanonical-name oracle failures were retained and corrected before the pass.
 
 ## A5.3 texture progress controls
 

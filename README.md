@@ -38,11 +38,12 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-The A5.8 candidate adds bounded native displacement meshes (rendering, picking,
-bounds and existing-vertex distance edits with undo/preserving save), and 13 more
-common integer VTF pixel layouts. Keep A5.7 as recovery. Sculpt/create/power/sew, base transforms, alpha-material
-blending and full Source support are not complete; see the roadmap and validation
-for the exact automated controls and the retained preference-test failure.
+The A5.9 candidate adds safe whole-brush displacement **translation** with normal
+undo/preserving save, and entity-driven skin families for simple fixed Source FGD
+studio paths. It retains A5.8's native mesh/distance tools and 13 additional common
+integer VTF layouts; keep A5.8 as recovery. Native rotation/scale/shear, sculpt/
+create/power/sew, blend materials and full Source support remain incomplete.
+See the roadmap/validation for exact controls and the retained preference failure.
 
 Strict editable loading still constructs **35/38** supplied maps. After explicit
 permission, a clearly labelled **read-only compatibility preview** opens all
