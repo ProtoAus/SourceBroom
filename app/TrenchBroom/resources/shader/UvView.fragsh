@@ -40,6 +40,7 @@ float gridLine(float coord, float stripeSize, float isMajor);
 vec3 adaptiveGridColor(vec3 background);
 float texturedGridAlpha(float alpha);
 bool passesAlphaFunc(float alpha);
+float materialAlpha(float alpha);
 
 float getSoftStripes(float coord, float gridDivider, float gridSize, float stripeSize)
 {
@@ -101,6 +102,7 @@ void main()
     discard;
   }
 
+  gl_FragColor.a = materialAlpha(gl_FragColor.a);
   gl_FragColor = vec4(vec3(Brightness / 2.0 * gl_FragColor), gl_FragColor.a);
   gl_FragColor = vec4(clamp(2.0 * gl_FragColor.rgb, 0.0, 1.0), gl_FragColor.a);
 

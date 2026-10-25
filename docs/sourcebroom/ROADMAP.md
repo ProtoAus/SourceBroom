@@ -50,9 +50,11 @@ compatible merely because they also use VMF.
   A5.4 corrects Source prop winding and VMT mask/opacity handling, preserving
   editor fades with actual GPU controls. Material settings show game-level roots
   without pruning the catalog or rewriting saved subsets on presentation.
-  Current [validation](VALIDATION.md) records
-  Fs20/Gl21/Mdl171/Ui43 passing (255 entries). The earlier preference-test failure
-  passed this run but remains an unresolved intermittent finding, not a fix.
+  [Validation](VALIDATION.md) records a reviewed full Fs20/Gl21/Mdl171/Ui43
+  pass (255 entries). A later clean-commit delivery run recurred at the unchanged
+  Windows preference rename test (Ui42/43); its isolated rerun passed. This remains
+  unresolved, not a fix or an all-runs-green claim. Final receipts retain the run
+  distinctions; the expanded all-five-program GPU controls pass 394 assertions.
   Independent Hammer++/owner checks remain pending.
 - A6 is not implemented. No Source compiler, Valve content, or third-party/user
   map is bundled. See [alpha instructions](ALPHA.md) for the owner test path.

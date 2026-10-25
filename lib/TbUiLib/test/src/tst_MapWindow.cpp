@@ -474,9 +474,16 @@ void main() {
      {img::ImageAlphaDomain::Binary, 204, 0.4f},
      {img::ImageAlphaDomain::Graduated, 51, 1.0f},
      {img::ImageAlphaDomain::Graduated, 204, 0.4f}}};
-  for (auto config : {gl::Shaders::FaceShader, gl::Shaders::EntityModelShader})
+  for (auto config :
+       {gl::Shaders::FaceShader,
+        gl::Shaders::PatchShader,
+        gl::Shaders::EntityModelShader,
+        gl::Shaders::MaterialBrowserShader,
+        gl::Shaders::UvViewShader})
   {
-    const auto face = config.name == gl::Shaders::FaceShader.name;
+    const auto face = config.name == gl::Shaders::FaceShader.name
+                      || config.name == gl::Shaders::PatchShader.name;
+    const auto uv = config.name == gl::Shaders::UvViewShader.name;
     config.vertexShaders = {"alpha-preview.vertsh"};
     const auto loaded = manager.loadProgram(gl, config);
     if (loaded.is_error())
@@ -487,7 +494,7 @@ void main() {
     auto shader = gl::ActiveShader{gl, manager, config};
     shader.set("Brightness", 1.0f);
     shader.set("Material", 0);
-    if (face)
+    if (face || uv)
     {
       shader.set("ApplyMaterial", true);
     }

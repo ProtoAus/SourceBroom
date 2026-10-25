@@ -111,12 +111,18 @@ suppression for non-graduated VMTs, case-insensitively, AFTER raw alpha rejectio
 Do not disable Source blending globally: that breaks editor transparent-tag fade.
 
 The opt-in `Source alpha preview GPU controls opt-in` UI case uses an owned
-compatibility context, actual Face/EntityModel fragment programs and real material
+compatibility context, all five shared alpha-test program configurations and real material
 activation. It checks pixels plus draw blend/depth state for opaque/cutout/real
 opacity, editor fade and non-Source controls; forcing mask suppression off is an
 acted negative arm. It does not need game assets or owner-window interaction.
 ShaderManager passes `shader/name` into its locator, not a bare filename. New
 uniform/shader changes must ship together; a compiler-only pass is not GPU proof.
+A linked uniform is inactive when its shared function is never used: the first
+A5.4 app paint exposed this in material-browser/UV fragments despite Face/Entity
+pixel controls passing. Cover every `setAlphaFuncUniforms` caller (Face, Patch,
+Entity Model/browser, material browser and UV view), consume the policy in each
+fragment, and keep the active-uniform assertion. Do not make setters silently
+ignore missing uniforms to conceal an integration error.
 
 Source collection grouping is presentation-only over existing material paths.
 Never migrate/expand a saved partial subset on dialog creation. Only explicit

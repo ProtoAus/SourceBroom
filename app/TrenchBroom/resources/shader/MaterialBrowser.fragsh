@@ -25,6 +25,7 @@ uniform bool ApplyTinting;
 uniform vec4 TintColor;
 
 bool passesAlphaFunc(float alpha);
+float materialAlpha(float alpha);
 
 void main()
 {
@@ -38,6 +39,7 @@ void main()
     discard;
   }
 
+  gl_FragColor.a = materialAlpha(gl_FragColor.a);
   gl_FragColor = vec4(vec3(Brightness / 2.0 * gl_FragColor), gl_FragColor.a);
   gl_FragColor = vec4(clamp(2.0 * gl_FragColor.rgb, 0.0, 1.0), gl_FragColor.a);
 

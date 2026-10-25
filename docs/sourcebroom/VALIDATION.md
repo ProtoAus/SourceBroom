@@ -64,12 +64,20 @@ are not public fixtures.
 - Fresh review found a fade regression in an initial `.vmt` blend-disable approach.
   That approach was removed. A Source-only shader uniform now suppresses reserved
   alpha **after** raw cutout rejection, preserving editor fades and ambient draw
-  state. Separate actual offscreen GPU controls compile both real fragment
-  programs, activate real materials, query blend/depth state and read back pixels
+  state. Separate actual offscreen GPU controls compile all five shared alpha-test
+  configurations (Face, Patch, Entity Model, material browser and UV view),
+  activate real materials, query blend/depth state and read back pixels
   for lower/upper-case VMT and non-Source paths. The reserved-alpha negative arm
-  acts; opaque, below/above-cutout, true opacity and 0.4 editor fade pass (163
+  acts; opaque, below/above-cutout, true opacity and 0.4 editor fade pass (394
   assertions). Bounded independent closure accepts the fix. This is not an entire
   viewport screenshot, every shader or owner acceptance.
+- The first actual A5.4 app smoke caught an introduced active-uniform assertion
+  in material-browser painting: including the shared alpha file alone did not
+  keep the new unused uniform active. Material-browser and UV fragments now apply
+  the same post-cutout policy. The existing GPU case was extended to every caller;
+  the same corrected staging app opens/closes normally. The failed executable and
+  crash evidence were preserved; the shader assertion was not weakened, a fresh
+  candidate name was not used to bypass it, and no ZIP was promoted on failure.
 - Actual Qt Source/non-Source collection-list controls prove one game-labelled
   browsing entry versus ordinary folders, a nonempty complete catalog, unchanged
   saved partial state on presentation, explicit all/none selection and undo/redo.
