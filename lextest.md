@@ -1,8 +1,8 @@
 # Human acceptance — SourceBroom A4/A5/A5.4 candidates
 
-No owner confirmation has been received for the following checks. Do not turn
-an automated build/screenshot into a human pass. Use newly authored maps/copies;
-never overwrite an original user/corpus VMF for a test.
+Only the owner observations explicitly recorded below are confirmed. Do not turn
+an automated build/screenshot or a general visual approval into unrelated passes.
+Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
 - [ ] **A4 independent Hammer++ reopening.** Open the native-edited authored room
   copy in the appropriate Hammer++ branch (no save needed). Confirm the room,
@@ -43,7 +43,13 @@ that opening observation only: exact binary/profile hashes, complete geometry,
 correct rendering and improved texture latency were not independently confirmed.
 External map names/content stay out of public notes.
 
-## A5.4 rendering/material retry — pending
+## A5.4 rendering/material retry — overall visual acceptance confirmed
+
+On 2026-10-25, after the A5.4 delivery and requested orientation/material-root
+retry, the owner replied: **"Epic! looks good! continue!"** This accepts the
+observed visual result. It does not independently attest every detailed action
+below, matching Hammer reopening, all models/shaders, complete geometry or any
+numerical performance improvement. Unreported detailed subchecks remain explicit:
 
 - [ ] Open a **copy** of the reported map in the new candidate with matching
   content configured. Look at a brush exterior and a familiar prop from outside.
