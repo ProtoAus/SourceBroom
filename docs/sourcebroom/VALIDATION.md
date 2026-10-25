@@ -1,4 +1,4 @@
-# SourceBroom validation — A5.6 bounded two-sided-material follow-up
+# SourceBroom validation — A5.7 bounded custom-cutout follow-up
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
@@ -29,9 +29,9 @@ not substituted for compilation or runtime checks.
 
 | Check | Actual result |
 | --- | --- |
-| Current filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 174/174 + 43/43 passed** (258 entries) |
+| Current filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 175/175 + 43/43 passed** (259 entries) |
 | Preference history | A5.5 full42/43 and isolated QPreferenceStore Windows rename failures remain preserved/unfixed. The current pass has no preference-code fix and is not an all-runs-green claim |
-| Focused two-sided/Patch/rendering controls | Graphics **945 assertions /2 cases**, model **2414 /6 cases** and expanded shared-alpha GPU **1994 /1 case** passed |
+| Focused cutout/two-sided/Patch/rendering controls | Graphics **990 assertions /2 cases**, model **7654 /7 cases** and expanded shared-alpha GPU **2539 /1 case** passed |
 | Focused accepted-fix UI controls | **4/4 passed**: property/I/O namespace controls, production build backend and metadata/package tools |
 | Lossless supplied corpus | **38/38 passed**, no-edit plus acted in-memory mutation; original SHA-256 unchanged |
 | Scene supplied corpus | Strict **35/38 constructed**, same three ID/geometry/UV refusals; explicit read-only preview **38/38**, counting/reporting unprojected solids with original hashes unchanged. Shared +/-131072 policy; retained smaller-envelope strict control was 32/38 |
@@ -49,7 +49,40 @@ installed-candidate reruns from retained checks. This sample is useful evidence,
 not all-map/all-game coverage. External map names, content and raw private logs
 are not public fixtures.
 
-### A5.6 two-sided material controls
+### A5.7 authored cutout-reference controls
+
+- Existing UnlitGeneric/LightmappedGeneric/VertexLitGeneric preview now validates
+  an explicit finite `$alphatestreference` in (0,1] after direct/Patch resolution.
+  Duplicate/case-variant/block/empty/vector/junk/nonfinite/out-of-range/zero/-zero
+  inputs refuse, even without active alpha test. Strict optional-feature, scalar
+  `$alpha` and WorldVertexTransition refusals remain. Missing threshold retains
+  the existing0.5 preview fallback, not certified Source branch defaults.
+- Direct controls cover all3 admitted shaders and decimal/exponent/whitespace
+  syntax; Patch controls prove inherited .25, override .75 and invalid/zero final
+  refusal. Demanded brush/prop transport matrix expands84 to252 arms by absent,
+  .25 and .75, preserving acted2x2base/1x1override/32fallback and same-image VMT
+  isolation. Raw/Q2/default metadata and deferred-loading controls remain.
+- Binary textures derive the Source threshold; Opaque/Graduated do not invent
+  cutoff. Explicit material alpha-function overrides win. No shader, winding,
+  geometry, catalog-loader or GL-scope rewrite was needed.
+- The real5-config GPU case retains1994 assertions and adds545 across50 authored
+  cutoff scenarios: low threshold survives, high rejects, equality at1 survives,
+  disabled alpha test ignores reference, explicit override reverses rejection,
+  and raw cutoff precedes editor fade. Forcing a high-cutoff pixel's uniform to
+  .5 makes it visibly leak; restoring .75 removes it. All5 acted negative arms
+  fire. Real blend/depth and `$nocull` polygon restoration are checked.
+- All6 product/checker/test targets built with zero compiler warnings/errors;
+  normal CTest259 entries and focused counts above pass. Final receipt identifies
+  clean committed binaries, installed evidence and source-identical test reuse.
+- Research used a pinned public MIT renderer as semantic evidence only; no code
+  copied. Its default0.7/lightmapped-alpha TODOs differ from an engine-wide proof.
+  VDC pages returned access challenges, not evidence. Nonzero interval is an
+  explicit bounded editor admission policy; scalar/zero semantics remain refused.
+- After A5.6 delivery the owner said "looks dope! please continue!": overall
+  observed visual approval only. Detailed A5.7 material/game/Hammer appearance
+  remains pending in lextest.md; no performance/all-shader claim is made.
+
+### A5.6 two-sided material controls (retained)
 
 - Preview-only `$nocull` flags survive direct and Patch resolution into both
   demanded brush textures and static-prop materials via tagged Source metadata.

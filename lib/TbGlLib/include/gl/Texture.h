@@ -51,7 +51,8 @@ struct Q2EmbeddedDefaults
 struct SourceEmbeddedDefaults
 {
   bool noCull = false;
-  kdl_reflect_decl(SourceEmbeddedDefaults, noCull);
+  float alphaTestReference = 0.5f;
+  kdl_reflect_decl(SourceEmbeddedDefaults, noCull, alphaTestReference);
 };
 
 using EmbeddedDefaults =

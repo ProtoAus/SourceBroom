@@ -1,4 +1,4 @@
-# Native Source authoring tools — bounded A5.6 candidate
+# Native Source authoring tools — bounded A5.7 candidate
 
 SourceBroom edits native Source 1 VMF, not a converted Quake MAP. CSS and
 Momentum/Strata are the first tested profiles; generic Source paths and external
@@ -114,6 +114,15 @@ with existing blend/depth state. No catalog-time decoding, geometry/winding
 change or original material rewrite is introduced. Absent/false flags retain
 normal culling; invalid/duplicate flags refuse and strict inspection still
 rejects unsupported features. Two-sided preview is not Source backface lighting.
+
+A5.7 adds explicit authored `$alphatestreference` for existing alpha-tested
+brush/prop previews, including Patch inheritance. One finite value in (0,1] is
+supported; zero/-zero/invalid/duplicate/block values refuse. Without the parameter,
+the prior0.5 preview fallback remains; game-wide default/sentinel parity is not
+claimed. Merely specifying a reference does not enable alpha testing. Configured
+alpha-function overrides win; raw cutoff precedes editor fade and `$nocull`
+state still restores. Scalar$alpha/full opacity effects remain unsupported and
+combined flags retain existing cutout precedence. Original assets are unchanged.
 
 ## Static prop preview
 

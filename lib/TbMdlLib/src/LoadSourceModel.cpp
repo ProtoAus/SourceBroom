@@ -99,7 +99,8 @@ struct Materials
         }
         auto pixels = std::move(decoded) | kdl::value();
         pixels.setAlphaDomain(info.alphaDomain);
-        pixels.setEmbeddedDefaults(gl::SourceEmbeddedDefaults{info.noCull});
+        pixels.setEmbeddedDefaults(
+          gl::SourceEmbeddedDefaults{info.noCull, info.alphaTestReference});
         for (const auto& buffer : pixels.buffersIfLoaded())
         {
           remaining -= buffer.size();

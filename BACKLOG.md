@@ -27,12 +27,15 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   to manufacture an improvement.
 - **Source alpha/shader fidelity — `mdl/SourceContent.cpp`, `shader/AlphaFunc.fragsh`.**
   A5.4 fixes shader-mask opacity and prop winding; its basic alpha hints do not
-  implement arbitrary `$alphatestreference`, combined translucent/cutout blending,
+  implement arbitrary shader opacity, combined translucent/cutout blending,
   scalar `$alpha`, proxies or full shader effects. A5.5 resolves bounded scalar
   Patch inheritance; nested/conditional/proxy/deletion and overlapping operations
   remain unsupported rather than guessed. A5.6 adds basic `$nocull` and scoped
-  polygon-state restoration, not backface lighting. Basic cutout uses 0.5. Falsifier
-  for expanding support: authored controls against the matching Source shader
+  polygon-state restoration, not backface lighting. A5.7 honors explicit finite
+  `$alphatestreference` in (0,1] through both demanded loaders/Patch inheritance;
+  absent0.5 is an editor fallback, not universal Source-default parity. Zero's
+  literal/sentinel meaning remains uncertified and explicit zero refuses.
+  Falsifier for expanding support: authored controls against the matching Source shader
   retain raw cutout ordering, actual opacity, editor fade, non-Source draw state
   and deferred loading without inventing unsupported effects.
 - **Long-session texture residency — `gl/Resource.h`, `mdl/Map.cpp`.** Source

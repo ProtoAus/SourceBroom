@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
@@ -432,13 +433,48 @@ Result<SourceMaterialInfo> parseMaterial(
         }
       }
     }
+    auto alphaTestReference = 0.5f;
+    if (
+      std::ranges::count(shader.children, std::string{"$alphatestreference"}, &Entry::key)
+      > 1)
+    {
+      return Error{"Repeated Source $alphatestreference requires explicit resolution"};
+    }
+    if (const auto* entry = child(shader.children, "$alphatestreference"))
+    {
+      auto value = std::string_view{entry->value};
+      while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())))
+      {
+        value.remove_prefix(1);
+      }
+      while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())))
+      {
+        value.remove_suffix(1);
+      }
+      if (!value.empty() && value.front() == '+')
+      {
+        value.remove_prefix(1);
+      }
+      const auto parsed =
+        std::from_chars(value.data(), value.data() + value.size(), alphaTestReference);
+      if (
+        parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()
+        || !std::isfinite(alphaTestReference) || alphaTestReference <= 0.0f
+        || alphaTestReference > 1.0f)
+      {
+        return Error{
+          "Unsupported Source $alphatestreference: expected finite value above 0 and at "
+          "most 1"};
+      }
+    }
     path.replace_extension(".vtf");
     return SourceMaterialInfo{
       std::filesystem::path{"materials"} / path,
       alphaTest     ? img::ImageAlphaDomain::Binary
       : translucent ? img::ImageAlphaDomain::Graduated
                     : img::ImageAlphaDomain::Opaque,
-      noCull};
+      noCull,
+      alphaTestReference};
   }
   catch (const std::runtime_error& e)
   {

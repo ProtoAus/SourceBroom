@@ -48,6 +48,7 @@ struct SourceMaterialInfo
   std::filesystem::path baseTexture;
   img::ImageAlphaDomain alphaDomain;
   bool noCull = false;
+  float alphaTestReference = 0.5f;
 };
 Result<SourceMaterialInfo> sourceMaterial(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);

@@ -55,9 +55,13 @@ compatible merely because they also use VMF.
   for brush/prop textures through existing mounts, not full Patch/shader support.
   A5.6 adds demanded `$nocull` two-sided brush/prop previews and scoped restoration
   of prior polygon state, preserving explicit overrides and existing alpha/fade.
-  This is not backface lighting or another winding/shader rewrite.
-  [Validation](VALIDATION.md) records current Fs20/Gl21/Mdl174/Ui43 passes,
-  focused Gl945/Mdl2414 and GPU1994 assertions. The earlier intermittent Windows
+  This is not backface lighting or another winding/shader rewrite. The owner
+  gave overall A5.6 visual approval; specific surface/Hammer gates stay pending.
+  A5.7 honors explicit supported nonzero `$alphatestreference` through demanded
+  brush/prop/Patch previews; absent0.5 remains an editor fallback, not certified
+  branch defaults. Scalar$alpha and zero/sentinel semantics are not guessed.
+  [Validation](VALIDATION.md) records current Fs20/Gl21/Mdl175/Ui43 passes,
+  focused Gl990/Mdl7654 and GPU2539 assertions. The earlier intermittent Windows
   preference rename failure remains unfixed despite the current passing run.
   Final receipts retain the source/binary/run distinctions and appearance gates.
 - A6 is not implemented. No Source compiler, Valve content, or third-party/user

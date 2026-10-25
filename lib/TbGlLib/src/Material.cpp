@@ -257,7 +257,11 @@ std::optional<MaterialAlphaFunc> Material::effectiveAlphaFunc() const
     const auto* texture = this->texture();
     texture && texture->alphaDomain() == img::ImageAlphaDomain::Binary)
   {
-    return MaterialAlphaFunc{MaterialAlphaFunc::Compare::GreaterEqual, 0.5f};
+    const auto* defaults =
+      std::get_if<SourceEmbeddedDefaults>(&texture->embeddedDefaults());
+    return MaterialAlphaFunc{
+      MaterialAlphaFunc::Compare::GreaterEqual,
+      defaults ? defaults->alphaTestReference : 0.5f};
   }
 
   return std::nullopt;

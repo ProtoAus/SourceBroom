@@ -672,6 +672,118 @@ void main() {
       }
     }
     gl.popAttrib();
+
+    struct CutoutScenario
+    {
+      float reference;
+      uint8_t alpha;
+      float fade;
+      bool alphaTest;
+      bool overrideReference;
+    };
+    auto actedDefaultCutoff = false;
+    gl.pushAttrib(GL_POLYGON_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    for (const auto scenario :
+         {CutoutScenario{0.25f, 102, 1.0f, true, false},
+          CutoutScenario{0.75f, 153, 1.0f, true, false},
+          CutoutScenario{0.75f, 204, 0.4f, true, false},
+          CutoutScenario{0.25f, 102, 0.4f, true, false},
+          CutoutScenario{1.0f, 255, 1.0f, true, false},
+          CutoutScenario{1.0f, 254, 1.0f, true, false},
+          CutoutScenario{0.75f, 153, 1.0f, true, true},
+          CutoutScenario{0.75f, 51, 1.0f, false, false},
+          CutoutScenario{0.75f, 51, 0.4f, false, false},
+          CutoutScenario{0.75f, 0, 1.0f, false, false}})
+    {
+      CAPTURE(
+        config.name,
+        scenario.reference,
+        scenario.alpha,
+        scenario.fade,
+        scenario.alphaTest,
+        scenario.overrideReference);
+      auto pixels = gl::TextureBuffer{4};
+      const auto rgba = std::array<uint8_t, 4>{255, 0, 0, scenario.alpha};
+      std::copy(rgba.begin(), rgba.end(), pixels.data());
+      auto texture = gl::Texture{
+        1,
+        1,
+        Color{RgbaF{1, 0, 0, 1}},
+        GL_RGBA,
+        gl::SourceEmbeddedDefaults{true, scenario.reference},
+        std::move(pixels)};
+      texture.setAlphaDomain(
+        scenario.alphaTest ? img::ImageAlphaDomain::Binary
+                           : img::ImageAlphaDomain::Opaque);
+      auto resource = gl::createTextureResource(std::move(texture));
+      resource->uploadSync(gl);
+      auto material = gl::Material{"authored cutoff control", resource};
+      material.setRelativePath("control.vmt");
+      if (scenario.overrideReference)
+      {
+        material.setAlphaFunc(gl::MaterialAlphaFunc::Compare::GreaterEqual, 0.25f);
+      }
+      const auto cutoff = material.effectiveAlphaFunc();
+      CHECK(cutoff.has_value() == scenario.alphaTest);
+      if (cutoff)
+      {
+        CHECK(
+          cutoff->threshold == (scenario.overrideReference ? 0.25f : scenario.reference));
+      }
+      const auto editorFade = face ? scenario.fade : 1.0f;
+      if (face)
+      {
+        shader.set("Alpha", editorFade);
+      }
+      gl::setAlphaFuncUniforms(shader, &material);
+      gl.enable(GL_CULL_FACE);
+      gl.cullFace(GL_FRONT_AND_BACK);
+      gl.enable(GL_BLEND);
+      gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(editorFade < 1.0f ? GL_FALSE : GL_TRUE);
+      gl.clearColor(0, 0, 1, 1);
+      gl.clear(GL_COLOR_BUFFER_BIT);
+      material.activate(gl, GL_NEAREST, GL_NEAREST);
+      CHECK(functions->glIsEnabled(GL_CULL_FACE) == GL_FALSE);
+      CHECK(functions->glIsEnabled(GL_BLEND) == GL_TRUE);
+      auto depth = GLboolean{};
+      gl.getBooleanv(GL_DEPTH_WRITEMASK, &depth);
+      CHECK(depth == (editorFade < 1.0f ? GL_FALSE : GL_TRUE));
+      if (
+        cutoff && cutoff->threshold > 0.5f && scenario.alpha >= 128
+        && scenario.alpha < 192)
+      {
+        // Acted negative arm: an ignored authored high cutoff visibly leaks this pixel.
+        shader.set("AlphaFuncThreshold", 0.5f);
+        gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        auto leaked = std::array<uint8_t, 4>{};
+        functions->glReadPixels(4, 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, leaked.data());
+        CHECK(
+          std::abs(int(leaked[0]) - static_cast<int>(std::lround(255.0f * editorFade)))
+          <= 2);
+        gl.clear(GL_COLOR_BUFFER_BIT);
+        gl::setAlphaFuncUniforms(shader, &material);
+        actedDefaultCutoff = true;
+      }
+      gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+      auto pixel = std::array<uint8_t, 4>{};
+      functions->glReadPixels(4, 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+      const auto kept = !cutoff || scenario.alpha / 255.0f >= cutoff->threshold;
+      const auto red = kept ? static_cast<int>(std::lround(255.0f * editorFade)) : 0;
+      CHECK(std::abs(int(pixel[0]) - red) <= 2);
+      CHECK(std::abs(int(pixel[2]) - (255 - red)) <= 2);
+      material.deactivate(gl);
+      CHECK(functions->glIsEnabled(GL_CULL_FACE) == GL_TRUE);
+      auto mode = GLint{};
+      functions->glGetIntegerv(GL_CULL_FACE_MODE, &mode);
+      CHECK(mode == GL_FRONT_AND_BACK);
+      CHECK(functions->glIsEnabled(GL_BLEND) == GL_TRUE);
+      gl.getBooleanv(GL_DEPTH_WRITEMASK, &depth);
+      CHECK(depth == (editorFade < 1.0f ? GL_FALSE : GL_TRUE));
+      resource->dropSync(gl);
+    }
+    CHECK(actedDefaultCutoff);
+    gl.popAttrib();
   }
   CHECK(gl.getError() == GL_NO_ERROR);
 }

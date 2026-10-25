@@ -217,16 +217,22 @@ TEST_CASE("Source material Patch resolution")
     game "|gameinfo_path|."
   } } })");
   env.createFile("materials/base.vmt", R"(VertexLitGeneric {
-    $basetexture wrong $translucent 1 $nocull 1
+    $basetexture wrong $translucent 1 $nocull 1 $alphatestreference 0.25
   })");
   env.createFile("materials/middle.vmt", R"(Patch {
     include "materials/base.vmt" replace { $basetexture brick/wall }
   })");
   const auto patch = R"(pAtCh {
     include "MATERIALS\\middle.VMT"
-    insert { $translucent 0 $alphatest 1 $surfaceprop brick $nocull 0 }
+    insert { $translucent 0 $alphatest 1 $surfaceprop brick $nocull 0 $alphatestreference 0.75 }
   })";
   env.createFile("materials/derived.vmt", patch);
+  env.createFile("materials/bad-threshold.vmt", R"(Patch {
+    include "materials/derived.vmt" replace { $alphatestreference nan }
+  })");
+  env.createFile("materials/zero-threshold.vmt", R"(Patch {
+    include "materials/derived.vmt" replace { $alphatestreference 0 }
+  })");
   REQUIRE(env.fileExists("materials/derived.vmt"));
   auto fs = GameFileSystem{};
   auto logger = NullLogger{};
@@ -242,10 +248,18 @@ TEST_CASE("Source material Patch resolution")
   CHECK(info.baseTexture == "materials/brick/wall.vtf");
   CHECK(info.alphaDomain == img::ImageAlphaDomain::Binary);
   CHECK_FALSE(info.noCull);
+  CHECK(info.alphaTestReference == 0.75f);
   const auto inherited = loadSourceMaterial(
     "materials/middle.vmt", fs, SourceMaterialMode::BaseTexturePreview);
   REQUIRE(inherited.is_success());
   CHECK((inherited | kdl::value()).noCull);
+  CHECK((inherited | kdl::value()).alphaTestReference == 0.25f);
+  CHECK(loadSourceMaterial(
+          "materials/bad-threshold.vmt", fs, SourceMaterialMode::BaseTexturePreview)
+          .is_error());
+  CHECK(loadSourceMaterial(
+          "materials/zero-threshold.vmt", fs, SourceMaterialMode::BaseTexturePreview)
+          .is_error());
   CHECK(loadSourceMaterial("materials/derived.vmt", fs).is_error());
   const auto original = fs.openFile("materials/derived.vmt") | kdl::value();
   CHECK(original->reader().readString(original->size()) == before);
@@ -415,6 +429,71 @@ TEST_CASE("Source material Patch safety and mounted precedence")
     CHECK((result | kdl::value()).baseTexture == "materials/priority/winner.vtf");
     CHECK(env.loadFile("materials/base.vmt") == base);
   }
+}
+
+TEST_CASE("Source VMT cutout reference policy")
+{
+  const auto parse = [](const std::string& shader, const std::string& flags) {
+    return sourceMaterial(
+      shader + " { $basetexture test/pixel " + flags + " }",
+      SourceMaterialMode::BaseTexturePreview);
+  };
+  for (const auto* shader : {"UnlitGeneric", "VertexLitGeneric", "LightmappedGeneric"})
+  {
+    const auto absent = parse(shader, "$alphatest 1");
+    REQUIRE(absent.is_success());
+    CHECK((absent | kdl::value()).alphaTestReference == 0.5f);
+    for (const auto& [text, threshold] :
+         {std::pair{"0.25", 0.25f},
+          std::pair{".75", 0.75f},
+          std::pair{"1", 1.0f},
+          std::pair{"+2.5e-1", 0.25f},
+          std::pair{"\" 0.75 \"", 0.75f}})
+    {
+      for (const auto* flags :
+           {"",
+            "$alphatest 0",
+            "$alphatest 1",
+            "$translucent 1",
+            "$alphatest 1 $translucent 1"})
+      {
+        CAPTURE(shader, text, flags);
+        const auto result =
+          parse(shader, std::string{flags} + " $AlphaTestReference " + text);
+        REQUIRE(result.is_success());
+        CHECK((result | kdl::value()).alphaTestReference == threshold);
+        const auto domain = (result | kdl::value()).alphaDomain;
+        CHECK(domain == (std::string_view{flags}.find("$alphatest 1") != std::string_view::npos
+          ? img::ImageAlphaDomain::Binary
+          : std::string_view{flags}.find("$translucent 1") != std::string_view::npos
+            ? img::ImageAlphaDomain::Graduated : img::ImageAlphaDomain::Opaque));
+      }
+    }
+    for (const auto* flags :
+         {"$alphatestreference 0",
+          "$alphatestreference -0",
+          "$alphatestreference -0.1",
+          "$alphatestreference 1.01",
+          "$alphatestreference nan",
+          "$alphatestreference inf",
+          "$alphatestreference 1e999",
+          "$alphatestreference nope",
+          "$alphatestreference \"\"",
+          "$alphatestreference \"0.25 trailing\"",
+          "$alphatestreference \"[0.25]\"",
+          "$alphatestreference {}",
+          "$alphatestreference 0.25 $AlphaTestReference 0.75"})
+    {
+      CAPTURE(shader, flags);
+      CHECK(parse(shader, flags).is_error());
+      CHECK(parse(shader, std::string{"$alphatest 1 "} + flags).is_error());
+    }
+    CHECK(sourceMaterial(
+            std::string{shader} + " { $basetexture test/pixel $alphatestreference 0.25 }")
+            .is_error());
+    CHECK(parse(shader, "$alpha 0.5").is_error());
+  }
+  CHECK(parse("WorldVertexTransition", "$alphatestreference 0.25").is_error());
 }
 
 TEST_CASE("Source VMT no-cull policy")

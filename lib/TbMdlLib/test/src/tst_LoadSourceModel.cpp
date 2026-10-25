@@ -321,73 +321,88 @@ TEST_CASE("Source VMT alpha and culling control brush and prop render policy")
         std::tuple{0x1000u, true, true},
         std::tuple{0x2000u, true, true}})
   {
-    for (const auto& [parameters, expected] : modes)
+    for (const auto reference : {0.5f, 0.25f, 0.75f})
     {
-      CAPTURE(flags, parameters, patched, noCull);
-      auto fs = modelFileSystem(
-        withMaterialSkins(test::SyntheticProp{}),
-        true,
-        false,
-        parameters + (noCull ? " $nocull 1" : " $nocull 0"),
-        flags,
-        patched);
-      const auto raw =
-        loadTexture("materials/models/test/pixel.vtf", "raw", fs, {}) | kdl::value();
-      CHECK(
+      for (const auto& [parameters, expected] : modes)
+      {
+        CAPTURE(flags, parameters, patched, noCull, reference);
+        auto fs = modelFileSystem(
+          withMaterialSkins(test::SyntheticProp{}),
+          true,
+          false,
+          parameters + (noCull ? " $nocull 1" : " $nocull 0")
+            + (reference == 0.5f ? "" : " $alphatestreference " + std::to_string(reference)),
+          flags,
+          patched);
+        const auto raw =
+          loadTexture("materials/models/test/pixel.vtf", "raw", fs, {}) | kdl::value();
+        CHECK(
         raw.alphaDomain()
         == (flags == 0x2000u   ? img::ImageAlphaDomain::Graduated
             : flags == 0x1000u ? img::ImageAlphaDomain::Binary
                                : img::ImageAlphaDomain::Opaque));
-      auto config = MaterialConfig{};
-      config.root = "materials";
-      config.extensions = {".vmt"};
-      const auto collections =
-        loadMaterialCollections(
-          fs,
-          config,
-          [](auto loader) { return gl::createTextureResource(loader() | kdl::value()); },
-          taskManager,
-          logger)
-        | kdl::value();
-      auto brush = static_cast<const gl::Material*>(nullptr);
-      for (const auto& collection : collections)
-        for (const auto& material : collection.materials())
-          if (material.name() == "models/test/metal")
-            brush = &material;
-      REQUIRE(brush);
-      const auto model = loadSourceModel("prop.mdl", fs, logger) | kdl::value();
-      const auto* prop = model.surface(0).skin(0);
-      REQUIRE(prop);
-      const auto* sameImage = model.surface(0).skin(1);
-      REQUIRE(sameImage);
-      CHECK(sameImage->effectiveCulling() == gl::MaterialCulling::Default);
-      CHECK(raw.embeddedDefaults() == gl::EmbeddedDefaults{gl::NoEmbeddedDefaults{}});
-      for (const auto* material : {brush, prop})
-      {
-        REQUIRE(material->texture());
-        // Patch base is2x2 and fallback32x32: only acted replacement decodes1x1.
-        CHECK(material->texture()->width() == 1);
-        CHECK(material->texture()->height() == 1);
-        CHECK(material->texture()->alphaDomain() == expected);
+        auto config = MaterialConfig{};
+        config.root = "materials";
+        config.extensions = {".vmt"};
+        const auto collections =
+          loadMaterialCollections(
+            fs,
+            config,
+            [](auto loader) {
+              return gl::createTextureResource(loader() | kdl::value());
+            },
+            taskManager,
+            logger)
+          | kdl::value();
+        auto brush = static_cast<const gl::Material*>(nullptr);
+        for (const auto& collection : collections)
+          for (const auto& material : collection.materials())
+            if (material.name() == "models/test/metal")
+              brush = &material;
+        REQUIRE(brush);
+        const auto model = loadSourceModel("prop.mdl", fs, logger) | kdl::value();
+        const auto* prop = model.surface(0).skin(0);
+        REQUIRE(prop);
+        const auto* sameImage = model.surface(0).skin(1);
+        REQUIRE(sameImage);
+        CHECK(sameImage->effectiveCulling() == gl::MaterialCulling::Default);
+        REQUIRE(sameImage->texture());
         CHECK(
-          material->texture()->embeddedDefaults()
-          == gl::EmbeddedDefaults{gl::SourceEmbeddedDefaults{noCull}});
-        CHECK(material->culling() == gl::MaterialCulling::Default);
-        CHECK(
-          material->effectiveCulling()
-          == (noCull ? gl::MaterialCulling::None : gl::MaterialCulling::Default));
-        const auto blend = material->effectiveBlendFunc();
-        CHECK(
-          blend.enable
-          == (expected == img::ImageAlphaDomain::Graduated ? gl::MaterialBlendFunc::Enable::UseFactors : gl::MaterialBlendFunc::Enable::UseDefault));
-        if (expected == img::ImageAlphaDomain::Graduated)
+          sameImage->texture()->embeddedDefaults()
+          == gl::EmbeddedDefaults{gl::SourceEmbeddedDefaults{}});
+        CHECK(raw.embeddedDefaults() == gl::EmbeddedDefaults{gl::NoEmbeddedDefaults{}});
+        for (const auto* material : {brush, prop})
         {
-          CHECK(blend.srcFactor == GL_SRC_ALPHA);
-          CHECK(blend.destFactor == GL_ONE_MINUS_SRC_ALPHA);
+          REQUIRE(material->texture());
+          // Patch base is2x2 and fallback32x32: only acted replacement decodes1x1.
+          CHECK(material->texture()->width() == 1);
+          CHECK(material->texture()->height() == 1);
+          CHECK(material->texture()->alphaDomain() == expected);
+          CHECK(
+            material->texture()->embeddedDefaults()
+            == gl::EmbeddedDefaults{gl::SourceEmbeddedDefaults{noCull, reference}});
+          CHECK(material->culling() == gl::MaterialCulling::Default);
+          CHECK(
+            material->effectiveCulling()
+            == (noCull ? gl::MaterialCulling::None : gl::MaterialCulling::Default));
+          const auto blend = material->effectiveBlendFunc();
+          CHECK(
+            blend.enable
+            == (expected == img::ImageAlphaDomain::Graduated ? gl::MaterialBlendFunc::Enable::UseFactors : gl::MaterialBlendFunc::Enable::UseDefault));
+          if (expected == img::ImageAlphaDomain::Graduated)
+          {
+            CHECK(blend.srcFactor == GL_SRC_ALPHA);
+            CHECK(blend.destFactor == GL_ONE_MINUS_SRC_ALPHA);
+          }
+          CHECK(
+            material->effectiveAlphaFunc().has_value()
+            == (expected == img::ImageAlphaDomain::Binary));
+          if (const auto alpha = material->effectiveAlphaFunc())
+          {
+            CHECK(alpha->compare == gl::MaterialAlphaFunc::Compare::GreaterEqual);
+            CHECK(alpha->threshold == reference);
+          }
         }
-        CHECK(
-          material->effectiveAlphaFunc().has_value()
-          == (expected == img::ImageAlphaDomain::Binary));
       }
     }
   }

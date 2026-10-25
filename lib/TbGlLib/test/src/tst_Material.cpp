@@ -374,6 +374,40 @@ TEST_CASE("Material")
     CHECK(generic.effectiveCulling() == MaterialCulling::Default);
   }
 
+  SECTION("Source cutout reference is binary-only and explicit overrides win")
+  {
+    for (const auto domain :
+         {img::ImageAlphaDomain::Opaque,
+          img::ImageAlphaDomain::Binary,
+          img::ImageAlphaDomain::Graduated})
+    {
+      for (const auto reference : {0.25f, 0.75f, 1.0f})
+      {
+        auto texture = Texture{4, 4};
+        texture.setAlphaDomain(domain);
+        texture.setEmbeddedDefaults(SourceEmbeddedDefaults{true, reference});
+        auto material = Material{"source", createTextureResource(std::move(texture))};
+        const auto alpha = material.effectiveAlphaFunc();
+        CHECK(alpha.has_value() == (domain == img::ImageAlphaDomain::Binary));
+        if (alpha)
+        {
+          CHECK(alpha->compare == MaterialAlphaFunc::Compare::GreaterEqual);
+          CHECK(alpha->threshold == reference);
+        }
+        material.setAlphaFunc(MaterialAlphaFunc::Compare::Less, 0.3f);
+        REQUIRE(material.effectiveAlphaFunc());
+        CHECK(material.effectiveAlphaFunc()->compare == MaterialAlphaFunc::Compare::Less);
+        CHECK(material.effectiveAlphaFunc()->threshold == 0.3f);
+      }
+    }
+    auto texture = Texture{4, 4};
+    texture.setAlphaDomain(img::ImageAlphaDomain::Binary);
+    texture.setEmbeddedDefaults(Q2EmbeddedDefaults{1, 2, 3});
+    auto material = Material{"q2", createTextureResource(std::move(texture))};
+    REQUIRE(material.effectiveAlphaFunc());
+    CHECK(material.effectiveAlphaFunc()->threshold == 0.5f);
+  }
+
   SECTION("effectiveAlphaFunc and effectiveBlendFunc")
   {
     auto makeMaterial = [](const img::ImageAlphaDomain alphaDomain) {

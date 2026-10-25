@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom A4/A5/A5.6 candidates
+# Human acceptance — SourceBroom A4/A5/A5.7 candidates
 
 Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
@@ -43,7 +43,22 @@ that opening observation only: exact binary/profile hashes, complete geometry,
 correct rendering and improved texture latency were not independently confirmed.
 External map names/content stay out of public notes.
 
-## A5.6 two-sided material appearance — pending
+## A5.7 authored cutout appearance — pending
+
+- [ ] Open a **copied** familiar map with a fence/grate using an explicit
+  supported alpha-test threshold and compare holes/edges to the matching game.
+  Do not change installed VMTs/original maps for this check. Supported thresholds
+  are finite and above0 through1; absent uses the prior0.5 preview fallback,
+  explicit zero remains unsupported. Report fallback/edge differences. This is
+  not scalar opacity, every shader, arbitrary game defaults or performance proof.
+
+## A5.6 material retry — overall visual approval confirmed
+
+After the A5.6 delivery, the owner replied: **"looks dope! please continue!"**
+This is qualitative approval of the result they observed. Exact map/profile,
+individual two-sided surfaces, full shader/backface-lighting parity, independent
+Hammer reopening and numerical performance were not specified or measured.
+The detailed comparison below remains pending, not retrospectively passed:
 
 - [ ] In a **copied** map with matching content, look at a familiar two-sided
   fence, foliage or thin prop from both sides and compare the game. Do not edit

@@ -80,6 +80,10 @@ TEST_CASE("Texture")
     CHECK(texture.embeddedDefaults() == EmbeddedDefaults{NoEmbeddedDefaults{}});
     texture.setEmbeddedDefaults(SourceEmbeddedDefaults{true});
     CHECK(texture.embeddedDefaults() == EmbeddedDefaults{SourceEmbeddedDefaults{true}});
+    texture.setEmbeddedDefaults(SourceEmbeddedDefaults{true, 0.75f});
+    CHECK(
+      texture.embeddedDefaults()
+      == EmbeddedDefaults{SourceEmbeddedDefaults{true, 0.75f}});
     texture.setEmbeddedDefaults(SourceEmbeddedDefaults{false});
     CHECK(texture.embeddedDefaults() == EmbeddedDefaults{SourceEmbeddedDefaults{false}});
     texture.setEmbeddedDefaults(Q2EmbeddedDefaults{1, 2, 3});

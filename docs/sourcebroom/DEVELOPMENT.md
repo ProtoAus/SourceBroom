@@ -94,6 +94,35 @@ pixels, then explicitly requests a texture to prove the loader acts. Keep game
 files/logs private and report the workload; this is not an end-to-end benchmark
 or a substitute for visual acceptance.
 
+## A5.7 authored cutout-reference contracts
+
+Preview `$alphatestreference` is now validated after direct/Patch resolution:
+one finite float in (0,1], full-token locale-independent parse, surrounding
+whitespace/optional plus and decimal/exponent syntax. Explicit zero/-zero,
+nonfinite/out-of-range/malformed/duplicate/block values refuse even if alpha test
+is disabled. Zero-as-default/literal behavior is not certified across branches.
+Strict material inspection still rejects this optional feature.
+
+Carry the authored float in demanded SourceEmbeddedDefaults for both brush and
+prop paths; keep VMT cache identity, no metadata-time I/O and Q2/default tagging.
+Only Binary alpha derives this threshold; explicit setAlphaFunc wins. A reference
+alone must not invent cutout/blending. Existing shader cutoff precedes editor
+fade, so no shader rewrite is needed. Preserve the absent0.5 preview fallback
+and existing combined-flag cutout precedence; do not call this universal Source
+default parity or add scalar$alpha based on an ambiguous renderer reference.
+
+Semantic reference: public MIT noclip.website commit
+`e47a8cc8a9fe16e83adc0bf19153ff04c666ceca`, SourceEngine/Materials/Material_Generic.ts
+cutoff branch. Its default is0.7 and lightmapped scalar-alpha behavior has TODOs;
+VDC requests returned access-challenge HTML, not documentation. No SDK/reference
+implementation was copied. The bounded nonzero editor policy is explicit.
+
+The public metadata changed: all6 app/checker/test targets must rebuild and
+actual affected compilation must be checked, regardless of possible padding.
+The production transport matrix is252 arms (prior84 x absent/.25/.75). Shared
+five-config GPU controls retain1994 assertions and add545/50 scenarios, including
+an acted negative: forcing .5 makes a pixel leak that authored .75 rejects.
+
 ## A5.6 two-sided material / polygon-state contracts
 
 Preview-only `$nocull` uses the existing bounded boolean policy after direct or

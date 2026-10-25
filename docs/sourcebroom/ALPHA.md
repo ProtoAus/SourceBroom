@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.6 two-sided-material candidate
+# Try the Windows SourceBroom A5.7 custom-cutout candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,28 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.6: two-sided Source materials
+## A5.7: authored Source cutout thresholds
+
+Fences, grates and similar alpha-tested brush/prop materials now use a supported
+explicit `$alphatestreference`, including values inherited or replaced through
+Patch VMTs. A lower threshold keeps more pixels; a higher threshold removes more.
+Previously these previews all used 0.5. Explicit editor alpha-function overrides
+still win, and cutoff happens before editor fading. Catalog metadata still does
+not decode textures or rewrite original assets.
+
+This bounded preview accepts one finite threshold **above 0 and at most 1**.
+Absent values keep the existing **0.5 preview fallback**, not a newly certified
+Source-game default. Explicit zero, malformed/duplicate/out-of-range values
+refuse instead of guessing branch-specific semantics. A reference alone does
+not enable alpha testing. Scalar `$alpha`, full shader opacity and backface
+lighting remain unsupported; combined flags retain existing cutout precedence.
+
+**Optional quick check:** open a copied map with a familiar fence or grate using
+an authored threshold and compare its holes/edges to the matching game. Do not
+edit installed VMTs for this test. Keep A5.6 as recovery; detailed A5.7 appearance
+confirmation remains pending.
+
+## Retained A5.6: two-sided Source materials
 
 Basic Source `$nocull 1` now makes demanded brush and static-prop base-image
 previews two-sided, including flags inherited or replaced through a Patch VMT.
@@ -35,7 +56,8 @@ add geometry, displacements or complete shader support.
 **Optional quick check:** open a copied map with a familiar two-sided fence,
 foliage or thin prop, and look from both sides. Compare the matching game's
 material without editing its installed VMT. Keep the prior A5.5 folder/ZIP as
-recovery; owner appearance confirmation is still pending.
+recovery. The owner gave overall A5.6 visual approval; detailed surface/game
+comparison remains pending in lextest.md.
 
 ## Retained A5.5: inherited Source Patch materials
 
@@ -200,14 +222,14 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current A5.6 filesystem/graphics/model/UI suites pass
-  **20/20, 21/21, 174/174, 43/43** (258 entries). The historically intermittent
+- Current A5.7 filesystem/graphics/model/UI suites pass
+  **20/20, 21/21, 175/175, 43/43** (259 entries). The historically intermittent
   Windows preference rename failure remains unfixed, not a preference-fix claim.
-  Focused graphics/model controls pass **945/2414 assertions**, and expanded
-  five-config GPU controls pass **1994**. [VALIDATION.md](VALIDATION.md) and package
+  Focused graphics/model controls pass **990/7654 assertions**, and expanded
+  five-config GPU controls pass **2539**. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep prior A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
+  Keep prior A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

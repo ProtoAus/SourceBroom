@@ -59,7 +59,8 @@ Result<gl::Texture> loadTexture(
                           // VTF alpha can be a shader mask, not transparency.
                           texture.setAlphaDomain(info.alphaDomain);
                           texture.setEmbeddedDefaults(
-                            gl::SourceEmbeddedDefaults{info.noCull});
+                            gl::SourceEmbeddedDefaults{
+                              info.noCull, info.alphaTestReference});
                           return texture;
                         });
              });
