@@ -27,7 +27,10 @@
 #include "kd/ranges/to.h"
 #include "kd/reflection_impl.h"
 
+#include <cstdlib>
+#include <iostream>
 #include <ranges>
+#include <thread>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -119,6 +122,84 @@ TEST_CASE("ResourceManager")
     CHECK(catalog[97]->isLoaded());
     CHECK_FALSE(catalog[0]->isLoaded());
     CHECK_FALSE(catalog[99]->isLoaded());
+  }
+
+  SECTION("budgeted processing resumes beyond a busy prefix")
+  {
+    using namespace std::chrono_literals;
+    auto frontUploads = 0;
+    auto tailUploads = 0;
+    const auto slowUpload = [&](Gl&) {
+      ++frontUploads;
+      std::this_thread::sleep_for(5ms);
+    };
+    auto front = std::make_shared<ResourceT>(MockResource{slowUpload});
+    auto tail = std::make_shared<ResourceT>(MockResource{[&](Gl&) { ++tailUploads; }});
+    resourceManager.addResource(front);
+    resourceManager.addResource(tail);
+    resourceManager.process(taskRunner, processContext, 1ms);
+    REQUIRE(frontUploads == 1);
+    REQUIRE(tailUploads == 0);
+
+    // Keep work at the front of the queue. Restarting each tick at index zero
+    // must not prevent later requested textures from ever reaching the GPU.
+    *front = ResourceT{MockResource{slowUpload}};
+    resourceManager.process(taskRunner, processContext, 1ms);
+    CHECK(tailUploads == 1);
+    CHECK(frontUploads == 2);
+  }
+
+  SECTION("budget cursor survives removal before it and newly appended resources")
+  {
+    using namespace std::chrono_literals;
+    auto uploads = 0;
+    auto front = std::make_shared<ResourceT>(
+      MockResource{[](Gl&) { std::this_thread::sleep_for(5ms); }});
+    auto tail = std::make_shared<ResourceT>(MockResource{[&](Gl&) { ++uploads; }});
+    resourceManager.addResource(front);
+    resourceManager.addResource(tail);
+    resourceManager.process(taskRunner, processContext, 1ms);
+    REQUIRE(uploads == 0);
+    front.reset();
+    resourceManager.process(taskRunner, processContext);
+    REQUIRE(uploads == 1);
+    CHECK(resourceManager.resources() == std::vector{tail});
+    auto appended = std::make_shared<ResourceT>(MockResource{[&](Gl&) { ++uploads; }});
+    resourceManager.addResource(appended);
+    resourceManager.process(taskRunner, processContext);
+    CHECK(uploads == 2);
+    CHECK_FALSE(resourceManager.needsProcessing());
+  }
+
+  SECTION("unused on-demand catalog retires without decoding")
+  {
+    const auto* requestedCount = std::getenv("SOURCEBROOM_RESOURCE_GC_COUNT");
+    const auto count = requestedCount ? std::atoi(requestedCount) : 4000;
+    REQUIRE(count >= 1000);
+    REQUIRE(count <= 100000);
+    auto decoded = 0;
+    for (auto i = 0; i < count; ++i)
+    {
+      auto resource = std::make_shared<ResourceT>(ResourceLoader<MockResource>{[&]() {
+        ++decoded;
+        return Result<MockResource>{MockResource{}};
+      }});
+      resource->setLoadingPolicy(ResourceLoadingPolicy::OnDemand);
+      resourceManager.addResource(std::move(resource));
+    }
+    REQUIRE(resourceManager.resources().size() == size_t(count));
+    const auto start = std::chrono::steady_clock::now();
+    resourceManager.process(taskRunner, processContext);
+    const auto elapsed =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+        .count();
+    CHECK(resourceManager.resources().empty());
+    CHECK(decoded == 0);
+    if (requestedCount)
+    {
+      std::cout << "RESOURCE_GC resources=" << count << " elapsed_ms=" << elapsed
+                << " decoded=" << decoded << '\n';
+    }
   }
 
   SECTION("needsProcessing")

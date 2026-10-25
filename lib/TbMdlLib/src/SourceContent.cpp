@@ -202,7 +202,11 @@ Result<std::filesystem::path> sourceBaseTexture(
             || entry.key == "$halflambert" || entry.key == "$nodecal"
             || entry.key == "$vertexcolor" || entry.key == "$vertexalpha"
             || entry.key == "$translucent" || entry.key == "$alphatest"
-            || entry.key == "$alphatestreference");
+            || entry.key == "$alphatestreference" || entry.key == "$roughnessmap"
+            || entry.key == "$ambientocclusionmap" || entry.key == "$notint"
+            || entry.key == "$treesway" || entry.key == "$tintmasktexture"
+            || entry.key == "$blendtintbybasealpha" || entry.key == "$envmaplightscale"
+            || entry.key == "$color" || entry.key == "$color2");
       if (entry.block || (!previewParameter && entry.key != "$basetexture"
           && entry.key != "$surfaceprop" && entry.key != "$surfaceprop2"
           && entry.key != "$keywords" && entry.key != "$model"

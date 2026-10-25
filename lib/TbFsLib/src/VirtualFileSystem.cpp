@@ -54,8 +54,9 @@ size_t getMountPointId()
 
 bool matches(const VirtualMountPoint& mountPoint, const std::filesystem::path& path)
 {
-  return kdl::path_has_prefix(
-    kdl::path_to_lower(path), kdl::path_to_lower(mountPoint.path));
+  return mountPoint.path.empty()
+         || kdl::path_has_prefix(
+           kdl::path_to_lower(path), kdl::path_to_lower(mountPoint.path));
 }
 
 std::filesystem::path suffix(
@@ -63,7 +64,9 @@ std::filesystem::path suffix(
 {
   contract_pre(matches(mountPoint, path));
 
-  return kdl::path_clip(path, kdl::path_length(mountPoint.path));
+  return mountPoint.path.empty()
+           ? path
+           : kdl::path_clip(path, kdl::path_length(mountPoint.path));
 }
 
 } // namespace
@@ -124,8 +127,9 @@ PathInfo VirtualFileSystem::pathInfo(const std::filesystem::path& path) const
     if (matches(mountPoint, path))
     {
       const auto pathSuffix = suffix(mountPoint, path);
-      if (const auto pathInfo = mountPoint.mountedFileSystem->pathInfo(pathSuffix);
-          pathInfo != PathInfo::Unknown)
+      if (
+        const auto pathInfo = mountPoint.mountedFileSystem->pathInfo(pathSuffix);
+        pathInfo != PathInfo::Unknown)
       {
         return pathInfo;
       }
@@ -152,8 +156,9 @@ const FileSystemMetadata* VirtualFileSystem::metadata(
     if (matches(mountPoint, path))
     {
       const auto pathSuffix = suffix(mountPoint, path);
-      if (const auto pathInfo = mountPoint.mountedFileSystem->pathInfo(pathSuffix);
-          pathInfo != PathInfo::Unknown)
+      if (
+        const auto pathInfo = mountPoint.mountedFileSystem->pathInfo(pathSuffix);
+        pathInfo != PathInfo::Unknown)
       {
         return mountPoint.mountedFileSystem->metadata(pathSuffix, key);
       }
@@ -175,9 +180,10 @@ VirtualMountPointId VirtualFileSystem::mount(
 bool VirtualFileSystem::unmount(const VirtualMountPointId& id)
 {
   const auto lock = std::unique_lock{*m_mutex};
-  if (const auto it = std::ranges::find_if(
-        m_mountPoints, [&](const auto& mountPoint) { return mountPoint.id == id; });
-      it != m_mountPoints.end())
+  if (
+    const auto it = std::ranges::find_if(
+      m_mountPoints, [&](const auto& mountPoint) { return mountPoint.id == id; });
+    it != m_mountPoints.end())
   {
     m_mountPoints.erase(it);
     return true;

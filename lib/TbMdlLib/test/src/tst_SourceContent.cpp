@@ -116,13 +116,16 @@ TEST_CASE("Source content catalog profiling opt-in", "[.][source][profiling]")
   CHECK(linear == hashed);
   CHECK(hashed == enabledPaths);
   auto names = std::vector<std::string>{};
+  const auto* requestedProbe = std::getenv("SOURCEBROOM_PROFILE_MATERIAL");
+  const auto probeName =
+    std::string{requestedProbe ? requestedProbe : "brick/brickwall001a"};
   auto probeId = std::optional<gl::ResourceId>{};
   for (const auto& collection : collections)
   {
     for (const auto& material : collection.materials())
     {
       names.push_back(material.name());
-      if (material.name() == "brick/brickwall001a")
+      if (material.name() == probeName)
       {
         probeId = material.textureResource().id();
       }
@@ -286,6 +289,28 @@ TEST_CASE("SourceContent")
     {
       CHECK(
         sourceBaseTexture(unresolved, SourceMaterialMode::BaseTexturePreview).is_error());
+    }
+  }
+  SECTION("base-image preview accepts enumerated optional PBR and tint metadata")
+  {
+    for (const auto* parameter :
+         {"$roughnessmap",
+          "$ambientocclusionmap",
+          "$notint",
+          "$treesway",
+          "$tintmasktexture",
+          "$blendtintbybasealpha",
+          "$envmaplightscale",
+          "$color",
+          "$color2"})
+    {
+      const auto material =
+        std::string{"VertexLitGeneric { $basetexture brick/wall "} + parameter + " 1 }";
+      CHECK(sourceBaseTexture(material).is_error());
+      CHECK(
+        (sourceBaseTexture(material, SourceMaterialMode::BaseTexturePreview)
+         | kdl::value())
+        == std::filesystem::path{"materials/brick/wall.vtf"});
     }
   }
   SECTION("manual Steam root discovery and loose mount precedence")

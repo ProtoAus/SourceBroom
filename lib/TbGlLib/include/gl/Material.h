@@ -169,6 +169,8 @@ public:
   Texture* texture();
 
   const TextureResource& textureResource() const;
+  // Observe asynchronous layout dimensions without retaining an obsolete catalog.
+  std::weak_ptr<const TextureResource> weakTextureResource() const;
 
   const kdl::flat_set<std::string>& surfaceParms() const;
   void setSurfaceParms(kdl::flat_set<std::string> surfaceParms);

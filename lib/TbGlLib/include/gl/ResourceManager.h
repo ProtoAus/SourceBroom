@@ -91,6 +91,7 @@ public:
 
 private:
   std::vector<std::unique_ptr<ResourceWrapperBase>> m_resources;
+  size_t m_nextResource = 0;
 
 public:
   bool needsProcessing() const
@@ -129,9 +130,17 @@ public:
 
     auto processedResourceIds = std::vector<ResourceId>{};
 
-    for (auto it = m_resources.begin(); it != m_resources.end() && checkTimeout();)
+    // Continue after the previous budget boundary. Restarting at the front can
+    // starve later requested textures in large on-demand Source catalogs.
+    auto remaining = m_resources.size();
+    auto compact = false;
+    while (remaining > 0 && !m_resources.empty() && checkTimeout())
     {
-      auto& resourceWrapper = *it;
+      if (m_nextResource >= m_resources.size())
+      {
+        m_nextResource = 0;
+      }
+      auto& resourceWrapper = m_resources[m_nextResource];
       if (resourceWrapper->useCount() == 1 && !resourceWrapper->isDropped())
       {
         resourceWrapper->drop();
@@ -145,9 +154,36 @@ public:
         }
       }
 
-      it = resourceWrapper->useCount() == 1 && resourceWrapper->isDropped()
-             ? m_resources.erase(it)
-             : std::next(it);
+      compact =
+        compact || (resourceWrapper->useCount() == 1 && resourceWrapper->isDropped());
+      ++m_nextResource;
+      --remaining;
+    }
+    if (compact)
+    {
+      // Erasing each dead entry shifts the remainder of a large catalog once
+      // per texture. Compact once and preserve the next original queue position.
+      const auto boundary = m_nextResource;
+      auto write = size_t{0};
+      auto next = size_t{0};
+      for (auto read = size_t{0}; read < m_resources.size(); ++read)
+      {
+        if (m_resources[read]->useCount() == 1 && m_resources[read]->isDropped())
+        {
+          continue;
+        }
+        if (read < boundary)
+        {
+          ++next;
+        }
+        if (write != read)
+        {
+          m_resources[write] = std::move(m_resources[read]);
+        }
+        ++write;
+      }
+      m_resources.resize(write);
+      m_nextResource = next;
     }
 
     if (!processedResourceIds.empty())

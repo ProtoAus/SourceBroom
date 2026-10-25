@@ -73,6 +73,36 @@ TEST_CASE("VirtualFileSystem")
     CHECK(vfs.pathInfo("fs2/newFile.txt") == fs::PathInfo::File);
   }
 
+  SECTION("root and nested mounts preserve case-insensitive precedence and reload")
+  {
+    auto root = TestEnvironment{[](auto& e) {
+      e.createDirectory("Materials");
+      e.createDirectory("Materials2");
+      e.createFile("Materials/TeST.VMT", "root");
+      e.createFile("Materials2/other.vmt", "not a nested mount");
+    }};
+    auto overlay = TestEnvironment{[](auto& e) { e.createFile("test.vmt", "overlay"); }};
+    auto vfs = VirtualFileSystem{};
+    vfs.mount("", std::make_unique<DiskFileSystem>(root.dir()));
+    const auto mounted =
+      vfs.mount("materials", std::make_unique<DiskFileSystem>(overlay.dir()));
+    REQUIRE(vfs.pathInfo("") == PathInfo::Directory);
+    REQUIRE(vfs.pathInfo("MaTeRiAlS/tEsT.vmt") == PathInfo::File);
+    const auto read = [&](const auto& path) {
+      return vfs.openFile(path) | kdl::transform([](auto file) {
+               return std::string{file->reader().buffer().stringView()};
+             });
+    };
+    CHECK(read("MaTeRiAlS/tEsT.vmt") == Result<std::string>{"overlay"});
+    CHECK(read("Materials2/other.vmt") == Result<std::string>{"not a nested mount"});
+    root.createFile("Materials/new.vmt", "fresh");
+    CHECK(vfs.pathInfo("materials/new.vmt") == PathInfo::Unknown);
+    REQUIRE(vfs.reload().is_success());
+    CHECK(read("materials/new.vmt") == Result<std::string>{"fresh"});
+    REQUIRE(vfs.unmount(mounted));
+    CHECK(read("MaTeRiAlS/tEsT.vmt") == Result<std::string>{"root"});
+  }
+
   SECTION("concurrent mount/unmount vs. reads")
   {
     using ThreadFunc = std::function<void()>;

@@ -138,13 +138,39 @@ void MaterialBrowserView::revealMaterial(const gl::Material* material)
   });
 }
 
-void MaterialBrowserView::resourcesWereProcessed(const std::vector<gl::ResourceId>&)
+void MaterialBrowserView::resourcesWereProcessed(
+  const std::vector<gl::ResourceId>& resourceIds)
 {
-  reloadMaterials();
+  const auto dimensionsChanged = std::ranges::any_of(resourceIds, [&](const auto& id) {
+    const auto it = m_layoutTextures.find(id);
+    if (it == m_layoutTextures.end())
+    {
+      return false;
+    }
+    const auto resource = it->second.resource.lock();
+    if (!resource)
+    {
+      return true;
+    }
+    const auto* texture = resource->get();
+    const auto size = texture ? texture->sizef() : vm::vec2f{64, 64};
+    return size != it->second.size;
+  });
+  if (dimensionsChanged)
+  {
+    reloadMaterials();
+  }
+  else
+  {
+    // Loading starts, failures, uploads and unrelated model resources do not
+    // require re-sorting and re-measuring the entire Source material catalog.
+    update();
+  }
 }
 
 void MaterialBrowserView::reloadMaterials()
 {
+  m_layoutTextures.clear();
   invalidate();
   update();
 }
@@ -164,6 +190,7 @@ void MaterialBrowserView::doInitLayout(Layout& layout)
 
 void MaterialBrowserView::doReloadLayout(Layout& layout)
 {
+  m_layoutTextures.clear();
   const auto& fontPath = pref(Preferences::RendererFontPath);
   const auto fontSize = pref(Preferences::BrowserFontSize);
   contract_assert(fontSize > 0);
@@ -206,6 +233,9 @@ void MaterialBrowserView::addMaterialToLayout(
   const auto scaleFactor = pref(Preferences::MaterialBrowserIconSize);
   const auto* texture = material.texture();
   const auto textureSize = texture ? texture->sizef() : vm::vec2f{64, 64};
+  m_layoutTextures.insert_or_assign(
+    material.textureResource().id(),
+    LayoutTexture{material.weakTextureResource(), textureSize});
   const auto scaledTextureSize = vm::round(scaleFactor * textureSize);
 
   layout.addItem(
@@ -297,7 +327,10 @@ std::vector<const gl::Material*> MaterialBrowserView::sortMaterials(
   }
 }
 
-void MaterialBrowserView::doClear() {}
+void MaterialBrowserView::doClear()
+{
+  m_layoutTextures.clear();
+}
 
 void MaterialBrowserView::doRender(
   gl::Gl& gl, Layout& layout, const float y, const float height)
@@ -413,12 +446,13 @@ void MaterialBrowserView::renderMaterials(
             const auto& bounds = cell.itemBounds();
             const auto& material = cellData(cell);
 
-            auto vertexArray = gl::VertexArray::move(std::vector<Vertex>{
-              Vertex{{bounds.left(), height - (bounds.top() - y)}, {0, 0}},
-              Vertex{{bounds.left(), height - (bounds.bottom() - y)}, {0, 1}},
-              Vertex{{bounds.right(), height - (bounds.bottom() - y)}, {1, 1}},
-              Vertex{{bounds.right(), height - (bounds.top() - y)}, {1, 0}},
-            });
+            auto vertexArray = gl::VertexArray::move(
+              std::vector<Vertex>{
+                Vertex{{bounds.left(), height - (bounds.top() - y)}, {0, 0}},
+                Vertex{{bounds.left(), height - (bounds.bottom() - y)}, {0, 1}},
+                Vertex{{bounds.right(), height - (bounds.bottom() - y)}, {1, 1}},
+                Vertex{{bounds.right(), height - (bounds.top() - y)}, {1, 0}},
+              });
 
             gl::setAlphaFuncUniforms(shader, &material);
             material.activate(

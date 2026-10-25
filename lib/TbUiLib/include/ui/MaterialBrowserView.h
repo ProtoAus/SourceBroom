@@ -21,9 +21,12 @@
 
 #include "base/NotifierConnection.h"
 #include "gl/FontDescriptor.h"
+#include "gl/TextureResource.h"
 #include "ui/CellView.h"
 
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class QScrollBar;
@@ -61,6 +64,12 @@ private:
   std::string m_filterText;
 
   const gl::Material* m_selectedMaterial = nullptr;
+  struct LayoutTexture
+  {
+    std::weak_ptr<const gl::TextureResource> resource;
+    vm::vec2f size;
+  };
+  std::unordered_map<gl::ResourceId, LayoutTexture> m_layoutTextures;
 
   NotifierConnection m_notifierConnection;
 

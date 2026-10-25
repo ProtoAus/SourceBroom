@@ -184,6 +184,11 @@ const TextureResource& Material::textureResource() const
   return *m_textureResource;
 }
 
+std::weak_ptr<const TextureResource> Material::weakTextureResource() const
+{
+  return m_textureResource;
+}
+
 const kdl::flat_set<std::string>& Material::surfaceParms() const
 {
   return m_surfaceParms;
