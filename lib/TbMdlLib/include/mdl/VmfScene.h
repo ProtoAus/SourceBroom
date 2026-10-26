@@ -17,6 +17,7 @@
 namespace tb::mdl
 {
 class NodeContents;
+class BrushNode;
 
 struct VmfSceneDiagnostic
 {
@@ -37,6 +38,8 @@ private:
   VmfDocument m_document;
   std::unique_ptr<WorldNode> m_world;
   std::unique_ptr<WorldNode> m_original;
+  // Retains ancestry authority after takeWorld transfers ownership to Map.
+  const WorldNode* m_activeWorld = nullptr;
   std::vector<VmfSceneDiagnostic> m_diagnostics;
   bool m_readOnlyPreview = false;
   size_t m_unprojectedSolidCount = 0;
@@ -53,13 +56,13 @@ private:
     std::string nativeId;
     std::optional<VmfEntryId> prototype;
     size_t owner = 0;
-    /** Solid: immutable admitted side count; side ownership + uniqueness makes
-     * a count match the exact registered binding set without scanning history. */
-    size_t sideCount = 0;
   };
   std::map<size_t, GeneratedBinding> m_generated;
   // Exact operation-admitted side sets, including parked undo/redo states.
   std::map<size_t, std::vector<std::set<size_t>>> m_clipStates;
+  // Counts generated initial sets and retained clip states; source baselines
+  // are derived from the immutable document. Never evict undoable states.
+  size_t m_sideStateMemberships = 0;
   size_t m_nextBinding = 0;
   size_t m_generatedIdBytes = 0;
   std::optional<std::string> m_geometryReferenceProblem;
@@ -75,6 +78,10 @@ private:
   void requireEditing() const;
   std::optional<VmfEntryId> prototype(size_t binding) const;
   void checkGeometryReferences(VmfEntryId object) const;
+  void validateSideState(const BrushNode& node) const;
+  void validateClipOwner(const BrushNode& node, bool clipping = true) const;
+  void validateContentsImpl(
+    const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const;
   void nodeEdits(
     const Node& before,
     const Node& after,

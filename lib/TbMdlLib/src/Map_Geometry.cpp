@@ -79,9 +79,7 @@ bool clipBrushes(
   auto candidates = std::vector<std::pair<Node*, NodeContents>>{};
   for (auto* node : brushes)
   {
-    if (
-      !node || node->parent() != map.worldNode().defaultLayer()
-      || !map.editorContext().visible(*node))
+    if (!node || !map.editorContext().visible(*node))
     {
       return false;
     }
@@ -104,8 +102,8 @@ bool clipBrushes(
     }
     auto cut = std::move(face).value();
     // Match ClipTool's nearest-normal preview, including first-match ties.
-    const auto closest = std::ranges::min_element(
-      sourceFaces, {}, [&](const auto& source) {
+    const auto closest =
+      std::ranges::min_element(sourceFaces, {}, [&](const auto& source) {
         return vm::squared_length(source.boundary().normal - cut.boundary().normal);
       });
     cut.copyAttributes(*closest);

@@ -48,6 +48,7 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -2024,7 +2025,7 @@ TEST_CASE("VmfMap in-place ordinary clip history and admission", "[vmf]")
       != std::string::npos);
   }
 
-  SECTION("a later unsupported generated solid refuses the entire command batch")
+  SECTION("a later hidden template refuses the entire command batch")
   {
     duplicateSelectedNodes(map);
     auto* duplicate = map.selection().brushes.front();
@@ -2035,7 +2036,9 @@ TEST_CASE("VmfMap in-place ordinary clip history and admission", "[vmf]")
     const auto selected = map.selection().nodes;
     const auto undo = map.canUndoCommand();
     const auto redo = map.canRedoCommand();
+    duplicate->setVisibilityState(VisibilityState::Hidden);
     CHECK_FALSE(clipBrushes(map, {&node, duplicate}, plane));
+    duplicate->setVisibilityState(VisibilityState::Inherited);
     CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
     CHECK(map.modificationCount() == count);
     CHECK(filePositions(map) == positions);
@@ -2086,7 +2089,9 @@ TEST_CASE("VmfMap ordinary clip unsupported attachments refuse atomically", "[vm
     std::string{"hidden"},
     std::string{"brush entity"},
     std::string{"generated"},
-    std::string{"duplicate"});
+    std::string{"duplicate"},
+    std::string{"generated reference"},
+    std::string{"template reference"});
   CAPTURE(kind);
   auto original = kind == "displacement" ? nativeDisplacementRoom() : nativeRamp(false);
   if (kind == "opaque side")
@@ -2097,7 +2102,8 @@ TEST_CASE("VmfMap ordinary clip unsupported attachments refuse atomically", "[vm
   {
     original.insert(original.find("solid {") + 7, "foreign { key value } ");
   }
-  if (kind == "reference")
+  if (
+    kind == "reference" || kind == "generated reference" || kind == "template reference")
   {
     original +=
       "entity { \"id\" \"100\" \"classname\" \"info_overlay\" \"sides\" \"3\" }";
@@ -2137,12 +2143,12 @@ TEST_CASE("VmfMap ordinary clip unsupported attachments refuse atomically", "[vm
   auto* target = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
   REQUIRE(target);
   selectNodes(map, {target});
-  if (kind == "duplicate")
+  if (kind == "duplicate" || kind == "template reference")
   {
     duplicateSelectedNodes(map);
     target = map.selection().brushes.front();
   }
-  if (kind == "generated")
+  if (kind == "generated" || kind == "generated reference")
   {
     REQUIRE(createBrush(
       map,
@@ -2160,7 +2166,18 @@ TEST_CASE("VmfMap ordinary clip unsupported attachments refuse atomically", "[vm
   const auto count = map.modificationCount();
   const auto positions = filePositions(map);
   const auto selection = map.selection().nodes;
-  CHECK_FALSE(clipBrushes(map, {target}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+  if (kind == "brush entity" || kind == "generated" || kind == "duplicate")
+  {
+    REQUIRE(clipBrushes(map, {target}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+    CHECK(target->brush().bounds().max.x() == 32);
+    CHECK_NOTHROW(
+      VmfScene::read(map.vmfScene()->serialize(map.worldNode()), map.worldBounds()));
+    map.undoCommand();
+  }
+  else
+  {
+    CHECK_FALSE(clipBrushes(map, {target}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+  }
   CHECK(map.modificationCount() == count);
   CHECK(filePositions(map) == positions);
   CHECK(map.selection().nodes == selection);
@@ -2172,6 +2189,243 @@ TEST_CASE("VmfMap ordinary clip unsupported attachments refuse atomically", "[vm
   REQUIRE(
     clipBrushes(control, {&ramp(control)}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
   CHECK(ramp(control).brush().bounds().max.x() == 32);
+}
+
+TEST_CASE(
+  "VmfMap ordinary clip generated and entity ownership before first save", "[vmf]")
+{
+  const auto route = GENERATE(
+    std::string{"fresh"},
+    std::string{"template"},
+    std::string{"entity"},
+    std::string{"wrapped original"},
+    std::string{"wrapped fresh"},
+    std::string{"duplicated child"},
+    std::string{"clipped duplicate"});
+  CAPTURE(route);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "ownership input.vmf";
+  auto original = nativeRamp(false);
+  if (route == "entity" || route == "duplicated child")
+  {
+    const auto solid = nativeFragment(original, "2");
+    original.erase(original.find(solid), solid.size());
+    auto sibling = solid;
+    for (int id = 8; id >= 2; --id)
+    {
+      const auto token = "\"id\" \"" + std::to_string(id) + "\"";
+      const auto at = sibling.find(token);
+      REQUIRE(at != std::string::npos);
+      sibling.replace(at, token.size(), "\"id\" \"" + std::to_string(id + 20) + "\"");
+    }
+    original += "entity { \"id\" \"100\" classname func_detail " + solid + sibling
+      + "connections { OnUser1 \"marker,Enable,,0,-1\" OnUser1 \"marker,Disable,,1,-1\" } "
+        "editor { color \"001 002 003\" } }";
+  }
+  writeBinary(path, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto* node = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
+  REQUIRE(node);
+  selectNodes(map, {node});
+  if (route == "fresh" || route == "wrapped fresh")
+  {
+    deselectAll(map);
+    REQUIRE(createBrush(map, nativeCubePoints()));
+    node = map.selection().brushes.front();
+  }
+  if (route == "wrapped original" || route == "wrapped fresh")
+  {
+    const auto definition = EntityDefinition{.name = "func_detail"};
+    REQUIRE(createBrushEntity(map, definition));
+  }
+  const auto clipX = [&](BrushNode* target) {
+    const auto x = target->brush().bounds().center().x();
+    return clipBrushes(map, {target}, {{{x, 0, 0}, {x, 0, 64}, {x, 64, 0}}});
+  };
+  if (route == "clipped duplicate")
+  {
+    REQUIRE(clipX(node));
+  }
+  if (route == "template" || route == "duplicated child" || route == "clipped duplicate")
+  {
+    duplicateSelectedNodes(map);
+    REQUIRE(map.selection().brushes.size() == 1);
+    auto* duplicate = map.selection().brushes.front();
+    REQUIRE(duplicate != node);
+    node = duplicate;
+  }
+  const auto initial = map.vmfScene()->serialize(map.worldNode());
+  const auto id = map.vmfScene()->nativeId(*node);
+  const auto binding = node->lineNumber();
+  const auto selected = map.selection().nodes;
+  const auto oldBounds = node->brush().bounds();
+  auto oldSides = std::set<size_t>{};
+  for (const auto& face : node->brush().faces())
+  {
+    oldSides.insert(face.lineNumber());
+  }
+  REQUIRE(
+    clipX(node)); // No save/reload has occurred since creation/duplication/wrapping.
+  CHECK(node->lineNumber() == binding);
+  CHECK(map.vmfScene()->nativeId(*node) == id);
+  CHECK(map.selection().nodes == selected);
+  CHECK(node->brush().bounds().max.x() == oldBounds.center().x());
+  auto newSides = size_t{0};
+  for (const auto& face : node->brush().faces())
+  {
+    newSides += oldSides.contains(face.lineNumber()) ? 0 : 1;
+  }
+  CHECK(newSides == 1);
+  const auto first = map.vmfScene()->serialize(map.worldNode());
+  CHECK(first == map.vmfScene()->serialize(map.worldNode()));
+  CHECK(nativeFragment(first, "9") == nativeFragment(original, "9"));
+  if (route == "template" || route == "clipped duplicate")
+  {
+    CHECK(nativeFragment(first, "2") == nativeFragment(initial, "2"));
+    CHECK(nativeFragment(first, id).find("0.2500") != std::string::npos);
+  }
+  if (route == "entity" || route == "duplicated child")
+  {
+    CHECK(nativeFragment(first, "22") == nativeFragment(original, "22"));
+    CHECK(
+      first.find("OnUser1 \"marker,Enable,,0,-1\" OnUser1 \"marker,Disable,,1,-1\"")
+      != std::string::npos);
+    CHECK(first.find("color \"001 002 003\"") != std::string::npos);
+  }
+  const auto y = node->brush().bounds().center().y();
+  REQUIRE(clipBrushes(map, {node}, {{{0, y, 0}, {64, y, 0}, {0, y, 64}}}));
+  const auto second = map.vmfScene()->serialize(map.worldNode());
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == first);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == initial);
+  if (route != "entity")
+  {
+    map.undoCommand(); // Creation, wrapping or duplication remains a separate command.
+    CHECK(map.vmfScene()->serialize(map.worldNode()) != initial);
+    if (route == "wrapped fresh")
+    {
+      map.undoCommand();
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+      map.redoCommand();
+    }
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == initial);
+  }
+  map.redoCommand();
+  map.redoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == second);
+  const auto saved = env.dir() / "ownership saved.vmf";
+  REQUIRE(map.saveAs(saved).is_success());
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(saved) == second);
+  auto recovered = MapFixture{};
+  auto& reopened = recovered.load(saved, config);
+  auto& reopenedNode = dynamic_cast<BrushNode&>(nativeNode(reopened, id));
+  checkReopenedBrush(reopenedNode.brush(), node->brush(), false);
+  const auto reopenedX = reopenedNode.brush().bounds().center().x();
+  REQUIRE(clipBrushes(
+    reopened,
+    {&reopenedNode},
+    {{{reopenedX, 0, 0}, {reopenedX, 0, 64}, {reopenedX, 64, 0}}}));
+  REQUIRE(translateSelection(map, {4, 0, 0}));
+  auto painted = node->brush();
+  for (auto& face : painted.faces())
+  {
+    face.setMaterialName("synthetic/ownership_paint");
+  }
+  REQUIRE(map.executeAndStore(
+    std::make_unique<SwapNodeContentsCommand>(
+      "Paint owned clip",
+      std::vector<std::pair<Node*, NodeContents>>{
+        {node, NodeContents{std::move(painted)}}})));
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(saved).find("synthetic/ownership_paint") != std::string::npos);
+  CHECK(readBinary(path) == original);
+}
+
+TEST_CASE("VmfMap clip redo live owner refusal preserves retry history", "[vmf]")
+{
+  const auto refuseRedo = GENERATE(false, true);
+  const auto wrapFresh = GENERATE(false, true);
+  CAPTURE(refuseRedo, wrapFresh);
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "redo owner input.vmf";
+  writeBinary(path, nativeRamp(false));
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto* node = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
+  REQUIRE(node);
+  selectNodes(map, {node});
+  if (wrapFresh)
+  {
+    deselectAll(map);
+    REQUIRE(createBrush(map, nativeCubePoints()));
+    node = map.selection().brushes.front();
+    REQUIRE(createBrushEntity(map, EntityDefinition{.name = "func_detail"}));
+  }
+  else
+  {
+    duplicateSelectedNodes(map);
+    node = map.selection().brushes.front();
+  }
+  const auto before = map.vmfScene()->serialize(map.worldNode());
+  const auto beforeBounds = node->brush().bounds();
+  const auto x = beforeBounds.center().x();
+  REQUIRE(clipBrushes(map, {node}, {{{x, 0, 0}, {x, 0, 64}, {x, 64, 0}}}));
+  const auto after = map.vmfScene()->serialize(map.worldNode());
+  const auto afterPositions = filePositions(map);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+  REQUIRE(map.canRedoCommand());
+  const auto redoName = map.redoCommandName();
+  const auto selected = map.selection().nodes;
+  const auto count = map.modificationCount();
+  const auto positions = filePositions(map);
+  const auto undoName = map.undoCommandName();
+  auto* owner = node->parent();
+  REQUIRE(owner);
+  if (refuseRedo)
+  {
+    owner->setVisibilityState(VisibilityState::Hidden);
+  }
+  map.redoCommand();
+  if (refuseRedo)
+  {
+    CHECK(node->brush().bounds() == beforeBounds);
+    CHECK(map.modificationCount() == count);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.undoCommandName() == undoName);
+    REQUIRE(map.canRedoCommand());
+    CHECK(map.redoCommandName() == redoName);
+    CHECK(map.selection().nodes == selected);
+    map.redoCommand();
+    REQUIRE(map.canRedoCommand());
+    CHECK(node->brush().bounds() == beforeBounds);
+    CHECK(map.modificationCount() == count);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.undoCommandName() == undoName);
+    CHECK(map.redoCommandName() == redoName);
+    owner->setVisibilityState(VisibilityState::Inherited);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == after);
+    CHECK(filePositions(map) == afterPositions);
+    CHECK(map.modificationCount() == count + 1);
+    CHECK(node->brush().bounds().max.x() == x);
+    CHECK_NOTHROW(
+      VmfScene::read(map.vmfScene()->serialize(map.worldNode()), map.worldBounds()));
+  }
+  else
+  {
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == after);
+    CHECK(node->brush().bounds().max.x() == x);
+  }
 }
 
 } // namespace tb::mdl

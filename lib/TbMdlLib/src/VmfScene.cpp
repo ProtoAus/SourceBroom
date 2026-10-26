@@ -805,6 +805,7 @@ VmfScene VmfScene::readImpl(
       load(load, root, *scene.m_world->defaultLayer(), false);
     }
   }
+  scene.m_activeWorld = scene.m_world.get();
   scene.m_original.reset(
     static_cast<WorldNode*>(scene.m_world->cloneRecursively(bounds)));
   try
@@ -1006,6 +1007,8 @@ void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool dup
     size_t binding;
   };
   auto additions = std::map<size_t, GeneratedBinding>{};
+  auto states = m_clipStates;
+  auto memberships = m_sideStateMemberships;
   auto assignments = std::vector<Assignment>{};
   auto binding = m_nextBinding;
   auto objectId = m_nextObjectId;
@@ -1036,20 +1039,33 @@ void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool dup
     assignments.push_back({&node, nullptr, allocated});
     if (const auto* brush = dynamic_cast<const BrushNode*>(&node))
     {
-      additions.at(allocated).sideCount = brush->brush().faceCount();
+      if (duplication)
+      {
+        validateSideState(*brush);
+      }
+      auto sides = std::set<size_t>{};
       for (const auto& face : brush->brush().faces())
       {
         const auto originalSide =
           duplication ? prototype(face.lineNumber()) : std::nullopt;
         if (
-          source
-          && (!originalSide || m_document.entries()[*originalSide].parent != source))
+          originalSide
+          && (!source || m_document.entries()[*originalSide].parent != source))
         {
-          refuse(*source, "duplicate side provenance does not belong to native solid");
+          refuse(
+            source.value_or(0),
+            "duplicate side provenance does not belong to native solid");
         }
         const auto side = allocate(GeneratedKind::Side, originalSide, allocated);
+        sides.insert(side);
         assignments.push_back({nullptr, &face, side});
       }
+      if (sides.size() > 1'000'000 - memberships)
+      {
+        refuse(0, "native admitted side-state budget exhausted");
+      }
+      memberships += sides.size();
+      states[allocated].push_back(std::move(sides));
     }
     for (auto* child : node.children())
     {
@@ -1063,6 +1079,8 @@ void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool dup
   // All fallible validation/allocation precedes identity publication. Detached
   // command-owned nodes keep these bindings when undo/redo parks/restores them.
   m_generated.merge(additions);
+  m_clipStates.swap(states);
+  m_sideStateMemberships = memberships;
   m_nextBinding = binding;
   m_nextObjectId = std::move(objectId);
   m_nextSideId = std::move(sideId);
@@ -1186,6 +1204,164 @@ bool sameClipFaceData(const BrushFace& a, const BrushFace& b)
 }
 } // namespace
 
+void VmfScene::validateSideState(const BrushNode& node) const
+{
+  const auto binding = node.lineNumber();
+  const auto source = prototype(binding);
+  const auto generated = m_generated.find(binding);
+  if (generated != m_generated.end() && generated->second.kind != GeneratedKind::Solid)
+  {
+    refuse(0, "native solid kind mismatch");
+  }
+  const auto bindings = sideBindings(node.brush());
+  auto prototypes = std::set<VmfEntryId>{};
+  for (const auto& face : node.brush().faces())
+  {
+    const auto record = m_generated.find(face.lineNumber());
+    const auto side = prototype(face.lineNumber());
+    if (record != m_generated.end())
+    {
+      if (
+        record->second.kind != GeneratedKind::Side || record->second.owner != binding
+        || face.sourceDisplacement())
+      {
+        refuse(0, "foreign generated side owner/kind or displacement");
+      }
+    }
+    else if (generated != m_generated.end() || !side)
+    {
+      refuse(0, "generated solid acquired unregistered side");
+    }
+    if (side && (!source || m_document.entries()[*side].parent != source
+                 || key(m_document, *side) != "side" || !prototypes.insert(*side).second))
+    {
+      refuse(0, "side prototype does not uniquely belong to native solid");
+    }
+  }
+  if (
+    const auto states = m_clipStates.find(binding);
+    states != m_clipStates.end()
+    && std::ranges::find(states->second, bindings) != states->second.end())
+  {
+    return;
+  }
+  if (generated == m_generated.end() && source)
+  {
+    auto baseline = std::set<size_t>{};
+    for (const auto child : m_document.entries()[*source].children)
+    {
+      if (m_document.entries()[child].isBlock() && key(m_document, child) == "side")
+      {
+        baseline.insert(child + 1);
+      }
+    }
+    if (bindings == baseline)
+    {
+      return;
+    }
+  }
+  refuse(0, "unregistered native brush side set");
+}
+
+void VmfScene::validateClipOwner(const BrushNode& node, const bool clipping) const
+{
+  const Node* owner = node.parent();
+  const auto* entity = dynamic_cast<const EntityNode*>(owner);
+  if (entity)
+  {
+    const auto record = m_generated.find(entity->lineNumber());
+    const auto source = prototype(entity->lineNumber());
+    if (
+      (record != m_generated.end() && record->second.kind != GeneratedKind::Entity)
+      || (source && (key(m_document, *source) != "entity" || opaque(m_document, *source)))
+      || unsafeClass(entity->entity().classname())
+      || entity->visibilityState() != VisibilityState::Inherited)
+    {
+      refuse(0, "unsupported native clip entity owner");
+    }
+    if (record == m_generated.end())
+    {
+      auto original = NodeMap{};
+      collect(*m_original, original);
+      const auto found = original.find(entity->lineNumber());
+      if (
+        found == original.end() || !dynamic_cast<const EntityNode*>(found->second)
+        || found->second->childCount() == 0)
+      {
+        refuse(0, "point or unprojected entity cannot acquire clip ownership");
+      }
+    }
+    if (!source)
+    {
+      validateFreshData(*entity);
+    }
+    owner = entity->parent();
+  }
+  const auto* layer = dynamic_cast<const LayerNode*>(owner);
+  const auto* world = layer ? dynamic_cast<const WorldNode*>(layer->parent()) : nullptr;
+  if (
+    !world || world != m_activeWorld || world->lineNumber() != m_original->lineNumber()
+    || layer != world->defaultLayer()
+    || layer->visibilityState() != VisibilityState::Inherited || !node.visible()
+    || node.visibilityState() != VisibilityState::Inherited)
+  {
+    refuse(0, "native clip requires live visible ordinary ownership");
+  }
+  auto live = NodeMap{};
+  collect(*world, live);
+  if (!live.contains(node.lineNumber()) || live.at(node.lineNumber()) != &node)
+  {
+    refuse(0, "native clip target is not a unique live solid");
+  }
+  const auto source = prototype(node.lineNumber());
+  if (source && (key(m_document, *source) != "solid" || opaque(m_document, *source)))
+  {
+    refuse(*source, "opaque/displacement source prevents native clipping");
+  }
+  if (source)
+  {
+    for (auto parent = m_document.entries()[*source].parent; parent;
+         parent = m_document.entries()[*parent].parent)
+    {
+      if (key(m_document, *parent) == "entity" && opaque(m_document, *parent))
+      {
+        refuse(*parent, "opaque source owner prevents native clipping");
+      }
+    }
+  }
+  if (!m_generated.contains(node.lineNumber()))
+  {
+    auto original = NodeMap{};
+    collect(*m_original, original);
+    const auto found = original.find(node.lineNumber());
+    if (found == original.end())
+    {
+      refuse(0, "native clip solid is not projected");
+    }
+    if (parentBinding(*found->second) != parentBinding(node))
+    {
+      if (!entity)
+      {
+        refuse(0, "native clip owner provenance changed");
+      }
+      validateReparent(*entity, {const_cast<BrushNode*>(&node)});
+    }
+  }
+  const auto states = m_clipStates.find(node.lineNumber());
+  if (clipping || (states != m_clipStates.end() && states->second.size() > 1))
+  {
+    checkGeometryReferences(source.value_or(0));
+  }
+  for (const auto& face : node.brush().faces())
+  {
+    if (face.sourceDisplacement())
+    {
+      refuse(0, "native displacement clipping unsupported");
+    }
+  }
+  validateSideState(node);
+}
+
 void VmfScene::registerClips(
   std::vector<std::pair<Node*, NodeContents>>& nodes, const vm::bbox3d& worldBounds)
 {
@@ -1197,6 +1373,7 @@ void VmfScene::registerClips(
   }
   auto generated = m_generated;
   auto states = m_clipStates;
+  auto memberships = m_sideStateMemberships;
   auto binding = m_nextBinding;
   auto sideId = m_nextSideId;
   auto idBytes = m_generatedIdBytes;
@@ -1210,23 +1387,12 @@ void VmfScene::registerClips(
     }
     const auto* before = dynamic_cast<const BrushNode*>(node);
     const auto* after = std::get_if<Brush>(&contents.get());
-    const auto source = prototype(node->lineNumber());
-    const auto* layer = dynamic_cast<const LayerNode*>(node->parent());
-    const auto* world = layer ? dynamic_cast<const WorldNode*>(layer->parent()) : nullptr;
-    if (
-      !seen.insert(node).second || !before || !after || !source
-      || m_generated.contains(node->lineNumber()) || !world
-      || layer != world->defaultLayer() || !node->visible()
-      || node->visibilityState() != VisibilityState::Inherited
-      || m_document.entries()[*source].parent != prototype(world->lineNumber()))
+    if (!seen.insert(node).second || !before || !after)
     {
-      refuse(0, "native clipping requires a loaded visible ordinary world solid");
+      refuse(0, "invalid or repeated native clip target");
     }
-    if (opaque(m_document, *source))
-    {
-      refuse(*source, "opaque/displacement attachment prevents native clipping");
-    }
-    checkGeometryReferences(*source);
+    validateClipOwner(*before);
+    const auto source = prototype(node->lineNumber()).value_or(0);
     validateContents(*node, NodeContents{before->brush()}, worldBounds);
     const auto oldSides = sideBindings(before->brush());
     auto newSides = std::set<size_t>{};
@@ -1235,20 +1401,20 @@ void VmfScene::registerClips(
     {
       if (face.sourceDisplacement())
       {
-        refuse(*source, "displacement brush clipping unsupported");
+        refuse(source, "displacement brush clipping unsupported");
       }
     }
     for (const auto& face : after->faces())
     {
       if (face.sourceDisplacement())
       {
-        refuse(*source, "displacement brush clipping unsupported");
+        refuse(source, "displacement brush clipping unsupported");
       }
       if (!face.lineNumber())
       {
         if (cut)
         {
-          refuse(*source, "native clip requires exactly one new cut face");
+          refuse(source, "native clip requires exactly one new cut face");
         }
         cut = &face;
       }
@@ -1256,12 +1422,12 @@ void VmfScene::registerClips(
         !oldSides.contains(face.lineNumber())
         || !newSides.insert(face.lineNumber()).second)
       {
-        refuse(*source, "foreign or duplicate clip survivor");
+        refuse(source, "foreign or duplicate clip survivor");
       }
     }
     if (!cut || !after->closed() || !after->fullySpecified())
     {
-      refuse(*source, "empty or no-op native clip");
+      refuse(source, "empty or no-op native clip");
     }
     if (
       binding == std::numeric_limits<size_t>::max() || generated.size() >= 1'000'000
@@ -1277,7 +1443,7 @@ void VmfScene::registerClips(
       !expected.clip(worldBounds, *cut).is_success()
       || expected.faceCount() != after->faceCount())
     {
-      refuse(*source, "candidate is not an ordinary one-plane clip");
+      refuse(source, "candidate is not an ordinary one-plane clip");
     }
     for (const auto& face : expected.faces())
     {
@@ -1286,7 +1452,7 @@ void VmfScene::registerClips(
       });
       if (found == after->faces().end() || !sameClipFaceData(face, *found))
       {
-        refuse(*source, "clip changed surviving face provenance or data");
+        refuse(source, "clip changed surviving face provenance or data");
       }
     }
     auto oldVertices = before->brush().vertexPositions();
@@ -1295,7 +1461,7 @@ void VmfScene::registerClips(
     std::sort(newVertices.begin(), newVertices.end());
     if (oldVertices == newVertices)
     {
-      refuse(*source, "no-op native clip");
+      refuse(source, "no-op native clip");
     }
     const auto allocated = binding++;
     generated.emplace(
@@ -1304,12 +1470,22 @@ void VmfScene::registerClips(
     idBytes += sideId.size();
     sideId = incrementId(sideId);
     newSides.insert(allocated);
-    states[node->lineNumber()].push_back(std::move(newSides));
+    auto& admitted = states[node->lineNumber()];
+    if (std::ranges::find(admitted, newSides) == admitted.end())
+    {
+      if (newSides.size() > 1'000'000 - memberships)
+      {
+        refuse(0, "native admitted side-state budget exhausted");
+      }
+      memberships += newSides.size();
+      admitted.push_back(std::move(newSides));
+    }
     assignments.emplace_back(cut, allocated);
   }
   // No live node, identity counter or command-owned contents change on failure.
   m_generated.swap(generated);
   m_clipStates.swap(states);
+  m_sideStateMemberships = memberships;
   m_nextBinding = binding;
   m_nextSideId.swap(sideId);
   m_generatedIdBytes = idBytes;
@@ -1330,14 +1506,32 @@ void VmfScene::validateContents(
       refuse(0, "generic content edits cannot change native side identities");
     }
   }
-  validateClipContents(node, contents, worldBounds);
+  validateContentsImpl(node, contents, worldBounds);
 }
 
 void VmfScene::validateClipContents(
   const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const
 {
   requireEditing();
+  if (const auto* brush = dynamic_cast<const BrushNode*>(&node))
+  {
+    validateClipOwner(*brush);
+  }
+  validateContentsImpl(node, contents, worldBounds);
+}
+
+void VmfScene::validateContentsImpl(
+  const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const
+{
+  requireEditing();
   requireEditableVersion(m_document);
+  if (
+    const auto* brush = dynamic_cast<const BrushNode*>(&node);
+    brush
+    && (m_generated.contains(node.lineNumber()) || m_clipStates.contains(node.lineNumber())))
+  {
+    validateClipOwner(*brush, false);
+  }
   auto copy = std::unique_ptr<Node>{node.clone(worldBounds)};
   if (const auto* entity = std::get_if<Entity>(&contents.get()))
   {
@@ -1560,24 +1754,21 @@ void VmfScene::nodeEdits(
     }
     const auto& b = bb->brush();
     const auto& a = ba->brush();
+    validateSideState(*ba);
     const auto bindings = sideBindings(a);
     const auto originalBindings = sideBindings(b);
-    const auto generatedSolid = m_generated.contains(after->lineNumber());
-    if (generatedSolid && b.faceCount() != a.faceCount())
+    auto templateBindings = std::set<size_t>{};
+    for (const auto& face : a.faces())
     {
-      refuse(id, "generated brush topology changed");
+      if (const auto side = prototype(face.lineNumber()))
+      {
+        templateBindings.insert(*side + 1);
+      }
     }
-    const auto topologyChanged = !generatedSolid && bindings != originalBindings;
+    const auto topologyChanged =
+      templateBindings != originalBindings || templateBindings.size() != bindings.size();
     if (topologyChanged)
     {
-      const auto admitted = m_clipStates.find(after->lineNumber());
-      if (
-        admitted == m_clipStates.end()
-        || std::ranges::find(admitted->second, bindings) == admitted->second.end()
-        || m_generated.contains(after->lineNumber()))
-      {
-        refuse(id, "unregistered native brush topology");
-      }
       if (opaque(d, id))
       {
         refuse(id, "opaque/displacement attachment prevents native clipping");
@@ -1596,26 +1787,12 @@ void VmfScene::nodeEdits(
     for (const auto& f : a.faces())
     {
       const auto source = prototype(f.lineNumber());
-      const auto generatedNode = m_generated.find(after->lineNumber());
       const auto generatedSide = m_generated.find(f.lineNumber());
-      if (generatedNode != m_generated.end())
+      if (!source && generatedSide != m_generated.end())
       {
-        if (
-          generatedSide == m_generated.end()
-          || generatedSide->second.kind != GeneratedKind::Side
-          || generatedSide->second.owner != after->lineNumber())
+        if (f.sourceDisplacement())
         {
-          refuse(id, "foreign generated side identity");
-        }
-      }
-      else if (generatedSide != m_generated.end())
-      {
-        if (
-          !topologyChanged || generatedSide->second.kind != GeneratedKind::Side
-          || generatedSide->second.owner != after->lineNumber()
-          || generatedSide->second.prototype || f.sourceDisplacement())
-        {
-          refuse(id, "foreign generated cut side identity");
+          refuse(id, "generated displacement side unsupported");
         }
         const auto text = freshSideText(f, generatedSide->second.nativeId);
         static_cast<void>(VmfDocument::parse(text));
@@ -1807,7 +1984,13 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
     }
     if (record != m_generated.end())
     {
-      refuse(0, "existing native solid acquired generated side identity");
+      if (
+        record->second.kind != GeneratedKind::Side
+        || record->second.owner != node.lineNumber() || record->second.prototype)
+      {
+        refuse(0, "foreign generated cut side identity");
+      }
+      return record->second.nativeId;
     }
     const auto side = prototype(face.lineNumber());
     if (!side || !source || d.entries()[*side].parent != source)
@@ -1834,12 +2017,7 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
     else
     {
       validateFreshData(node);
-      if (
-        generated == m_generated.end()
-        || brush->brush().faceCount() != generated->second.sideCount)
-      {
-        refuse(0, "fresh native brush topology changed");
-      }
+      validateSideState(*brush);
       auto sides = std::set<size_t>{};
       result = "solid\n{\n\"id\" " + quote(nativeId(node)) + "\n";
       for (const auto& face : brush->brush().faces())
@@ -1912,11 +2090,10 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
       if (generated != m_generated.end())
       {
         const auto side = prototype(face.lineNumber());
-        if (!side || d.entries()[*side].parent != source)
+        if (side)
         {
-          refuse(*source, "generated side lost its native template");
+          values.push_back({*property(d, *side, "id"), quote(id)});
         }
-        values.push_back({*property(d, *side, "id"), quote(id)});
       }
     }
   }
@@ -1944,6 +2121,15 @@ std::string VmfScene::serialize(const WorldNode& world) const
          != m_original->defaultLayer()->visibilityState())
   {
     refuse(0, "native world/layer structure changed");
+  }
+  for (const auto& [binding, node] : current)
+  {
+    if (
+      const auto* brush = dynamic_cast<const BrushNode*>(node);
+      brush && (m_generated.contains(binding) || m_clipStates.contains(binding)))
+    {
+      validateClipOwner(*brush, false);
+    }
   }
   auto edits = std::vector<VmfValueEdit>{};
   auto structural = std::vector<VmfStructuralEdit>{};

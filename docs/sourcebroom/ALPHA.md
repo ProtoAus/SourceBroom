@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.12 native one-output clip candidate
+# Try the Windows SourceBroom A5.13 ordinary native clipping candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,28 +20,32 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.12: clip an ordinary native world brush without replacing it
+## A5.13: clip fresh, duplicated and plain brush-entity solids natively
 
-On a **copy** of an editable VMF, select one loaded, visible, ordinary world brush
-(no displacement or brush entity). Use the normal clipping tool with **Front** or
-**Back**, undo/redo and Save As a new VMF. The original solid ID and surviving
-native side subtrees stay native; retired sides are removed surgically and the
-new cut side gets a stable ID at command admission, not on saving. Its material/
-UV attributes match the same nearest-normal original face as the preview.
-Repeated clip, undo/redo, deterministic saves and independent reopen have acted
-model/tool controls. Whole invalid batches refuse before live geometry changes.
+In a new editable map or **copy** of a VMF, draw a small ordinary closed brush.
+Use the normal clipping tool with **Front** or **Back**, undo/redo and Save As a
+new VMF. Fresh/template and duplicated brushes now work before their first save,
+world-owned or in a supported plain brush entity such as `func_detail`. Loaded
+world brushes from A5.12 still work. The solid ID and surviving native side
+subtrees remain; retired sides are removed surgically and a new cut side gets a
+stable ID at command admission, not on saving. Cut material/UVs match preview.
 
-This first slice intentionally does **not** clip generated/duplicated solids or
-brush entities, keep **BOTH** halves, touch displacement topology or bypass hidden/
-opaque/global-reference ambiguity. BOTH remains preview-only/nonexecutable in a
-native document. Do not route refusals through MAP export or overwrite an original
-as an experiment. Those remaining ordinary ownership/split branches are next work,
-not a claim of full Source topology support.
+Live parent/owner and visibility are checked before mutation; invalid whole
+batches refuse. A certified registered-clip pre-swap redo refusal can retain the
+same command for retry without issuing another cut ID. This does not change
+other failed redo/undo/transaction policies. Safe notification-lifetime controls
+also cover history-clearing/new-edit observers and exception unwind.
 
-**Quick owner check:** clip one copied, loaded plain world brush with Front/Back,
-undo/redo and Save As, then compare shape and cut material/UVs in matching Hammer++.
-That human check is pending; automated geometry/data controls are not a visual
-or universal SDK acceptance. Keep A5.11 as unmerged recovery.
+**BOTH** halves remain preview-only/nonexecutable in native documents. Displacement
+topology, hidden/opaque/global-reference ambiguity and arbitrary CSG remain gated.
+Do not route refusals through MAP export or overwrite an original as an experiment.
+This is ordinary one-output clipping, not complete Source topology support.
+
+**Quick owner check:** draw and duplicate one plain brush, Front/Back clip one,
+undo/redo and Save As. Compare shape and cut material/UVs in matching Hammer++.
+Optionally repeat within a plain `func_detail`. Human acceptance is pending;
+automated geometry/data controls are not visual or universal SDK acceptance.
+Keep the whole A5.12 kit as unmerged recovery.
 
 ## Retained A5.11: uniformly scale terrain and preview static bodygroups
 
@@ -323,7 +327,7 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 
 - Basic plain-brush/point-entity creation, duplication, deletion and limited
   brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
-  CSG/clipping, native editor-group/layer authoring, displacement creation/sculpt/
+  BOTH-halves/other CSG, native editor-group/layer authoring, displacement creation/sculpt/
   power/sew, native nonuniform scale/shear/flip, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
   some upstream controls can remain visible and save guards stay authoritative.
 - Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
@@ -334,9 +338,11 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Full **191 model** and **49 App/tool** entries pass; existing **21 graphics**
-  evidence remains valid for unchanged graphics code. Native ordinary clip focus
-  **4/4** plus retained/native ClipTool **3/3** pass. A real changed-bounds cut
+- Full **194 model** and **49 App/tool** entries pass; existing **21 graphics**
+  evidence remains valid for unchanged graphics code. Core/native ordinary clip
+  focus **8/8** plus retained/native ClipTool **3/3** pass. Certified same-command
+  redo controls and safe lifetime red15-to-green controls act; focused follow-up
+  static review found no remaining lifetime-scope blockers. A real changed-bounds cut
   reproduced two preview material/UV failures, then both and Front/Back attributes
   passed after the fix. Actual app/checker/UI callers rebuilt with zero new warnings.
   Uniform-scale/save-path
@@ -350,7 +356,7 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   targeted passes are not an all-UI-green or manual/Hammer acceptance claim. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep prior A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
+  Keep prior A5.12/A5.11/A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

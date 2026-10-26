@@ -32,6 +32,7 @@
 
 #include <memory>
 #include <ostream>
+#include <stdexcept>
 #include <thread>
 #include <variant>
 
@@ -148,6 +149,7 @@ auto makeTransactionObserver(const auto type, auto& notifications)
 struct DoPerformDo
 {
   bool returnSuccess;
+  bool retryableFailure = false;
 };
 struct DoPerformUndo
 {
@@ -161,18 +163,40 @@ struct DoCollateWith
 
 using TestCommandCall = std::variant<DoPerformDo, DoPerformUndo, DoCollateWith>;
 
+struct TestCommandLifetime
+{
+  bool alive = true;
+  size_t destructions = 0;
+};
+
 class TestCommand : public UndoableCommand
 {
 private:
   mutable std::vector<TestCommandCall> m_expectedCalls;
+  bool m_retryableFailure = false;
+  std::shared_ptr<TestCommandLifetime> m_lifetime;
 
 public:
-  explicit TestCommand(std::string name, const bool updateModificationCount)
+  explicit TestCommand(
+    std::string name,
+    const bool updateModificationCount,
+    std::shared_ptr<TestCommandLifetime> lifetime = {})
     : UndoableCommand{std::move(name), updateModificationCount}
+    , m_lifetime{std::move(lifetime)}
   {
   }
 
-  ~TestCommand() override { CHECK(m_expectedCalls.empty()); }
+  ~TestCommand() override
+  {
+    if (m_lifetime)
+    {
+      m_lifetime->alive = false;
+      ++m_lifetime->destructions;
+    }
+    CHECK(m_expectedCalls.empty());
+  }
+
+  bool canRetryFailedRedo() const override { return m_retryableFailure; }
 
 private:
   template <class T>
@@ -187,6 +211,7 @@ private:
   bool doPerformDo(Map&) override
   {
     const auto expectedCall = popCall<DoPerformDo>();
+    m_retryableFailure = !expectedCall.returnSuccess && expectedCall.retryableFailure;
     return expectedCall.returnSuccess;
   }
 
@@ -212,9 +237,9 @@ public:
    * Sets an expectation that doPerformDo() should be called.
    * When called, it will return the given `returnSuccess` value.
    */
-  void expectDo(const bool returnSuccess)
+  void expectDo(const bool returnSuccess, const bool retryableFailure = false)
   {
-    m_expectedCalls.emplace_back(DoPerformDo{returnSuccess});
+    m_expectedCalls.emplace_back(DoPerformDo{returnSuccess, retryableFailure});
   }
 
   /**
@@ -330,6 +355,197 @@ TEST_CASE("CommandProcessor")
         CN{CN::Type::Undone, commandPtr},
         TN{TN::Type::Undone, commandName, K(isObservable), !K(isModification)},
       });
+  }
+
+  SECTION("failed redo without certification keeps existing disposal")
+  {
+    const auto baseline = map.modificationCount();
+    auto base = NullCommand{"default certification"};
+    CHECK_FALSE(base.canRetryFailedRedo());
+    auto command = std::make_unique<TestCommand>("default failed redo", true);
+    auto* ptr = command.get();
+    ptr->expectDo(true);
+    REQUIRE(commandProcessor.executeAndStore(std::move(command)));
+    ptr->expectUndo(true);
+    REQUIRE(commandProcessor.undo());
+    notifications.clear();
+    ptr->expectDo(false);
+    CHECK_FALSE(commandProcessor.redo());
+    CHECK_FALSE(commandProcessor.canRedo());
+    CHECK_FALSE(commandProcessor.canUndo());
+    CHECK(map.modificationCount() == baseline);
+    CHECK(
+      getNotifications()
+      == std::vector<Notification>{CN{CN::Type::Do, ptr}, CN{CN::Type::DoFailed, ptr}});
+  }
+
+  SECTION("certified failed redo is restored before observers and retries once")
+  {
+    const auto baseline = map.modificationCount();
+    const auto name = std::string{"certified failed redo"};
+    auto command = std::make_unique<TestCommand>(name, true);
+    auto* ptr = command.get();
+    ptr->expectDo(true);
+    REQUIRE(commandProcessor.executeAndStore(std::move(command)));
+    ptr->expectUndo(true);
+    REQUIRE(commandProcessor.undo());
+    notifications.clear();
+    auto failureObserver = NotifierConnection{};
+    failureObserver +=
+      commandProcessor.commandDoFailedNotifier.connect([&](Command& refused) {
+        CHECK(&refused == ptr);
+        REQUIRE(commandProcessor.canRedo());
+        CHECK(*commandProcessor.redoCommandName() == name);
+        CHECK(refused.state() == Command::CommandState::Default);
+        CHECK(map.modificationCount() == baseline);
+      });
+    for (auto i = 0; i < 2; ++i)
+    {
+      ptr->expectDo(false, true);
+      CHECK_FALSE(commandProcessor.redo());
+      REQUIRE(commandProcessor.canRedo());
+      CHECK_FALSE(commandProcessor.canUndo());
+      CHECK(map.modificationCount() == baseline);
+      CHECK(
+        getNotifications()
+        == std::vector<Notification>{CN{CN::Type::Do, ptr}, CN{CN::Type::DoFailed, ptr}});
+    }
+    ptr->expectDo(true);
+    REQUIRE(commandProcessor.redo());
+    CHECK_FALSE(commandProcessor.canRedo());
+    CHECK(commandProcessor.canUndo());
+    CHECK(map.modificationCount() == baseline + 1);
+    CHECK(
+      getNotifications()
+      == std::vector<Notification>{
+        CN{CN::Type::Do, ptr},
+        CN{CN::Type::Done, ptr},
+        TN{TN::Type::Done, name, true, true}});
+  }
+
+  SECTION("certified redo notification keeps the cleared command alive")
+  {
+    const auto action = GENERATE(
+      std::string{"clear"}, std::string{"execute"}, std::string{"executeAndStore"});
+    const auto throwObserver = GENERATE(false, true);
+    CAPTURE(action, throwObserver);
+    const auto lifetime = std::make_shared<TestCommandLifetime>();
+    const auto name = std::string{"notification lifetime"};
+    auto command = std::make_unique<TestCommand>(name, false, lifetime);
+    auto* ptr = command.get();
+    ptr->expectDo(true);
+    REQUIRE(commandProcessor.executeAndStore(std::move(command)));
+    ptr->expectUndo(true);
+    REQUIRE(commandProcessor.undo());
+    ptr->expectDo(false, true);
+    auto followingObservers = size_t{0};
+    auto failureObservers = NotifierConnection{};
+    failureObservers +=
+      commandProcessor.commandDoFailedNotifier.connect([&](Command& refused) {
+        CHECK(&refused == ptr);
+        CHECK(commandProcessor.canRedo());
+        CHECK_FALSE(commandProcessor.redo());
+        CHECK(commandProcessor.canRedo());
+        CHECK(lifetime->alive);
+        if (action == "clear")
+        {
+          commandProcessor.clear();
+        }
+        else if (action == "execute")
+        {
+          CHECK(commandProcessor.execute(std::make_unique<NullCommand>("nested edit")));
+        }
+        else
+        {
+          CHECK(commandProcessor.executeAndStore(
+            std::make_unique<NullCommand>("nested stored edit")));
+        }
+        // Never dereference refused after a potentially destructive history edit.
+        CHECK(lifetime->alive);
+        CHECK(lifetime->destructions == 0);
+        CHECK_FALSE(commandProcessor.redo());
+        if (throwObserver)
+        {
+          throw std::runtime_error{"failure observer aborted"};
+        }
+      });
+    failureObservers +=
+      commandProcessor.commandDoFailedNotifier.connect([&](Command& refused) {
+        ++followingObservers;
+        CHECK(lifetime->alive);
+        if (lifetime->alive)
+        {
+          CHECK(refused.name() == name);
+        }
+      });
+    if (throwObserver)
+    {
+      CHECK_THROWS_AS(commandProcessor.redo(), std::runtime_error);
+    }
+    else
+    {
+      CHECK_FALSE(commandProcessor.redo());
+    }
+    CHECK(followingObservers == (throwObserver ? 0u : 1u));
+    CHECK_FALSE(lifetime->alive);
+    CHECK(lifetime->destructions == 1);
+    CHECK_FALSE(commandProcessor.canRedo());
+    CHECK(commandProcessor.canUndo() == (action == "executeAndStore"));
+    commandProcessor.clear();
+    CHECK(lifetime->destructions == 1);
+  }
+
+  SECTION("throwing retry observer unwinds its guard without clearing redo")
+  {
+    const auto lifetime = std::make_shared<TestCommandLifetime>();
+    auto command =
+      std::make_unique<TestCommand>("unwind retained retry", false, lifetime);
+    auto* ptr = command.get();
+    ptr->expectDo(true);
+    REQUIRE(commandProcessor.executeAndStore(std::move(command)));
+    ptr->expectUndo(true);
+    REQUIRE(commandProcessor.undo());
+    ptr->expectDo(false, true);
+    {
+      auto failureObserver = NotifierConnection{};
+      failureObserver += commandProcessor.commandDoFailedNotifier.connect([&](Command&) {
+        CHECK(commandProcessor.canRedo());
+        CHECK_FALSE(commandProcessor.redo());
+        throw std::runtime_error{"retained failure observer aborted"};
+      });
+      CHECK_THROWS_AS(commandProcessor.redo(), std::runtime_error);
+    }
+    CHECK(lifetime->alive);
+    CHECK(lifetime->destructions == 0);
+    REQUIRE(commandProcessor.canRedo());
+    ptr->expectDo(true);
+    REQUIRE(commandProcessor.redo());
+    CHECK_FALSE(commandProcessor.canRedo());
+    CHECK(commandProcessor.canUndo());
+    commandProcessor.clear();
+    CHECK_FALSE(lifetime->alive);
+    CHECK(lifetime->destructions == 1);
+  }
+
+  SECTION("redo refusal certification must describe the latest failed attempt")
+  {
+    auto command = std::make_unique<TestCommand>("latest refusal only", false);
+    auto* ptr = command.get();
+    ptr->expectDo(true);
+    REQUIRE(commandProcessor.executeAndStore(std::move(command)));
+    ptr->expectUndo(true);
+    REQUIRE(commandProcessor.undo());
+    ptr->expectDo(false, true);
+    CHECK_FALSE(commandProcessor.redo());
+    REQUIRE(commandProcessor.canRedo());
+    notifications.clear();
+    ptr->expectDo(false);
+    CHECK_FALSE(commandProcessor.redo());
+    CHECK_FALSE(commandProcessor.canRedo());
+    CHECK_FALSE(commandProcessor.canUndo());
+    CHECK(
+      getNotifications()
+      == std::vector<Notification>{CN{CN::Type::Do, ptr}, CN{CN::Type::DoFailed, ptr}});
   }
 
   SECTION("doSuccessfulCommandAndFailAtUndo")

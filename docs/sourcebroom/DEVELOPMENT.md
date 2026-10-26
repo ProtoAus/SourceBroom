@@ -21,13 +21,16 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Native ordinary one-output clipping — development after A5.11
+## Native ordinary one-output clipping — A5.12/A5.13
 
 `mdl::clipBrushes` uses actual BrushFace/Brush clipping and one in-place
 SwapNodeContents command; native ClipTool must not use the upstream delete/add
-replacement path. Only loaded, visible, direct world-owned plain brushes admit
-this first slice. Generated/template solids, brush entities, BOTH halves,
-displacements, hidden and opaque/reference ambiguity remain refused.
+replacement path. A5.13 also admits visible fresh/template and duplicated plain
+brushes, world-owned or within supported plain brush entities, before first save.
+Validate the live parent/owner and visibility, not only parsed source ownership.
+BOTH halves, displacements, hidden and opaque/reference ambiguity remain refused.
+Generated admission must retain exact accepted states, not use guessed plane
+matches or make generic swaps an arbitrary-topology route.
 
 Explicit clip admission stages an entire batch's identities, counters/budgets and
 exact allowed side sets before publication. Reproduce Brush::clip to validate
@@ -56,6 +59,28 @@ controls append siblings and invalidate a helper's two-display-child assumption.
 Do not weaken the helper/production guard to hide that oracle error. Native clip
 model4/App3 focuses, fullModel191/App49 and actual app/checker/UI rebuild pass;
 known untouched preference failure and manual/Hammer checks remain separate.
+
+A5.13 ownership/current-state controls extend that evidence to fullModel194/App49
+and core/native8+AppClipTool3. Actual app/checker/UI callers rebuild0 without new
+warnings. A real hidden-owner redo control first reproduced two lost-history
+failures. Only registered native clip pre-swap validation refusal certifies retry;
+reset certification before every performDo, including read-only early exits.
+Initial/post-swap/linked-group failures and transactions never inherit permission.
+Repairing the owner then retries the SAME parked command/cut bytes/IDs, not a new
+clip. Generic failed redo/undo disposal remains unchanged.
+
+Before DoFailed observers, restoring sole ownership to the redo vector is unsafe:
+a valid observer can clear history or execute a new edit while other observers
+still borrow Command&. Independent review identified this; safe alive/destructor
+markers reproduced15 failures without reading freed memory. A scoped local
+unique_ptr now defers destruction when any of the three redo-clearing paths removes
+that protected command. Existing kdl::set_temp guards reset borrowed pointers
+before local destruction, including exception unwind. Visible history clears
+immediately and never resurrects; recursive redo during this scope returns false.
+Normal/throwing clear, execute/store, later observers, exactly-one destruction and
+throw-without-clear followed by successful redo all pass. Independent follow-up
+static review found no remaining blockers in this lifetime scope. This is not
+whole-Source, compiler, packaging or owner/Hammer acceptance.
 
 ## Build
 

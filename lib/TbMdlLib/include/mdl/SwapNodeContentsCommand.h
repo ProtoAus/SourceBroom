@@ -36,6 +36,7 @@ protected:
   std::vector<std::pair<Node*, NodeContents>> m_nodes;
   bool m_nativeClip = false;
   bool m_clipRegistered = false;
+  bool m_retryableClipRefusal = false;
 
 public:
   SwapNodeContentsCommand(
@@ -43,6 +44,9 @@ public:
     std::vector<std::pair<Node*, NodeContents>> nodes,
     bool nativeClip = false);
   ~SwapNodeContentsCommand() override;
+
+  bool performDo(Map& map) override;
+  bool canRetryFailedRedo() const override;
 
   bool doPerformDo(Map& map) override;
   bool doPerformUndo(Map& map) override;

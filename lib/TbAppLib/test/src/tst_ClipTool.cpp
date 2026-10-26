@@ -27,10 +27,13 @@
 #include "mdl/BrushNode.h"
 #include "mdl/CatchConfig.h"
 #include "mdl/EditorContext.h"
+#include "mdl/EntityDefinition.h"
 #include "mdl/EntityNode.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
+#include "mdl/Map_Brushes.h"
 #include "mdl/Map_CopyPaste.h"
+#include "mdl/Map_Entities.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/PasteType.h"
@@ -344,6 +347,8 @@ TEST_CASE("ClipTool")
 TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
 {
   const auto preview = GENERATE(false, true);
+  const auto ownership = GENERATE(0, 1, 2, 3);
+  CAPTURE(ownership);
   auto bytes = std::string{
     "versioninfo { formatversion 100 } world { id 1 classname worldspawn solid { id 2 "};
   const auto planes = std::array<std::string, 6>{
@@ -378,6 +383,36 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
     dynamic_cast<mdl::BrushNode*>(map.worldNode().defaultLayer()->children().front());
   REQUIRE(node);
   mdl::selectNodes(map, {node});
+  if (!preview && ownership == 1)
+  {
+    mdl::duplicateSelectedNodes(map);
+    node = map.selection().brushes.front();
+  }
+  if (!preview && ownership == 2)
+  {
+    const auto definition = mdl::EntityDefinition{.name = "func_detail"};
+    REQUIRE(mdl::createBrushEntity(map, definition));
+  }
+  if (!preview && ownership == 3)
+  {
+    mdl::deselectAll(map);
+    map.setCurrentMaterialName("synthetic/grid");
+    REQUIRE(
+      mdl::createBrush(
+        map,
+        {{0, 0, 0},
+         {64, 0, 0},
+         {0, 64, 0},
+         {64, 64, 0},
+         {0, 0, 64},
+         {64, 0, 64},
+         {0, 64, 64},
+         {64, 64, 64}}));
+    node = map.selection().brushes.front();
+  }
+  const auto expectedScale = node->brush().face(0).uvAttributes().scale;
+  const auto initial = map.vmfScene()->serialize(map.worldNode());
+  const auto nativeId = map.vmfScene()->nativeId(*node);
   const auto count = map.modificationCount();
   auto tool = ClipTool{document};
   REQUIRE(tool.activate());
@@ -401,17 +436,17 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
     tool.toggleSide(); // Back
     REQUIRE(tool.canClip());
     tool.performClip();
-    CHECK(map.worldNode().defaultLayer()->childCount() == 1);
+    CHECK(node->parent());
     CHECK(map.selection().nodes == std::vector<mdl::Node*>{node});
     CHECK(node->brush().bounds().min.x() == 32);
     for (const auto& face : node->brush().faces())
     {
       CHECK(face.materialName() == "synthetic/grid");
-      CHECK(face.uvAttributes().scale == vm::vec2f{0.25f, 0.25f});
+      CHECK(face.uvAttributes().scale == expectedScale);
     }
     const auto back = map.vmfScene()->serialize(map.worldNode());
     map.undoCommand();
-    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == initial);
     map.redoCommand();
     CHECK(map.vmfScene()->serialize(map.worldNode()) == back);
     map.undoCommand();
@@ -422,9 +457,9 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
     for (const auto& face : node->brush().faces())
     {
       CHECK(face.materialName() == "synthetic/grid");
-      CHECK(face.uvAttributes().scale == vm::vec2f{0.25f, 0.25f});
+      CHECK(face.uvAttributes().scale == expectedScale);
     }
-    CHECK(map.vmfScene()->nativeId(*node) == "2");
+    CHECK(map.vmfScene()->nativeId(*node) == nativeId);
   }
 }
 

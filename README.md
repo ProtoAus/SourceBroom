@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.12 bounded native one-output brush-clip candidate:
+**Status:** Windows A5.13 bounded ordinary native brush-clip candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -38,13 +38,16 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-The A5.12 candidate adds **one-output native brush clipping** for loaded, visible,
-ordinary world brushes. Front/Back clips retain the solid ID, surviving native
-side bytes and undo/save history, allocating only the new cut side. Committed
-cut materials/UVs match the nearest-face preview. Generated/duplicated solids,
-brush entities, BOTH halves, displacements and opaque/reference-ambiguous cases
-remain guarded. Portable provenance belongs to the candidate receipt; independent
-owner/Hammer acceptance remains pending. Keep the whole A5.11 kit as recovery.
+The A5.13 candidate extends **one-output native brush clipping** to fresh/template
+and duplicated plain brushes, world-owned or in supported plain brush entities,
+before their first save. Loaded-world clipping remains. Front/Back retains the
+solid ID and surviving side bytes, with stable cut IDs and preserving undo/save.
+Cut material/UVs match preview. A narrowly certified registered-clip redo refusal
+retains the same command; safe scoped ownership protects failure notifications
+when history is cleared. Generic failed redo/undo policy remains unchanged.
+BOTH halves, displacements and hidden/opaque/reference ambiguity remain guarded.
+Portable provenance belongs to the candidate receipt; independent owner/Hammer
+acceptance remains pending. Keep the whole A5.12 kit as recovery.
 
 It retains A5.11's **positive uniform displacement scaling**, static Source
 model **bodygroup selection**, and short safe-save transaction names for valid

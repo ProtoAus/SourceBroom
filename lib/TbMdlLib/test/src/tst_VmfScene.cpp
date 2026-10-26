@@ -8,6 +8,7 @@
 #include "mdl/BrushRendererBrushCache.h"
 #include "mdl/EditorContext.h"
 #include "mdl/EntityNode.h"
+#include "mdl/GroupNode.h"
 #include "mdl/Hit.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
@@ -1191,6 +1192,313 @@ TEST_CASE("VmfScene clip keeps arbitrary length reserved side namespace", "[vmf]
   const auto saved = scene.serialize(scene.world());
   CHECK(saved.find("\"id\" \"1" + std::string(80, '0') + "\"") != std::string::npos);
   CHECK(scene.nativeId(ordinary) == "2");
+}
+
+TEST_CASE("VmfScene generated clip exact states and live owner guards", "[vmf]")
+{
+  const auto freshTarget = GENERATE(false, true);
+  CAPTURE(freshTarget);
+  const auto bounds = vm::bbox3d{4096};
+  auto scene = VmfScene::read(
+    fixture(
+      false,
+      "// retained template side\r\n\"lightmapscale\" \"00032\" "
+      "\"smoothing_groups\" \"0017\" editor { \"color\" \"2 4 6\" } "),
+    bounds);
+  auto& original = brush(scene.world());
+  auto owned = std::unique_ptr<Node>{original.clone(bounds)};
+  auto* node = dynamic_cast<BrushNode*>(owned.get());
+  REQUIRE(node);
+  auto* layer = scene.world().defaultLayer();
+  if (freshTarget)
+  {
+    node->setFilePosition(0, 0);
+    for (const auto& face : node->brush().faces())
+    {
+      face.setFilePosition(0, 0);
+    }
+  }
+  scene.validateAdditions(*layer, {node}, !freshTarget);
+  scene.registerAdditions({node}, !freshTarget);
+  layer->addChild(owned.release());
+  const auto initialBrush = node->brush();
+  const auto initial = scene.serialize(scene.world());
+  const auto candidate = [&](BrushNode& target, const bool second) {
+    auto result = target.brush();
+    auto face = second ? BrushFace::create(
+                           {0, 32, 0},
+                           {64, 32, 0},
+                           {0, 32, 64},
+                           "synthetic/cut",
+                           UvAttributes{},
+                           SurfaceAttributes{},
+                           MapFormat::SourceVMF)
+                       : BrushFace::create(
+                           {32, 0, 0},
+                           {32, 0, 64},
+                           {32, 64, 0},
+                           "synthetic/cut",
+                           UvAttributes{},
+                           SurfaceAttributes{},
+                           MapFormat::SourceVMF);
+    REQUIRE(face.is_success());
+    REQUIRE(result.clip(bounds, std::move(face).value()).is_success());
+    return result;
+  };
+  auto batch = std::vector<std::pair<Node*, NodeContents>>{
+    {node, NodeContents{candidate(*node, false)}}};
+
+  SECTION(
+    "diagonal clipping removes multiple template or fresh sides without reconstruction")
+  {
+    auto diagonal = node->brush();
+    auto face = BrushFace::create(
+      {32, 0, 0},
+      {32, 0, 64},
+      {0, 32, 0},
+      "synthetic/diagonal",
+      UvAttributes{},
+      SurfaceAttributes{},
+      MapFormat::SourceVMF);
+    REQUIRE(face.is_success());
+    REQUIRE(diagonal.clip(bounds, std::move(face).value()).is_success());
+    REQUIRE(diagonal.faceCount() == 5);
+    // The normalized diagonal-plane intersection has double-precision roundoff.
+    CHECK(diagonal.bounds().max.x() == Catch::Approx{32.0}.epsilon(0).margin(1e-9));
+    CHECK(diagonal.bounds().max.y() == Catch::Approx{32.0}.epsilon(0).margin(1e-9));
+    batch = {{node, NodeContents{std::move(diagonal)}}};
+    scene.registerClips(batch, bounds);
+    node->setBrush(std::get<Brush>(batch.front().second.get()));
+    const auto saved = scene.serialize(scene.world());
+    CHECK(saved == scene.serialize(scene.world()));
+    CHECK_NOTHROW(VmfScene::read(saved, bounds));
+    node->setBrush(initialBrush);
+    CHECK(scene.serialize(scene.world()) == initial);
+    node->setBrush(std::get<Brush>(batch.front().second.get()));
+    CHECK(scene.serialize(scene.world()) == saved);
+  }
+
+  SECTION("mixed fresh template entity batch stages nothing on a late invalid owner")
+  {
+    auto freshOwned = std::unique_ptr<Node>{original.clone(bounds)};
+    auto* fresh = dynamic_cast<BrushNode*>(freshOwned.get());
+    REQUIRE(fresh);
+    fresh->setFilePosition(0, 0);
+    for (const auto& face : fresh->brush().faces())
+    {
+      face.setFilePosition(0, 0);
+    }
+    scene.validateAdditions(*layer, {fresh}, false);
+    scene.registerAdditions({fresh}, false);
+    layer->addChild(freshOwned.release());
+    auto entityOwned =
+      std::make_unique<EntityNode>(Entity{{{"classname", "func_detail"}}});
+    auto* entity = entityOwned.get();
+    scene.validateAdditions(*layer, {entity}, false);
+    scene.registerAdditions({entity}, false);
+    layer->addChild(entityOwned.release());
+    scene.validateReparent(*entity, {&original});
+    layer->removeChild(&original);
+    entity->addChild(&original);
+    const auto before = scene.serialize(scene.world());
+    batch.emplace_back(fresh, NodeContents{candidate(*fresh, false)});
+    batch.emplace_back(&original, NodeContents{candidate(original, false)});
+    auto foreign = std::unique_ptr<Node>{original.clone(bounds)};
+    auto* foreignBrush = dynamic_cast<BrushNode*>(foreign.get());
+    REQUIRE(foreignBrush);
+    batch.emplace_back(foreignBrush, NodeContents{candidate(*foreignBrush, false)});
+    // Detached foreign ancestry fails only after all three valid routes staged.
+    CHECK_THROWS_AS(scene.registerClips(batch, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == before);
+    for (const auto& [target, contents] : batch)
+    {
+      CHECK(
+        std::ranges::any_of(
+          std::get<Brush>(contents.get()).faces(),
+          [](const auto& face) { return face.lineNumber() == 0; }));
+    }
+    batch.pop_back();
+    scene.registerClips(batch, bounds);
+    for (const auto& [target, contents] : batch)
+    {
+      dynamic_cast<BrushNode*>(target)->setBrush(std::get<Brush>(contents.get()));
+    }
+    // Initial template uses9..14; fresh uses15..20. A failed batch must not
+    // consume21, the first cut identity of the subsequent valid batch.
+    CHECK(
+      scene.serialize(scene.world()).find("side\n{\n\"id\" \"21\"") != std::string::npos);
+  }
+
+  SECTION("live owner gates reject hidden point group layer and foreign world bypasses")
+  {
+    const auto kind = GENERATE(0, 1, 2, 3, 4);
+    CAPTURE(kind);
+    scene.registerClips(batch, bounds);
+    node->setBrush(std::get<Brush>(batch.front().second.get()));
+    const auto good = node->brush();
+    const auto saved = scene.serialize(scene.world());
+    if (kind == 0)
+    {
+      layer->setVisibilityState(VisibilityState::Hidden);
+      CHECK_THROWS_AS(
+        scene.validateClipContents(*node, NodeContents{initialBrush}, bounds),
+        std::invalid_argument);
+      CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+      layer->setVisibilityState(VisibilityState::Inherited);
+    }
+    else
+    {
+      layer->removeChild(node);
+      if (kind == 1)
+      {
+        auto* point = dynamic_cast<EntityNode*>(layer->children().back());
+        REQUIRE(point);
+        point->addChild(node);
+        CHECK_THROWS_AS(
+          scene.validateClipContents(*node, NodeContents{initialBrush}, bounds),
+          std::invalid_argument);
+        CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+        point->removeChild(node);
+      }
+      if (kind == 2)
+      {
+        auto group = std::make_unique<GroupNode>(Group{"unsupported"});
+        group->setFilePosition(99999, 1);
+        layer->addChild(group.get());
+        group->addChild(node);
+        CHECK_THROWS_AS(
+          scene.validateClipContents(*node, NodeContents{initialBrush}, bounds),
+          std::invalid_argument);
+        CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+        group->removeChild(node);
+        layer->removeChild(group.get());
+      }
+      if (kind == 3)
+      {
+        auto custom = std::make_unique<LayerNode>(Layer{"unsupported"});
+        scene.world().addChild(custom.get());
+        custom->addChild(node);
+        CHECK_THROWS_AS(
+          scene.validateClipContents(*node, NodeContents{initialBrush}, bounds),
+          std::invalid_argument);
+        CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+        custom->removeChild(node);
+        scene.world().removeChild(custom.get());
+      }
+      if (kind == 4)
+      {
+        auto foreign = VmfScene::read(fixture(), bounds);
+        foreign.world().defaultLayer()->addChild(node);
+        CHECK_THROWS_AS(
+          scene.validateClipContents(*node, NodeContents{initialBrush}, bounds),
+          std::invalid_argument);
+        foreign.world().defaultLayer()->removeChild(node);
+      }
+      layer->addChild(node);
+    }
+    CHECK(scene.serialize(scene.world()) == saved);
+    CHECK_NOTHROW(scene.validateClipContents(*node, NodeContents{good}, bounds));
+  }
+
+  SECTION("generic admission direct save and redo reject side and ancestry forgeries")
+  {
+    CHECK_THROWS_AS(
+      scene.validateContents(*node, batch.front().second, bounds), std::invalid_argument);
+    scene.registerClips(batch, bounds);
+    node->setBrush(std::get<Brush>(batch.front().second.get()));
+    const auto firstBrush = node->brush();
+    if (!freshTarget)
+    {
+      const auto emitted = scene.serialize(scene.world());
+      for (size_t i = 0; i < initialBrush.faceCount(); ++i)
+      {
+        if (std::ranges::any_of(firstBrush.faces(), [&](const auto& face) {
+              return face.lineNumber() == initialBrush.face(i).lineNumber();
+            }))
+        {
+          const auto sourceSide = original.brush().face(i).lineNumber() - 1;
+          auto expected = scene.document().serializeEntry(sourceSide);
+          auto sourceId = std::string{};
+          for (const auto child : scene.document().entries()[sourceSide].children)
+          {
+            const auto& entry = scene.document().entries()[child];
+            if (entry.value && scene.document().tokenContents(entry.key) == "id")
+            {
+              sourceId = scene.document().tokenContents(*entry.value);
+            }
+          }
+          REQUIRE_FALSE(sourceId.empty());
+          const auto oldId = "\"id\" \"" + sourceId + "\"";
+          const auto at = expected.find(oldId);
+          REQUIRE(at != std::string::npos);
+          expected.replace(at, oldId.size(), "\"id\" \"" + std::to_string(i + 9) + "\"");
+          CHECK(emitted.find(expected) != std::string::npos);
+        }
+      }
+      CHECK(emitted.find("\"lightmapscale\" \"00032\"") != std::string::npos);
+      CHECK(emitted.find("\"smoothing_groups\" \"0017\"") != std::string::npos);
+    }
+    auto second = std::vector<std::pair<Node*, NodeContents>>{
+      {node, NodeContents{candidate(*node, true)}}};
+    scene.registerClips(second, bounds);
+    node->setBrush(std::get<Brush>(second.front().second.get()));
+    const auto good = node->brush();
+    const auto saved = scene.serialize(scene.world());
+    auto retired = size_t{0};
+    for (const auto& face : initialBrush.faces())
+    {
+      if (std::ranges::none_of(firstBrush.faces(), [&](const auto& current) {
+            return current.lineNumber() == face.lineNumber();
+          }))
+      {
+        retired = face.lineNumber();
+      }
+    }
+    REQUIRE(retired != 0);
+    const auto forgery = GENERATE(0, 1, 2, 3, 4);
+    auto bad = good;
+    if (forgery == 0)
+      bad.faces()[0].setFilePosition(0, 0);
+    if (forgery == 1)
+      bad.faces()[0].setFilePosition(bad.faces()[1].lineNumber(), 1);
+    if (forgery == 2)
+      bad.faces()[0].setFilePosition(original.brush().face(0).lineNumber(), 1);
+    if (forgery == 3)
+      bad.faces()[0].setFilePosition(node->lineNumber(), 1);
+    if (forgery == 4)
+    {
+      const auto cut = std::ranges::find_if(bad.faces(), [&](const auto& face) {
+        return std::ranges::none_of(initialBrush.faces(), [&](const auto& old) {
+          return old.lineNumber() == face.lineNumber();
+        });
+      });
+      REQUIRE(cut != bad.faces().end());
+      cut->setFilePosition(
+        retired, 1); // Unique, owned, but never an admitted complete set.
+    }
+    CHECK_THROWS_AS(
+      scene.validateClipContents(*node, NodeContents{bad}, bounds),
+      std::invalid_argument);
+    node->setBrush(std::move(bad));
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+    node->setBrush(good);
+    node->setVisibilityState(VisibilityState::Hidden);
+    CHECK_THROWS_AS(
+      scene.validateClipContents(*node, NodeContents{firstBrush}, bounds),
+      std::invalid_argument);
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+    node->setVisibilityState(VisibilityState::Inherited);
+    layer->removeChild(node);
+    CHECK_THROWS_AS(
+      scene.validateClipContents(*node, NodeContents{firstBrush}, bounds),
+      std::invalid_argument);
+    layer->addChild(node);
+    CHECK(scene.serialize(scene.world()) == saved);
+    CHECK_NOTHROW(scene.validateClipContents(*node, NodeContents{initialBrush}, bounds));
+    CHECK_NOTHROW(scene.validateClipContents(*node, NodeContents{firstBrush}, bounds));
+    node->setBrush(initialBrush);
+    CHECK(scene.serialize(scene.world()) == initial);
+  }
 }
 
 } // namespace tb::mdl

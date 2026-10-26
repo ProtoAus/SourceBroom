@@ -1,11 +1,48 @@
-# SourceBroom validation — A5.11 native uniform scale/static bodygroups
+# SourceBroom validation — A5.13 ordinary clipping/ownership/history
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.12 — native ordinary one-output clip
+## A5.13 — fresh/duplicated/entity one-output clips and bounded retry lifetime
+
+Visible fresh/template and duplicated plain brushes, world-owned or within a
+supported plain brush entity, now use the same native Front/Back in-place command
+before first save. Loaded-world controls remain. Acted native/tool tests check
+geometry, live owner/visibility, solid/side identities, surviving source subtrees,
+registered cut states, undo/redo, deterministic preserving saves and reopen.
+Hidden/unsupported owners, opaque attachments/global references, displacement,
+invalid mixed batches, arbitrary topology and BOTH halves remain refused.
+
+A hidden-owner redo regression first reproduced two lost-history checks. A narrow
+default-false command hook certifies only an already-registered native clip's
+pre-swap validation refusal, reset before each attempt. The SAME parked command
+then succeeds after owner repair with exact prior cut bytes/IDs and modification
+count. Other failed redo/undo and transaction disposal remain unchanged.
+
+Independent ownership review found no remaining blockers in that scope. The new
+shared-core review then found a concrete notification-lifetime issue: a history-
+clearing observer could destroy the restored command before later observers.
+Safe shared destructor markers reproduced **15 failures** before production repair;
+no freed command was read. A scoped local unique owner now retains only that
+notified command until dispatch ends/unwinds, while all three clear routes remove
+visible history immediately without resurrection. Recursive redo during dispatch
+refuses. Normal/throwing clear/execute/store, later observer access, exactly-one
+destruction and throwing-without-clear followed by real successful retry pass.
+Focused independent follow-up review found no remaining scoped static blockers,
+including actual ownership/guard analysis, not merely inference from test results.
+
+Actual model/App rebuilds, core/native **8/8**, App ClipTool **3/3**, full model
+**194/194**, full App **49/49**, and actual app/checker/UI caller builds pass with
+zero new compiler warnings. The source-level private corpus remains38/35/38 with
+all38 original hashes unchanged; final installed checks/hashes/portable windows/
+archive provenance belong separately to the candidate receipt. Unchanged graphics
+and earlier toolchain evidence remain retained, not rerun or re-dated. The known
+untouched full-UI preference failure remains unfixed. Owner/Hammer acceptance is
+pending; no full Source support or general release is claimed.
+
+## Retained A5.12 — native ordinary one-output clip
 
 Loaded visible ordinary world brushes use the real Map/ClipTool Front/Back path
 in place, not delete/add replacements. Surviving native side bytes/IDs, original
@@ -169,10 +206,10 @@ manual native mesh appearance and independent Hammer checks remain pending.
 | Area | Implemented and checked | Not implied |
 | --- | --- | --- |
 | Native document | Ordered/repeated keys, comments, unknown blocks, numeric text, byte-exact no-edit serialization; surgical token edits and entry/nesting bounds | All VMF branch semantics or independent Hammer acceptance |
-| Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | Arbitrary topology, native editor-group/layer/displacement/overlay/instance authoring |
+| Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; ordinary one-output Front/Back clips; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | BOTH halves/other CSG/arbitrary topology, native editor-group/layer/displacement/overlay/instance authoring |
 | Compatibility preview | Explicit opt-in immutable partial reader; duplicate IDs/bytes unchanged; omitted-solid counts and labelled plane samples; selection-only commands; create-new unchanged copy | Editable repair, complete geometry, proxy hulls, normal save/export/build or relaxed syntax/resource limits |
 | Entity tools | FGD property hints, choices/flags and I/O metadata; ordered/repeated outputs; unknown data retained, definition defaults not blindly inserted | FGD completeness or correctness for every game; malformed data silently repaired |
-| Props/materials | Bounded static MDL44/48/49 with matching VVD/VTX, root/default pose, installed loose/VPK materials; Source fixed-studio entity skins; explicit fallbacks | Animation, physics/bodygroup/shader parity or every model variant |
+| Props/materials | Bounded static MDL44/48/49 with matching VVD/VTX, root/default pose, installed loose/VPK materials; Source fixed-studio entity skins and static body selection; explicit fallbacks | Animation, physics/full shader parity or every model variant |
 | Native metadata | Read-only groups/visgroups/membership/hidden/cameras/cordons, known-reference diagnostics; camera-eye navigation | Scene parenting, visibility/cordon authoring or arbitrary compiler clipping behavior |
 | Build tools | Actual staged-byte preflight; bounded reader; CSS20/Strata25 per-stage BSP-header contracts; leak/coordinate diagnostics; fresh staging and stop-on-failure | Whole-BSP validation, every Source branch, successful runtime load from process creation alone |
 | Custom packages | Explicit custom-only root/rights acknowledgement, bounded discovery, reviewed immutable snapshots, separate approval, create-new distribution ZIP | Automatic stock/VPK redistribution, complete discovery, licence certification or BSP embedding |

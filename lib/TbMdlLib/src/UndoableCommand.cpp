@@ -73,6 +73,11 @@ bool UndoableCommand::performUndo(Map& map)
   return result;
 }
 
+bool UndoableCommand::canRetryFailedRedo() const
+{
+  return false;
+}
+
 bool UndoableCommand::collateWith(UndoableCommand& command)
 {
   contract_pre(&command != this);

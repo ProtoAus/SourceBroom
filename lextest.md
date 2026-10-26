@@ -203,6 +203,16 @@ is pending, not inferred from source/model/tool/runtime checks:
   brush entities and opaque/reference cases remain guarded in this first slice;
   report a refusal rather than bypassing it through MAP export.
 
+## A5.13 fresh/duplicated/entity clipping — pending owner/Hammer check
+
+- [ ] In a **new editable** CSS/Momentum map or owned copy, draw and duplicate one
+  plain closed brush. Clip one with Front or Back before its first save, undo/redo
+  and Save As a new VMF. Compare shape, cut material/UVs and surviving faces in
+  matching Hammer++. If convenient repeat within a plain `func_detail` entity.
+  No original map is a write target. BOTH, displacements and hidden/opaque/reference
+  ambiguity remain guarded; report exact refusals rather than bypassing native
+  preservation through MAP export. Test counts/review are not this observation.
+
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation
 or support for other Source branches from a visual check.

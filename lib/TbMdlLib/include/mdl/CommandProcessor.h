@@ -22,6 +22,7 @@
 #include "base/Notifier.h"
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -77,6 +78,10 @@ private:
    * beginning of the vector.
    */
   std::vector<std::unique_ptr<UndoableCommand>> m_redoStack;
+
+  // History edits must not destroy a retry failure observer's borrowed argument.
+  UndoableCommand* m_retryNotificationCommand = nullptr;
+  std::unique_ptr<UndoableCommand>* m_retryNotificationKeepAlive = nullptr;
 
   /**
    * The time stamp of when the last command was executed.
@@ -308,7 +313,9 @@ private:
    * @param command the command to execute
    * @return the result of executing the given command
    */
-  bool executeCommand(Command& command);
+  bool executeCommand(
+    Command& command, const std::function<void()>& beforeFailureNotification = {});
+  void clearRedoStack();
 
   /**
    * Undoes the given command by calling its `performUndo` method and triggers the

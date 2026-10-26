@@ -271,7 +271,7 @@ bool CommandProcessor::execute(std::unique_ptr<Command> command)
   if (result)
   {
     m_undoStack.clear();
-    m_redoStack.clear();
+    clearRedoStack();
   }
   return result;
 }
@@ -302,11 +302,29 @@ bool CommandProcessor::undo()
 
 bool CommandProcessor::redo()
 {
+  // A failure observer may inspect/clear history, but must not replay it recursively.
+  if (m_retryNotificationCommand)
+  {
+    return false;
+  }
   contract_pre(m_transactionStack.empty());
   contract_pre(!m_redoStack.empty());
 
   auto command = popFromRedoStack();
-  const auto result = executeCommand(*command);
+  auto deferredDestruction = std::unique_ptr<UndoableCommand>{};
+  // Reset the borrowed guard pointers before destroying a deferred command, even on
+  // unwind.
+  const auto notificationScope =
+    kdl::set_temp{m_retryNotificationCommand, static_cast<UndoableCommand*>(nullptr)};
+  const auto keepAliveScope =
+    kdl::set_temp{m_retryNotificationKeepAlive, &deferredDestruction};
+  const auto result = executeCommand(*command, [&] {
+    if (command->canRetryFailedRedo())
+    {
+      m_retryNotificationCommand = command.get();
+      pushToRedoStack(std::move(command));
+    }
+  });
   if (result)
   {
     assertResult(pushToUndoStack(std::move(command), false));
@@ -314,12 +332,29 @@ bool CommandProcessor::redo()
   return result;
 }
 
+void CommandProcessor::clearRedoStack()
+{
+  if (m_retryNotificationCommand)
+  {
+    const auto it = std::ranges::find_if(m_redoStack, [&](const auto& command) {
+      return command.get() == m_retryNotificationCommand;
+    });
+    if (it != m_redoStack.end())
+    {
+      contract_pre(m_retryNotificationKeepAlive);
+      contract_pre(!*m_retryNotificationKeepAlive);
+      *m_retryNotificationKeepAlive = std::move(*it);
+    }
+  }
+  m_redoStack.clear();
+}
+
 void CommandProcessor::clear()
 {
   contract_pre(m_transactionStack.empty());
 
   m_undoStack.clear();
-  m_redoStack.clear();
+  clearRedoStack();
   m_lastCommandTimestamp = std::chrono::time_point<std::chrono::system_clock>();
 }
 
@@ -333,11 +368,12 @@ CommandProcessor::SubmitAndStoreResult CommandProcessor::executeAndStoreCommand(
   }
 
   const auto commandStored = storeCommand(std::move(command), collate);
-  m_redoStack.clear();
+  clearRedoStack();
   return {true, commandStored};
 }
 
-bool CommandProcessor::executeCommand(Command& command)
+bool CommandProcessor::executeCommand(
+  Command& command, const std::function<void()>& beforeFailureNotification)
 {
   notifyCommandIfNotType<TransactionCommand>(commandDoNotifier, command);
   const auto result = command.performDo(m_map);
@@ -352,6 +388,10 @@ bool CommandProcessor::executeCommand(Command& command)
   }
   else
   {
+    if (beforeFailureNotification)
+    {
+      beforeFailureNotification();
+    }
     notifyCommandIfNotType<TransactionCommand>(commandDoFailedNotifier, command);
   }
   return result;

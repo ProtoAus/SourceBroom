@@ -43,6 +43,9 @@ public:
   bool performDo(Map& map) override;
   virtual bool performUndo(Map& map);
 
+  /** Only opt in when the last failed do left map and replay contents unchanged. */
+  virtual bool canRetryFailedRedo() const;
+
   virtual bool collateWith(UndoableCommand& command);
 
 protected:

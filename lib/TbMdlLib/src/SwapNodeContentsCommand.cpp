@@ -140,6 +140,17 @@ SwapNodeContentsCommand::SwapNodeContentsCommand(
 
 SwapNodeContentsCommand::~SwapNodeContentsCommand() = default;
 
+bool SwapNodeContentsCommand::performDo(Map& map)
+{
+  m_retryableClipRefusal = false;
+  return UpdateLinkedGroupsCommandBase::performDo(map);
+}
+
+bool SwapNodeContentsCommand::canRetryFailedRedo() const
+{
+  return m_nativeClip && m_clipRegistered && m_retryableClipRefusal;
+}
+
 bool SwapNodeContentsCommand::doPerformDo(Map& map)
 {
   if (auto* scene = map.vmfScene())
@@ -150,12 +161,9 @@ bool SwapNodeContentsCommand::doPerformDo(Map& map)
       {
         for (const auto& [node, contents] : m_nodes)
         {
-          if (
-            !node || node->parent() != map.worldNode().defaultLayer()
-            || !map.editorContext().visible(*node))
+          if (!node || !map.editorContext().visible(*node))
           {
-            throw std::invalid_argument{
-              "native clip target is not a visible world brush"};
+            throw std::invalid_argument{"native clip target is not visible"};
           }
         }
       }
@@ -181,6 +189,8 @@ bool SwapNodeContentsCommand::doPerformDo(Map& map)
     }
     catch (const std::exception& e)
     {
+      // Only this pre-swap validation refusal certifies unchanged replay contents.
+      m_retryableClipRefusal = m_nativeClip && m_clipRegistered;
       map.logger().error() << "Native VMF content edit refused: " << e.what();
       return false;
     }

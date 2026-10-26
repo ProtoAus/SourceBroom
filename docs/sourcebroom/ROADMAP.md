@@ -33,16 +33,22 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.12 candidate:** loaded visible ordinary world brushes admit
-  native single-output Front/Back clipping in place. Solid ID, surviving side
-  subtrees, command history and preserving saves remain native; a registered new
-  cut side gets its own stable ID. Model191/191 and App49/49 pass; original corpus
+- **A5.13 candidate:** native single-output Front/Back clipping now also admits
+  fresh/template and duplicated plain brushes, both world-owned and in supported
+  plain brush entities, before their first save. Loaded-world clipping from A5.12
+  remains. Live ownership/visibility and exact admitted states are checked; solid
+  IDs, surviving side subtrees and registered cut IDs remain native through undo,
+  preserving saves and reopen. Model194/194 and App49/49 pass; original corpus
   remains38/35/38 across document/strict/preview with38 original hashes unchanged.
-  Generated/duplicated solids, brush entities and BOTH-halves remain next in-scope
-  work, not silently unlocked. No arbitrary topology, displacement/opaque/ref
-  bypass or owner/Hammer acceptance is implied. Cut material/UV commits now match
-  preview after a real two-failure red-to-green control; candidate receipts identify
-  final portable artifacts. Retain the whole A5.11 kit as recovery.
+  A certified registered-clip pre-swap redo refusal retains the same command;
+  other failed redo/undo/transaction policies do not change. Safe marker controls
+  reproduced15 premature-destruction failures before a scoped notification-lifetime
+  fix, then passed including clear/new edits, reentry refusal and exception unwind.
+  Focused follow-up static review found no remaining scoped blockers. BOTH-halves,
+  displacement/opaque/ref
+  bypass and arbitrary topology remain next/gated, not silently unlocked. No owner/
+  Hammer acceptance is implied. Candidate receipts identify final portable artifacts;
+  retain the whole A5.12 kit as recovery.
 - **A5 bounded candidate implemented; full exit pending:** FGD-backed property
   hints and ordered/repeated Source outputs, bounded static MDL/VVD/VTX preview,
   saved-file metadata inspection/camera-eye navigation, native capability
