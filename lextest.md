@@ -213,6 +213,25 @@ is pending, not inferred from source/model/tool/runtime checks:
   ambiguity remain guarded; report exact refusals rather than bypassing native
   preservation through MAP export. Test counts/review are not this observation.
 
+## A5.17 native point-data brush edits — pending owner retry
+
+Reported negative in A5.16: owner could load a Strata map but a native brush-content
+edit refused with an opaque attachment error. Tool/gesture was not specified.
+Automated reproduction identified side point_data. This is NOT an A5.17 human pass.
+
+- [ ] Open a COPY of the ORIGINAL VMF in the whole A5.17 kit. Select the brush
+  that refused, move one grid step, undo/redo, then Save As a new file and reopen.
+- [ ] Confirm the exact previously failing tool now works; if it was face/vertex
+  editing or clipping rather than movement, state which action and new diagnostic.
+- [ ] If useful, inspect the saved copy in matching Hammer/Strata tools for intact
+  brush shape/cache data; no automatic compiler/Hammer interpretation claim.
+
+All pending. Same-incidence/winding movement/rotation/positive-scale/content edits
+only; topology/mirrors/point-data clone/delete/group/clip and combined displacement
+base motion remain guarded. `_h++` uses vertices_plus and is still unsupported in
+this increment. Never strip blocks/overwrite originals as a workaround. Keep the
+whole A5.16 kit as recovery. Automated Map42/focus77/model246 are not human passes.
+
 ## A5.16 live native cordons — pending owner/Hammer check
 
 Use a **copy**, retaining the whole A5.15 kit as recovery.

@@ -33,7 +33,18 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.16 candidate:** live native cordon editing now handles loaded modern and
+- **A5.17 candidate:** native Strata `point_data` polygons no longer blanket-block
+  supported brush-content edits. Strict indexed cache/ring matching, whole-brush
+  vertex incidence and preserved relative winding admit same-combinatorics motion,
+  positive scaling, bounded boundary edits and UV/material changes with surgical
+  row updates. The exact owner brush passes actual Map move/save/reopen/undo/redo;
+  the native-ID-matched Hammer++ `vertices_plus` variant correctly remains guarded.
+  Model246/246, affected77, App50 and actual app/checker rebuild0/newwarnings0 pass;
+  corpus load/metadata38/35/38 and original hashes unchanged, NOT universal brush
+  acceptance. Mirrors/topology/point-data clone/delete/group/clip and combined
+  displacement/base-cache motion remain restricted. Owner retry pending. Next
+  separate schema increment: `vertices_plus`, before larger visgroup authoring.
+- **Retained A5.16 candidate:** live native cordon editing now handles loaded modern and
   legacy ordinary controllers plus new modern records, multiple boxes, names and
   optional activation. Atomic Map history, scoped handles, exact no-op/raw save,
   stale-action refusal and live UNSAVED UI are separate from the read-only saved

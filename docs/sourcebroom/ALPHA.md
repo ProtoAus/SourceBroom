@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.16 live cordon candidate
+# Try the Windows SourceBroom A5.17 point-data brush-edit candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,33 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.16: live native cordons beside map properties
+## A5.17: edit ordinary native point-data brushes
+
+A reported Strata map loaded correctly but refused an ordinary brush edit because
+its side `point_data` polygons were opaque. This candidate understands the strict
+indexed polygon shape and updates affected vertex rows during admitted content
+edits. The exact reported brush passed move, Save As, reopen, undo and redo using
+the actual Map command path; your original map was never a write target.
+
+**Quick owner retry (pending):** open a COPY of the original VMF, select the brush
+that refused, move one grid step, undo/redo, then Save As to a new file and reopen.
+Please mention the exact tool if it still refuses. Positive scaling, rotation,
+UV/material edits and boundary changes work only while face/vertex incidence and
+relative polygon winding stay unchanged. Even stationary-plane cache boundaries
+must follow changed neighbouring planes; unedited numeric text remains preserved.
+
+This is not a whitelist bypass. Malformed/unknown/mismatched caches still refuse.
+Mirrors, topology/cardinality changes and point-data duplication/removal/grouping/
+reparenting/clipping remain guarded. Combined displacement + point-data base
+motion is still conservatively refused. The `_h++` counterpart uses a DIFFERENT
+`vertices_plus` schema: its controlled refusal is expected in this build, not a
+point-data success. Test the original file for this retry. Keep the **whole A5.16**
+kit as recovery and do not merge DLLs, strip cache blocks or overwrite originals.
+
+Corpus load/metadata-edit passes do not prove every brush or operation is editable.
+Human editor/Hammer checks and full Source support remain pending.
+
+## Retained A5.16: live native cordons beside map properties
 
 Open an editable **copy** and find **Live native cordons** in the map inspector.
 This is current UNSAVED map state, not the saved-file metadata dialog. With no

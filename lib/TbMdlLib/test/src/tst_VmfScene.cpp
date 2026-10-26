@@ -27,6 +27,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -90,6 +93,262 @@ void translate(BrushNode& node)
   node.setBrush(std::move(b));
 }
 } // namespace
+
+// Installed maps are explicit read-only inputs, never public regression fixtures.
+TEST_CASE("VmfScene native brush edit opt-in", "[.][vmf][installed]")
+{
+  const auto* input = std::getenv("SOURCEBROOM_NATIVE_EDIT_INPUT");
+  const auto* requestedEntry = std::getenv("SOURCEBROOM_NATIVE_EDIT_ENTRY");
+  REQUIRE(input);
+  REQUIRE(requestedEntry);
+  auto stream = std::ifstream{input, std::ios::binary};
+  REQUIRE(stream.good());
+  const auto original =
+    std::string{std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
+  const auto entry = static_cast<VmfEntryId>(std::stoull(requestedEntry));
+  const auto bounds = vm::bbox3d{VmfScene::PreviewWorldExtent};
+  auto scene = VmfScene::read(original, bounds);
+  REQUIRE(entry < scene.document().entries().size());
+  CHECK(scene.serialize(scene.world()) == original);
+
+  auto schema = std::string{};
+  const auto describe =
+    [&](const auto& self, const VmfEntryId id, const size_t depth) -> void {
+    const auto& native = scene.document().entries()[id];
+    schema += std::string(depth, ' ')
+              + std::string{scene.document().tokenContents(native.key)}
+              + (native.isBlock() ? " {\\n" : "\\n");
+    if (native.isBlock())
+    {
+      for (const auto child : native.children)
+      {
+        self(self, child, depth + 1);
+      }
+    }
+  };
+  describe(describe, entry, 0);
+  INFO("Requested native entry schema:\\n" << schema);
+  auto* selected = static_cast<BrushNode*>(nullptr);
+  const auto find = [&](const auto& self, Node& node) -> void {
+    if (node.lineNumber() == entry + 1)
+    {
+      selected = dynamic_cast<BrushNode*>(&node);
+    }
+    for (auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  find(find, scene.world());
+  REQUIRE(selected);
+  const auto before = selected->brush();
+  auto moved = before;
+  REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+            .is_success());
+  REQUIRE(moved.bounds() != before.bounds());
+  REQUIRE_NOTHROW(scene.validateContents(*selected, NodeContents{moved}, bounds));
+  CHECK(selected->brush() == before);
+  selected->setBrush(std::move(moved));
+  const auto saved = scene.serialize(scene.world());
+  REQUIRE(saved != original);
+  auto reopened = VmfScene::read(saved, bounds);
+  CHECK(reopened.serialize(reopened.world()) == saved);
+  selected->setBrush(before);
+  CHECK(scene.serialize(scene.world()) == original);
+  stream.close();
+  auto check = std::ifstream{input, std::ios::binary};
+  CHECK(
+    std::string{std::istreambuf_iterator<char>{check}, std::istreambuf_iterator<char>{}}
+    == original);
+}
+
+TEST_CASE("VmfScene point_data same-combinatorics edits", "[vmf]")
+{
+  const auto cache = std::string{
+    "point_data { \"numpts\" \"4\" "
+    "\"point\" \"2 64.00 64 64\" \"point\" \"0 0.00 0 64\" "
+    "\"point\" \"3 64 0 64\" \"point\" \"1 0 64 64\" }"};
+  const auto withCache = GENERATE(false, true);
+  const auto operation = GENERATE(0, 1, 2, 3, 4, 5);
+  const auto bounds = vm::bbox3d{4096};
+  const auto source = fixture(false, withCache ? cache : "");
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  const auto before = node.brush();
+  CHECK(scene.serialize(scene.world()) == source);
+  auto changed = before;
+  if (operation == 0)
+  {
+    REQUIRE(changed.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+              .is_success());
+  }
+  else if (operation == 1)
+  {
+    REQUIRE(changed.transform(bounds, vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.37), true)
+              .is_success());
+  }
+  else if (operation == 2)
+  {
+    REQUIRE(changed.transform(bounds, vm::scaling_matrix(vm::vec3d{2, 3, 4}), true)
+              .is_success());
+  }
+  else if (operation == 3)
+  {
+    REQUIRE(
+      changed
+        .moveBoundary(bounds, *changed.findFace(vm::vec3d{1, 0, 0}), {16, 0, 0}, true)
+        .is_success());
+    const auto top = *before.findFace(vm::vec3d{0, 0, 1});
+    CHECK(changed.face(top).points() == before.face(top).points());
+    CHECK(changed.face(top).vertexPositions() != before.face(top).vertexPositions());
+  }
+  else if (operation == 4)
+  {
+    changed.face(0).setMaterialName("synthetic/changed");
+  }
+  else
+  {
+    auto uv = changed.face(0).uvAttributes();
+    uv.offset = uv.offset + vm::vec2f{8, 16};
+    REQUIRE(changed.face(0).setUvAttributes(uv).is_success());
+  }
+  REQUIRE(changed != before);
+  REQUIRE_NOTHROW(scene.validateContents(node, NodeContents{changed}, bounds));
+  node.setBrush(changed);
+  const auto saved = scene.serialize(scene.world());
+  REQUIRE(saved != source);
+  auto reopened = VmfScene::read(saved, bounds);
+  CHECK(reopened.serialize(reopened.world()) == saved);
+  auto& reopenedNode = brush(reopened.world());
+  auto continued = reopenedNode.brush();
+  REQUIRE(continued.transform(bounds, vm::translation_matrix(vm::vec3d{1, 2, 3}), true)
+            .is_success());
+  REQUIRE(continued != reopenedNode.brush());
+  REQUIRE_NOTHROW(
+    reopened.validateContents(reopenedNode, NodeContents{continued}, bounds));
+  reopenedNode.setBrush(std::move(continued));
+  const auto continuedSaved = reopened.serialize(reopened.world());
+  REQUIRE(continuedSaved != saved);
+  auto continuedReopened = VmfScene::read(continuedSaved, bounds);
+  CHECK(continuedReopened.serialize(continuedReopened.world()) == continuedSaved);
+  if (withCache && operation == 3)
+  {
+    CHECK(saved.find("0 0.00 0 64") != std::string::npos);
+    CHECK(saved.find("2 80 64 64") != std::string::npos);
+  }
+  if (withCache && operation >= 4)
+  {
+    CHECK(saved.find(cache) != std::string::npos);
+  }
+  node.setBrush(before);
+  CHECK(scene.serialize(scene.world()) == source);
+}
+
+TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
+{
+  const auto cache = std::string{
+    "point_data { \"numpts\" \"4\" \"point\" \"0 0 0 64\" "
+    "\"point\" \"1 0 64 64\" \"point\" \"2 64 64 64\" \"point\" \"3 64 0 64\" }"};
+  const auto bounds = vm::bbox3d{4096};
+  SECTION("malformed caches remain lossless and guarded")
+  {
+    const auto fault = GENERATE(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+    auto malformed = cache;
+    const auto replace = [&](const std::string& from, const std::string& to) {
+      malformed.replace(malformed.find(from), from.size(), to);
+    };
+    switch (fault)
+    {
+    case 0:
+      replace("numpts\" \"4", "numpts\" \"999999999999999999999999");
+      break;
+    case 1:
+      replace("1 0 64 64", "0 0 64 64");
+      break;
+    case 2:
+      replace("1 0 64 64", "4 0 64 64");
+      break;
+    case 3:
+      replace("1 0 64 64", "1 nan 64 64");
+      break;
+    case 4:
+      replace("1 0 64 64", "1 1 64 64");
+      break;
+    case 5:
+      malformed += cache;
+      break;
+    case 6:
+      malformed.insert(malformed.size() - 1, "unknown { }");
+      break;
+    case 7:
+      malformed.insert(malformed.size() - 1, "\"numpts\" \"4\"");
+      break;
+    case 8:
+      replace("numpts", "other_count");
+      break;
+    case 9:
+      replace("1 0 64 64", "1 64 64 64");
+      replace("2 64 64 64", "2 0 64 64");
+      break;
+    case 10:
+      replace("1 0 64 64", "1 0 64 64 0");
+      break;
+    case 11:
+      replace("1 0 64 64", "1 0 64");
+      break;
+    }
+    const auto source = fixture(false, malformed);
+    auto scene = VmfScene::read(source, bounds);
+    auto& node = brush(scene.world());
+    auto moved = node.brush();
+    REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+              .is_success());
+    CHECK(scene.serialize(scene.world()) == source);
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+  SECTION("known polygon does not relax clone removal clipping or reflection")
+  {
+    auto scene = VmfScene::read(fixture(false, cache), bounds);
+    auto& node = brush(scene.world());
+    CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
+    CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+    auto mirrored = node.brush();
+    REQUIRE(mirrored.transform(bounds, vm::scaling_matrix(vm::vec3d{-1, 1, 1}), true)
+              .is_success());
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{mirrored}, bounds),
+      std::invalid_argument);
+    CHECK_THROWS_AS(
+      scene.validateClipContents(node, NodeContents{node.brush()}, bounds),
+      std::invalid_argument);
+  }
+  SECTION("combined point_data and displacement motion remains guarded")
+  {
+    const auto source = fixture(false, cache + test::displacementBlock());
+    auto scene = VmfScene::read(source, bounds);
+    auto& node = brush(scene.world());
+    auto moved = node.brush();
+    REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+              .is_success());
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+  SECTION("misplaced cache remains opaque")
+  {
+    auto source = fixture();
+    source.insert(source.find("solid {") + std::string{"solid {"}.size(), cache);
+    auto scene = VmfScene::read(source, bounds);
+    auto& node = brush(scene.world());
+    auto moved = node.brush();
+    REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+              .is_success());
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+  }
+}
 
 TEST_CASE("VmfScene renderer vertices keep outward clockwise faces", "[vmf]")
 {

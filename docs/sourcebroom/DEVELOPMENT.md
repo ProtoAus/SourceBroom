@@ -21,6 +21,45 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Native side point_data — A5.17
+
+VmfScene::pointDataEdits is pure per-content staging. Default opaque remains strict;
+only nodeEdits gets a validated-side allowance after count/index/finite/ring checks.
+Its before brush is immutable original provenance at all current callers. Numeric
+indices define polygon order, not repeated-row physical position. Count is bounded
+by actual rows/ring before count-sized allocation. Existing displacement arithmetic
+epsilon1e-6 matches authored xyz to original projected vertices; mismatches refuse.
+
+Lazy per-brush ring/incidence maps are built ONCE, with finite double position keys,
+unique whole-brush vertex identities, unchanged side/cardinality/incidence sets and
+forward old/current ring correspondence. This preserves relative cache winding;
+mirrors refuse rather than silently reindex. Every cached boundary is considered,
+not just changed plane triples. Surgical backwards coordinate-span replacement
+preserves unchanged index/coordinate lexemes and spacing inside changed rows.
+Local edits are unpublished until complete validation; later refusal stays atomic.
+
+Keep default clone/remove/group/reparent/clip/reference and parsed-displacement
+guards. Combined point-data/displacement geometry motion is conservatively refused
+by the cache preguard; mesh-only existing displacement behavior is not broadened.
+Vertices_plus is NOT point_data. Variant checks resolve native ID through production
+bindings; entry offsets differ. Its ACTED negative control is not a positive pass.
+
+Regression: synthetic predispatch RED62/57controls/5failures; final affected77,
+fullmodel246, actual original+H++ Map42assertions, parent App50. Actual requested
+brush moves/saves/reopens/undo/redoes; public fixture has a second reopened edit.
+The scene oracle also performs a second ACTED transform: identical-brush requests
+return before==after and cannot validate cached geometry. Parent review required
+both this oracle and once-per-brush correspondence before final freeze.
+
+Read-only real-map hidden opt-ins use SOURCEBROOM_NATIVE_EDIT_INPUT/ENTRY and
+optional VARIANT. No map assets/private paths in public tests; all writes are
+owned TestEnvironment outputs, original hashes unchanged. Earlier corpus probe-edit
+is metadata-only, NOT evidence arbitrary brush edits work. Actual production app/
+checker rebuild0/newwarnings0 and parent load/metadata corpus38/35/38 pass.
+Standalone clangd --check lacked a VS compilation database; its fallback errors
+are recorded, not represented as a clean LSP result. MSVC is the build gate.
+Owner/Hammer/visual retry pending; keep whole A5.16 as recovery. No full Source claim.
+
 ## Live native cordons — A5.16
 
 NativeCordons is VmfScene-owned authoritative state, not a mutable saved inspector.

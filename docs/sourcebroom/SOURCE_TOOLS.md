@@ -61,6 +61,29 @@ Other CSG/arbitrary topology, displacement and hidden/opaque/reference ambiguity
 remain refused; no stripping or MAP conversion. Use a copy, Save As and reopen in
 matching Hammer++; no owner/visual acceptance is implied by automated/static checks.
 
+## Native side point-data brushes — A5.17
+
+Known Strata-style side `point_data` is indexed polygon geometry, not inert editor
+metadata. Ordinary content edits now validate its unique direct block, integer
+count, exactly-once indices, finite xyz and cyclic bijection against the original
+face ring. Unique vertex incident-side identities map current geometry without
+inventing a global transform. Whole-brush side/cardinality/incidence and relative
+winding must remain unchanged, including uncached sides.
+
+Accepted movement, proper rotation, positive scaling, material/UV and bounded
+boundary edits patch changed coordinate tokens only; stationary face planes can
+still need updated boundary rows. Physical repeated-row order, unchanged index/
+coordinate spelling, comments and outside bytes survive. No-op and undo restore
+exact source; reopened scenes must accept another actual supported edit.
+
+Out-of-tolerance (existing1e-6), malformed, unknown or inconsistent caches refuse.
+Mirror/topology/cardinality changes and point-data clone/remove/group/reparent/clip
+are NOT enabled. Combined displacement + point-data base motion remains guarded.
+Hammer++ `vertices_plus` is a different unsupported schema, even when the native
+solid ID matches another map variant. No map or cache block is silently rewritten
+or removed to make an edit pass. The actual reported original brush passes the
+Map/save/history path; every other operation/map still requires its own evidence.
+
 ## Live native cordons — A5.16
 
 The map inspector contains **Live native cordons**, reading current UNSAVED state

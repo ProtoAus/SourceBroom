@@ -59,6 +59,14 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   Follow-up: complete capability-specific affordances before full A5, not merely save-time
   refusal. Falsifier: each unsupported action is unavailable or explains refusal
   before mutation; supported authoring, transforms, selection and undo still work.
+- **Native polygon-cache operation boundary — `mdl/VmfScene.cpp:pointDataEdits`.**
+  A5.17 enables strict same-incidence/winding `point_data` content edits and fixes
+  the reported original-map brush move. `vertices_plus` is a DIFFERENT unsupported
+  schema; point-data mirrors/topology/clone/delete/group/reparent/clip and combined
+  displacement/base-cache motion remain guarded. Next: separately validate native
+  vertices_plus semantics, not a wider opaque whitelist. Falsifier: independent
+  accepted/refused indexed/ring controls plus actual source bindings, surgical
+  save/reopen/further edit/undo and unchanged original hashes for each new arm.
 - **Windows preference regression check — `test/src/tst_QPreferenceStore.cpp`,
   replacement/reload sections.** The A5 full UI run passed 41/42, with this
   untouched test throwing rename `Access is denied` in its task-owned Unicode

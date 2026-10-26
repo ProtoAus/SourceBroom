@@ -1,11 +1,57 @@
-# SourceBroom validation — A5.16 live native cordons
+# SourceBroom validation — A5.17 native point-data brush editing
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.16 — live native cordon state, history and UI
+## A5.17 — strict indexed face-polygon content edits
+
+An owner reported a loaded VMF refusing brush-content edits. Actual production
+VmfDocument/VmfScene entry lookup reproduced it after a real transform: nine
+assertions, eight positive controls passed and the intended opaque refusal. Schema
+was side `point_data` with `numpts` and repeated indexed xyz rows. The previous
+corpus probe changed metadata, NOT brush geometry; its pass was insufficient for
+this acceptance question. That distinction is now explicit.
+
+- Synthetic predispatch RED:62 assertions,57 controls passed/five opaque failures.
+  Final focused model **77/77**, one full model **246/246** at the final cut and
+  actual original/Hammer++ combined Map opt-in **42 assertions** pass.
+- Original requested brush: acted Map move, modification count, Save As, reopen,
+  undo/redo/exact source restore. Variant resolved by production native ID, not
+  equal entry number: different `vertices_plus` schema has an ACTED negative
+  transform, unchanged brush/selection/history/count/native bytes/input controls.
+  Both originals retain their SHA-256 hashes; only test-owned outputs are written.
+- Independent cube/ramp controls cover cache/no-cache movement, proper rotation,
+  positive nonuniform scale, material/UV and boundary changes with unchanged plane
+  but changed polygon. A second ACTED reopened transform validates saved cache
+  consistency; identical-brush validation would bypass the helper and is not proof.
+- Strict count/index/finite/cyclic-bijection validation; malformed, duplicate,
+  missing, out-of-range, nonfinite, noncyclic, unknown/nested/misplaced and
+  mismatched inputs refuse. Mirror/topology/clone/remove/clip and combined
+  displacement/cache base motion remain guarded. Later-invalid Map batch is
+  mutation-free; exact unedited source and lexemes survive accepted edits/undo.
+- Whole-brush rings/incidence/orientation mappings are computed once lazily and
+  reused across cached faces; no numerical performance improvement is claimed.
+  Full model was rerun only when parent-required production/test corrections
+  invalidated the prior cut. Build/filter/test-oracle failures remain preserved.
+- Parent independently reviewed the final three-file cut and verified raw hashes
+  against the frozen worker report; no focused blockers remain. Actual app/checker/
+  App targets rebuild0/zero new compiler warnings and full App **50/50** passes.
+  No UI-source change or fresh full-UI claim. Standalone clangd fallback had no
+  compilation database; actual MSVC gates, not that fallback, are authoritative.
+- Rebuilt production checker remains document38/strict35/preview38, exact same
+  three strict refusals/all38 original hashes unchanged. These are load/metadata
+  checks only; brush evidence above is separately scoped to actual actions.
+
+Known boundary: existing 1e-6 arithmetic cache/ring tolerance, unchanged whole-brush
+face/vertex incidence and relative winding. No global opaque relaxation, stale
+cache, loader-authority switch, branch/profile hardcoding or native ID allocation.
+Hammer++ `vertices_plus` needs its own contract, not the point-data allowance.
+Human editor/Hammer/visual acceptance and full Source support remain pending.
+Installed package provenance belongs in the final candidate receipt.
+
+## Retained A5.16 — live native cordon state, history and UI
 
 VmfScene owns bounded cordon state with strict local admission, owning snapshots,
 strong scene-scoped record/box handles, pure complete staging and semantic-state

@@ -17,6 +17,7 @@
 #include "mdl/SourceEditorMetadata.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -220,10 +221,256 @@ bool supportedConnections(
   return true;
 }
 
+// point_data is a polygon cache, not inert metadata. Only content edits may
+// admit it, after matching the immutable polygon to the brush's actual ring.
+std::set<VmfEntryId> pointDataEdits(
+  const VmfDocument& d,
+  const Brush& before,
+  const Brush& after,
+  std::vector<VmfValueEdit>& edits)
+{
+  auto admitted = std::set<VmfEntryId>{};
+  if (before == after)
+  {
+    return admitted;
+  }
+  const auto integer = [](const std::string& token, const size_t bound, VmfEntryId id) {
+    auto result = size_t{0};
+    if (token.empty())
+    {
+      refuse(id, "invalid point_data integer");
+    }
+    for (const auto c : token)
+    {
+      if (c < '0' || c > '9' || result > bound / 10)
+      {
+        refuse(id, "invalid point_data integer");
+      }
+      result = result * 10 + static_cast<size_t>(c - '0');
+      if (result > bound)
+      {
+        refuse(id, "point_data integer outside polygon bounds");
+      }
+    }
+    return result;
+  };
+  struct PolygonCorrespondence
+  {
+    std::vector<vm::vec3d> before;
+    std::vector<vm::vec3d> after;
+    std::vector<size_t> indices;
+  };
+  auto correspondence = std::map<size_t, PolygonCorrespondence>{};
+  const auto positionKey = [](const vm::vec3d& position) {
+    return std::array<double, 3>{position.x(), position.y(), position.z()};
+  };
+  const auto prepareCorrespondence = [&](const VmfEntryId block) {
+    using Incidence = std::map<std::array<double, 3>, std::set<size_t>>;
+    auto oldIncidence = Incidence{};
+    auto newIncidence = Incidence{};
+    const auto collect =
+      [&](const Brush& brush, Incidence& incidence, const bool original) {
+        for (const auto& face : brush.faces())
+        {
+          auto ring = face.vertexPositions();
+          for (const auto& position : ring)
+          {
+            if (
+              !std::isfinite(position.x()) || !std::isfinite(position.y())
+              || !std::isfinite(position.z()))
+            {
+              refuse(block, "non-finite point_data geometry ring");
+            }
+            incidence[positionKey(position)].insert(face.lineNumber());
+          }
+          auto& polygon = correspondence[face.lineNumber()];
+          (original ? polygon.before : polygon.after) = std::move(ring);
+        }
+      };
+    collect(before, oldIncidence, true);
+    collect(after, newIncidence, false);
+    auto oldIdentities = std::set<std::set<size_t>>{};
+    auto newIdentities = std::set<std::set<size_t>>{};
+    for (const auto& [position, identity] : oldIncidence)
+    {
+      if (!oldIdentities.insert(identity).second)
+      {
+        refuse(block, "ambiguous point_data vertex incidence");
+      }
+    }
+    for (const auto& [position, identity] : newIncidence)
+    {
+      if (!newIdentities.insert(identity).second)
+      {
+        refuse(block, "ambiguous point_data vertex incidence");
+      }
+    }
+    if (oldIdentities != newIdentities)
+    {
+      refuse(block, "point_data topology/incidence change unsupported");
+    }
+    // Check the entire brush once, including faces without cached polygons.
+    for (auto& [binding, polygon] : correspondence)
+    {
+      if (polygon.before.empty() || polygon.before.size() != polygon.after.size())
+      {
+        refuse(block, "point_data topology/cardinality change unsupported");
+      }
+      auto targetIndices = std::map<std::set<size_t>, size_t>{};
+      for (size_t i = 0; i < polygon.after.size(); ++i)
+      {
+        targetIndices.emplace(newIncidence.at(positionKey(polygon.after[i])), i);
+      }
+      for (const auto& position : polygon.before)
+      {
+        const auto match = targetIndices.find(oldIncidence.at(positionKey(position)));
+        if (match == targetIndices.end())
+        {
+          refuse(block, "point_data topology/incidence change unsupported");
+        }
+        polygon.indices.push_back(match->second);
+      }
+      for (size_t i = 0; i < polygon.indices.size(); ++i)
+      {
+        if (
+          polygon.indices[(i + 1) % polygon.indices.size()]
+          != (polygon.indices[i] + 1) % polygon.indices.size())
+        {
+          refuse(block, "point_data winding reversal unsupported");
+        }
+      }
+    }
+  };
+  for (const auto& face : before.faces())
+  {
+    const auto side = face.lineNumber() - 1;
+    auto block = std::optional<VmfEntryId>{};
+    for (const auto child : d.entries()[side].children)
+    {
+      if (key(d, child) == "point_data")
+      {
+        if (block || !d.entries()[child].isBlock())
+        {
+          refuse(side, "duplicate or non-block side point_data");
+        }
+        block = child;
+      }
+    }
+    if (!block)
+    {
+      continue;
+    }
+    if (correspondence.empty())
+    {
+      prepareCorrespondence(*block);
+    }
+    const auto& polygon = correspondence.at(face.lineNumber());
+    const auto& oldRing = polygon.before;
+    const auto& newRing = polygon.after;
+    const auto& newForOld = polygon.indices;
+    auto rows = std::vector<VmfEntryId>{};
+    for (const auto row : d.entries()[*block].children)
+    {
+      const auto name = key(d, row);
+      if (d.entries()[row].isBlock() || (name != "numpts" && name != "point"))
+      {
+        refuse(*block, "unknown or nested point_data field");
+      }
+      if (name == "point")
+      {
+        rows.push_back(row);
+      }
+    }
+    const auto count = integer(value(d, *block, "numpts"), rows.size(), *block);
+    if (count < 3 || count != rows.size() || count != oldRing.size())
+    {
+      refuse(*block, "point_data count does not match brush polygon");
+    }
+    auto oldForIndex = std::vector<size_t>(count, count);
+    auto usedOld = std::set<size_t>{};
+    for (const auto row : rows)
+    {
+      const auto raw = text(d, *d.entries()[row].value);
+      auto input = std::istringstream{raw};
+      auto tokens = std::array<std::string, 4>{};
+      for (auto& token : tokens)
+      {
+        if (!(input >> token))
+        {
+          refuse(row, "invalid point_data row");
+        }
+      }
+      input >> std::ws;
+      if (!input.eof())
+      {
+        refuse(row, "trailing point_data row data");
+      }
+      const auto index = integer(tokens[0], count - 1, row);
+      const auto xyz = numbers(tokens[1] + " " + tokens[2] + " " + tokens[3], "nnn", row);
+      const auto position = vm::vec3d{xyz[0], xyz[1], xyz[2]};
+      auto match = std::optional<size_t>{};
+      for (size_t i = 0; i < count; ++i)
+      {
+        if (vm::is_equal(position, oldRing[i], SourceDisplacement::TransformEpsilon))
+        {
+          if (match)
+          {
+            refuse(row, "ambiguous point_data polygon vertex");
+          }
+          match = i;
+        }
+      }
+      if (!match || oldForIndex[index] != count || !usedOld.insert(*match).second)
+      {
+        refuse(row, "duplicate or unmatched point_data index/vertex");
+      }
+      oldForIndex[index] = *match;
+      const auto& replacement = newRing[newForOld[*match]];
+      auto updated = raw;
+      auto cursor = size_t{0};
+      // Patch backwards so unchanged coordinate/index lexemes and row spacing stay raw.
+      auto spans = std::array<std::pair<size_t, size_t>, 4>{};
+      for (size_t i = 0; i < tokens.size(); ++i)
+      {
+        cursor = raw.find(tokens[i], cursor);
+        spans[i] = {cursor, tokens[i].size()};
+        cursor += tokens[i].size();
+      }
+      for (size_t axis = 3; axis > 0; --axis)
+      {
+        if (oldRing[*match][axis - 1] != replacement[axis - 1])
+        {
+          updated.replace(
+            spans[axis].first, spans[axis].second, number(replacement[axis - 1]));
+        }
+      }
+      if (updated != raw)
+      {
+        edits.push_back({row, quote(updated)});
+      }
+    }
+    const auto step = (oldForIndex[1] + count - oldForIndex[0]) % count;
+    if (step != 1 && step != count - 1)
+    {
+      refuse(*block, "point_data indices do not follow polygon winding");
+    }
+    for (size_t i = 0; i < count; ++i)
+    {
+      if (oldForIndex[(i + 1) % count] != (oldForIndex[i] + step) % count)
+      {
+        refuse(*block, "point_data indices do not form a cyclic polygon");
+      }
+    }
+    admitted.insert(side);
+  }
+  return admitted;
+}
+
 bool opaque(
   const VmfDocument& d,
   VmfEntryId id,
-  const std::set<VmfEntryId>* displacementSides = nullptr)
+  const std::set<VmfEntryId>* displacementSides = nullptr,
+  const std::set<VmfEntryId>* pointDataSides = nullptr)
 {
   if (referencesGeometry(d, id))
   {
@@ -252,10 +499,14 @@ bool opaque(
       const auto name = key(d, child);
       if (name == "solid" || name == "side" || name == "hidden")
       {
-        if (opaque(d, child, displacementSides))
+        if (opaque(d, child, displacementSides, pointDataSides))
         {
           return true;
         }
+      }
+      else if (name == "point_data" && pointDataSides && pointDataSides->contains(id))
+      {
+        // This exact side block was checked against both complete geometry rings.
       }
       else if (name == "dispinfo" && displacementSides && displacementSides->contains(id))
       {
@@ -2598,6 +2849,19 @@ void VmfScene::nodeEdits(
       }
       checkGeometryReferences(id);
     }
+    const auto pointDataEditStart = edits.size();
+    const auto pointDataSides = pointDataEdits(d, b, a, edits);
+    if (edits.size() != pointDataEditStart)
+    {
+      if (opaque(d, id, nullptr, &pointDataSides))
+      {
+        refuse(id, "opaque attachment prevents point_data polygon edit");
+      }
+      if (protectExistingGeometry)
+      {
+        checkGeometryReferences(id);
+      }
+    }
     auto displacementSides = std::set<VmfEntryId>{};
     for (const auto& face : b.faces())
     {
@@ -2726,7 +2990,7 @@ void VmfScene::nodeEdits(
       {
         continue;
       }
-      if (opaque(d, id, &displacementSides))
+      if (opaque(d, id, &displacementSides, &pointDataSides))
       {
         refuse(id, "opaque attachment prevents safe brush edit");
       }

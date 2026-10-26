@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.16 live native cordon candidate:
+**Status:** Windows A5.17 native point-data brush-edit candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -38,7 +38,18 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.16 adds a **live native cordon editor** beside map properties. Edit modern
+A5.17 fixes an actual Strata VMF brush-edit refusal caused by native **point_data**
+face polygons. Supported movement, rotation, positive scaling, material/UV and
+boundary edits keep those cached vertices synchronized without re-exporting VMF.
+Only unchanged face/vertex incidence and winding are admitted; unknown/malformed
+caches, mirrors, topology changes, and point-data clone/delete/group/clip remain
+protected. Hammer++ **vertices_plus** is a different, still-unsupported schema.
+The exact reported brush passed real Map move/Save As/reopen/undo/redo; full model
+246/246, affected77 and App50 pass with zero new compiler warnings. Corpus load and
+metadata-edit checks are NOT arbitrary brush-edit acceptance. Human retry is pending;
+keep the whole A5.16 kit as recovery. Full Source support is not claimed.
+
+Retained A5.16 adds a **live native cordon editor** beside map properties. Edit modern
 loaded/new records, multiple boxes, names and optional activation; legacy bounds,
 activation and removal stay in their original form. The editor shows UNSAVED state,
 uses document-scoped handles, supports atomic Apply/Fit/undo/redo and preserves
