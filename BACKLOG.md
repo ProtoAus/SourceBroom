@@ -59,12 +59,12 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   Follow-up: complete capability-specific affordances before full A5, not merely save-time
   refusal. Falsifier: each unsupported action is unavailable or explains refusal
   before mutation; supported authoring, transforms, selection and undo still work.
-- **Native polygon-cache operation boundary — `mdl/VmfScene.cpp:pointDataEdits`.**
-  A5.17 enables strict same-incidence/winding `point_data` content edits and fixes
-  the reported original-map brush move. `vertices_plus` is a DIFFERENT unsupported
-  schema; point-data mirrors/topology/clone/delete/group/reparent/clip and combined
-  displacement/base-cache motion remain guarded. Next: separately validate native
-  vertices_plus semantics, not a wider opaque whitelist. Falsifier: independent
+- **Native polygon-cache operation boundary — `mdl/VmfScene.cpp:polygonCacheEdits`.**
+  A5.17 fixes indexed point_data content edits; A5.18 separately supports implicit
+  vertices_plus and strict observed inert preview roots. Mixed caches, mirrors/
+  topology/clone/delete/group/reparent/clip and combined displacement/base-cache
+  motion remain guarded. Nonempty LUT/texlight/backgrounds and future root fields
+  need their own evidenced contract, not a wider opaque/root whitelist. Falsifier: independent
   accepted/refused indexed/ring controls plus actual source bindings, surgical
   save/reopen/further edit/undo and unchanged original hashes for each new arm.
 - **Windows preference regression check — `test/src/tst_QPreferenceStore.cpp`,

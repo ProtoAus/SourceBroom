@@ -21,9 +21,40 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Hammer++ polygons and strict inert roots — A5.18
+
+polygonCacheEdits shares per-brush correspondence with thin row parsing: explicit
+point_data indices versus implicit physical vertices_plus order. Raw xyz spans are
+patched backwards, preserving unchanged lexemes/spacing. Opaque allowance now
+identifies EXACT validated block IDs, not side IDs; duplicates/mixed same-side
+caches refuse, so one schema cannot lend its side approval to another. No default
+clone/remove/group/reparent/clip/ref/displacement guard change.
+
+geometryProblem separately recognizes exact observed root schemas before isBlock,
+catching malformed scalar known names and scalar+block duplicates. Exact named
+fields reject color00/name00 aliases; singleton roots/fields and no unknown/nested
+data. Numeric/RGB/count/toggle shapes are strict; LUT slots paired and strings
+EMPTY ONLY, texlight EMPTY, bgimages EMPTY. bounced/supersample/cubemap admit
+nonnegativeint32 count/level-shaped scalars without certifying boolean semantics.
+No wildcard suffix, resource resolving, default insertion or metadata rewriting.
+
+Desired H++ ACTED positive was compiled BEFORE wiring: RED32/31controls/1 side
+opaque, then side-only ROOT-RED32/31controls/1 root failure, then both-positive.
+Final original+H++ actual Map54 includes production native-ID lookup, save/reopen,
+second ACTED reopened edit/undo/redo/exact restore and unchanged original hashes.
+Public tests synthesize both cache schemas and root shapes; no private assets/paths/
+IDs embedded. Earlier failed test compile followed by a stale-binary pass is not
+RED. Final focus80/fullmodel249, actual parent app/checker/App build0/newwarnings0/
+App50 and separate metadata/loadcorpus38/35/38 pass. Parent final read/hash review
+found no focused blocker; owner/Hammer/compiler retry remains pending.
+
+Known limitations remain same1e-6/incidence/winding, mixed caches, mirrors/topology/
+other operations, combined displacement/base motion and nonempty/future root data.
+Keep whole A5.17 as recovery. Larger visgroup/hidden protocol is not implemented.
+
 ## Native side point_data — A5.17
 
-VmfScene::pointDataEdits is pure per-content staging. Default opaque remains strict;
+The point_data branch of polygonCacheEdits in VmfScene.cpp is pure per-content staging. Default opaque remains strict;
 only nodeEdits gets a validated-side allowance after count/index/finite/ring checks.
 Its before brush is immutable original provenance at all current callers. Numeric
 indices define polygon order, not repeated-row physical position. Count is bounded

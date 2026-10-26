@@ -54,6 +54,7 @@
 #include <iterator>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -308,15 +309,20 @@ void checkOnlyPlaneTokensChanged(const std::string& original, const std::string&
 }
 } // namespace
 
-TEST_CASE("VmfMap point_data history save and atomic refusal", "[vmf]")
+TEST_CASE("VmfMap polygon caches history save and atomic refusal", "[vmf]")
 {
   const auto invalid = GENERATE(false, true);
+  const auto indexed = GENERATE(false, true);
   auto source = nativeRamp(false);
-  // Independent authored top ring of the ramp, deliberately non-physical index order.
-  const auto polygon = std::string{
-    "point_data { \"numpts\" \"4\" \"point\" \"2 64 64 64\" "
-    "\"point\" \"0 0.00 0 32\" \"point\" \"3 64 0 64\" "
-    "\"point\" \"1 0 64 32\" }"};
+  // Independently authored ramp polygon: explicit indices vs physical row order.
+  const auto polygon = indexed
+    ? std::string{
+        "point_data { \"numpts\" \"4\" \"point\" \"2 64 64 64\" "
+        "\"point\" \"0 0.00 0 32\" \"point\" \"3 64 0 64\" "
+        "\"point\" \"1 0 64 32\" }"}
+    : std::string{
+        "vertices_plus { \"v\" \"64 64 64\" \"v\" \"64 0 64\" "
+        "\"v\" \"0.00 0 32\" \"v\" \"0 64 32\" }"};
   const auto document = VmfDocument::parse(source);
   auto append = std::vector<VmfStructuralEdit>{};
   for (size_t i = 0; i < document.entries().size(); ++i)
@@ -333,7 +339,8 @@ TEST_CASE("VmfMap point_data history save and atomic refusal", "[vmf]")
   source = document.serialize({}, append);
   if (invalid)
   {
-    source.replace(source.find("1 0 64 32"), 9, "1 1 64 32");
+    const auto row = indexed ? std::string{"1 0 64 32"} : std::string{"0 64 32"};
+    source.replace(source.find(row), row.size(), indexed ? "1 1 64 32" : "1 64 32");
   }
   auto env = fs::TestEnvironment{};
   const auto input = env.dir() / "point-data.vmf";
@@ -361,8 +368,8 @@ TEST_CASE("VmfMap point_data history save and atomic refusal", "[vmf]")
     REQUIRE(translateSelection(map, {16, 8, 4}));
     CHECK(map.modificationCount() == beforeCount + 1);
     const auto saved = map.vmfScene()->serialize(map.worldNode());
-    CHECK(saved.find("0 16 8 36") != std::string::npos);
-    CHECK(saved.find("2 80 72 68") != std::string::npos);
+    CHECK(saved.find("16 8 36") != std::string::npos);
+    CHECK(saved.find("80 72 68") != std::string::npos);
     REQUIRE(map.saveAs(output).is_success());
     CHECK(readBinary(output) == saved);
     auto reopened = MapFixture{};
@@ -377,6 +384,80 @@ TEST_CASE("VmfMap point_data history save and atomic refusal", "[vmf]")
     CHECK_FALSE(flipSelection(map, {0, 0, 0}, vm::axis::x));
     CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
   }
+  CHECK(readBinary(input) == source);
+}
+
+TEST_CASE("VmfMap Hammer++ root settings acted atomic controls", "[vmf]")
+{
+  const auto fault = GENERATE(-1, 0, 1, 2, 3);
+  auto settings = std::string{R"(palette_plus { color0 "0 128 255" }
+colorcorrection_plus { name0 "" weight0 "+0.2500" }
+bgimages_plus { })"};
+  if (fault == 0)
+  {
+    settings += "unknown_plus {}";
+  }
+  if (fault == 1)
+  {
+    settings += "light_plus { future_field 0 }";
+  }
+  if (fault == 2)
+  {
+    settings += R"(light_plus { texlight "synthetic/light" })";
+  }
+  if (fault == 3)
+  {
+    settings += "palette_plus 0";
+  }
+  const auto source = nativeRamp(false) + settings;
+  auto env = fs::TestEnvironment{};
+  const auto input = env.dir() / "settings.vmf";
+  writeBinary(input, source);
+  auto fixture = MapFixture{};
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto& map = fixture.load(input, config);
+  auto& node = ramp(map);
+  const auto oldBrush = node.brush();
+  auto* second = map.worldNode().defaultLayer()->children().back();
+  REQUIRE(second != &node);
+  REQUIRE(dynamic_cast<EntityNode*>(second));
+  const auto oldSecond = static_cast<EntityNode*>(second)->entity();
+  const auto nativeId = map.vmfScene()->nativeId(node);
+  selectNodes(map, {&node, second});
+  const auto selection = map.selection().nodes;
+  const auto history = map.undoCommandName();
+  const auto count = map.modificationCount();
+  REQUIRE(map.vmfScene()->serialize(map.worldNode()) == source);
+  if (fault < 0)
+  {
+    REQUIRE(translateSelection(map, {16, 8, 4}));
+    CHECK(node.brush() != oldBrush);
+    CHECK(static_cast<EntityNode*>(second)->entity() != oldSecond);
+    CHECK(map.modificationCount() == count + 1);
+    const auto saved = map.vmfScene()->serialize(map.worldNode());
+    CHECK(saved.ends_with(settings));
+    REQUIRE(map.saveAs(env.dir() / "saved.vmf").is_success());
+    auto reopened = MapFixture{};
+    auto& loaded = reopened.load(env.dir() / "saved.vmf", config);
+    selectNodes(loaded, {&ramp(loaded)});
+    REQUIRE(translateSelection(loaded, {1, 2, 3}));
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+  }
+  else
+  {
+    CHECK_FALSE(translateSelection(map, {16, 8, 4}));
+    CHECK(node.brush() == oldBrush);
+    CHECK(static_cast<EntityNode*>(second)->entity() == oldSecond);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.undoCommandName() == history);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  CHECK(map.selection().nodes == selection);
+  CHECK(map.vmfScene()->nativeId(node) == nativeId);
   CHECK(readBinary(input) == source);
 }
 
@@ -398,13 +479,17 @@ TEST_CASE("VmfMap point_data installed history opt-in", "[.][vmf][installed]")
       nativeId = identityScene.nativeId(node);
     }
     for (const auto* child : node.children())
+    {
       self(self, *child);
+    }
   };
   identity(identity, identityScene.world());
   REQUIRE_FALSE(nativeId.empty());
   auto inputs = std::vector<std::filesystem::path>{input};
   if (variant)
+  {
     inputs.emplace_back(variant);
+  }
   auto env = fs::TestEnvironment{};
   for (size_t i = 0; i < inputs.size(); ++i)
   {
@@ -423,7 +508,9 @@ TEST_CASE("VmfMap point_data installed history opt-in", "[.][vmf][installed]")
         selected = dynamic_cast<BrushNode*>(&node);
       }
       for (auto* child : node.children())
+      {
         self(self, *child);
+      }
     };
     find(find, map.worldNode());
     INFO("Input variant index " << i << "; native solid " << nativeId);
@@ -432,39 +519,45 @@ TEST_CASE("VmfMap point_data installed history opt-in", "[.][vmf][installed]")
     REQUIRE(
       diagnostic.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
         .is_success());
+    auto rootSchema = std::string{};
     if (i != 0)
     {
-      // Same native solid, different unsupported Hammer++ polygon-cache schema.
       const auto& document = map.vmfScene()->document();
-      auto caches = size_t{0};
-      for (const auto side : document.entries()[selected->lineNumber() - 1].children)
+      for (const auto root : document.roots())
       {
-        for (const auto child : document.entries()[side].children)
+        const auto name =
+          std::string{document.tokenContents(document.entries()[root].key)};
+        if (name.ends_with("_plus"))
         {
-          if (document.tokenContents(document.entries()[child].key) == "vertices_plus")
+          rootSchema += name + '\n';
+          for (const auto field : document.entries()[root].children)
           {
-            ++caches;
+            const auto& entry = document.entries()[field];
+            rootSchema += "  " + std::string{document.tokenContents(entry.key)};
+            if (entry.value)
+            {
+              auto scalarInput =
+                std::istringstream{std::string{document.tokenContents(*entry.value)}};
+              auto n = double{};
+              auto count = size_t{};
+              while (scalarInput >> n)
+              {
+                ++count;
+              }
+              rootSchema +=
+                " scalar numeric-components=" + std::to_string(count)
+                + (document.tokenContents(*entry.value).empty() ? " empty" : " nonempty");
+            }
+            else
+            {
+              rootSchema += " BLOCK";
+            }
+            rootSchema += '\n';
           }
         }
       }
-      REQUIRE(caches == selected->brush().faceCount());
-      CHECK_THROWS_AS(
-        map.vmfScene()->validateContents(*selected, NodeContents{diagnostic}, bounds),
-        std::invalid_argument);
-      selectNodes(map, {selected});
-      const auto selection = map.selection().nodes;
-      const auto count = map.modificationCount();
-      const auto history = map.undoCommandName();
-      const auto oldBrush = selected->brush();
-      CHECK_FALSE(translateSelection(map, {16, 8, 4}));
-      CHECK(selected->brush() == oldBrush);
-      CHECK(map.selection().nodes == selection);
-      CHECK(map.modificationCount() == count);
-      CHECK(map.undoCommandName() == history);
-      CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
-      CHECK(readBinary(inputs[i]) == bytes);
-      continue;
     }
+    INFO("Root schema:" << '\n' << rootSchema);
     REQUIRE_NOTHROW(
       map.vmfScene()->validateContents(*selected, NodeContents{diagnostic}, bounds));
     const auto oldBounds = selected->brush().bounds();
@@ -481,6 +574,26 @@ TEST_CASE("VmfMap point_data installed history opt-in", "[.][vmf][installed]")
     auto reopened = MapFixture{};
     auto& loaded = reopened.load(output, config);
     CHECK(loaded.vmfScene()->serialize(loaded.worldNode()) == saved);
+    auto* reopenedSubject = static_cast<BrushNode*>(nullptr);
+    const auto findReopened = [&](const auto& self, Node& node) -> void {
+      if (
+        auto* candidate = dynamic_cast<BrushNode*>(&node);
+        candidate && loaded.vmfScene()->nativeId(*candidate) == nativeId)
+      {
+        REQUIRE_FALSE(reopenedSubject);
+        reopenedSubject = candidate;
+      }
+      for (auto* child : node.children())
+      {
+        self(self, *child);
+      }
+    };
+    findReopened(findReopened, loaded.worldNode());
+    REQUIRE(reopenedSubject);
+    const auto reopenedBefore = reopenedSubject->brush();
+    selectNodes(loaded, {reopenedSubject});
+    REQUIRE(translateSelection(loaded, {1, 2, 3}));
+    REQUIRE(reopenedSubject->brush() != reopenedBefore);
     map.undoCommand();
     CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
     map.redoCommand();

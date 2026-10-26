@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.17 native point-data brush-edit candidate:
+**Status:** Windows A5.18 Hammer++ polygon-cache editing candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -38,7 +38,16 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.17 fixes an actual Strata VMF brush-edit refusal caused by native **point_data**
+A5.18 adds the corresponding **Hammer++ vertices_plus** content-edit path and
+strictly admits the observed scalar preview-settings roots without rewriting them.
+Both the original Strata map and its native-ID-matched Hammer++ counterpart passed
+real Map move/save/reopen/further-edit/undo/redo checks. Polygon caches use exact
+validated-block allowances, not a broad opaque whitelist. Full model249/249,
+affected80, actual-map54 assertions and App50 pass; production builds have no new
+warnings. Mixed caches, mirrors/topology and nonempty LUT/texlight/background
+settings remain guarded. Owner/Hammer retry is pending; keep whole A5.17 as recovery.
+
+Retained A5.17 fixes an actual Strata VMF brush-edit refusal caused by native **point_data**
 face polygons. Supported movement, rotation, positive scaling, material/UV and
 boundary edits keep those cached vertices synchronized without re-exporting VMF.
 Only unchanged face/vertex incidence and winding are admitted; unknown/malformed

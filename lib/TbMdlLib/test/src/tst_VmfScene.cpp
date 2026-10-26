@@ -162,12 +162,17 @@ TEST_CASE("VmfScene native brush edit opt-in", "[.][vmf][installed]")
     == original);
 }
 
-TEST_CASE("VmfScene point_data same-combinatorics edits", "[vmf]")
+TEST_CASE("VmfScene polygon caches same-combinatorics edits", "[vmf]")
 {
-  const auto cache = std::string{
-    "point_data { \"numpts\" \"4\" "
-    "\"point\" \"2 64.00 64 64\" \"point\" \"0 0.00 0 64\" "
-    "\"point\" \"3 64 0 64\" \"point\" \"1 0 64 64\" }"};
+  const auto indexed = GENERATE(false, true);
+  const auto cache = indexed
+    ? std::string{
+        "point_data { \"numpts\" \"4\" "
+        "\"point\" \"2 64.00 64 64\" \"point\" \"0 0.00 0 64\" "
+        "\"point\" \"3 64 0 64\" \"point\" \"1 0 64 64\" }"}
+    : std::string{
+        "vertices_plus { \"v\" \"64.00 64 64\" \"v\" \"64 0 64\" "
+        "\"v\" \"0.00 0 64\" \"v\" \"0 64 64\" }"};
   const auto withCache = GENERATE(false, true);
   const auto operation = GENERATE(0, 1, 2, 3, 4, 5);
   const auto bounds = vm::bbox3d{4096};
@@ -233,8 +238,8 @@ TEST_CASE("VmfScene point_data same-combinatorics edits", "[vmf]")
   CHECK(continuedReopened.serialize(continuedReopened.world()) == continuedSaved);
   if (withCache && operation == 3)
   {
-    CHECK(saved.find("0 0.00 0 64") != std::string::npos);
-    CHECK(saved.find("2 80 64 64") != std::string::npos);
+    CHECK(saved.find("0.00 0 64") != std::string::npos);
+    CHECK(saved.find("80 64 64") != std::string::npos);
   }
   if (withCache && operation >= 4)
   {
@@ -347,6 +352,233 @@ TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
               .is_success());
     CHECK_THROWS_AS(
       scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+  }
+}
+
+TEST_CASE("VmfScene vertices_plus strict schema and operation guards", "[vmf]")
+{
+  const auto cache = std::string{
+    R"(vertices_plus { "v" "0 0 64" "v" "0 64 64" "v" "64 64 64" "v" "64 0 64" })"};
+  const auto bounds = vm::bbox3d{4096};
+  SECTION("malformed and mixed caches preserve bytes but refuse edits")
+  {
+    const auto fault = GENERATE(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+    auto malformed = cache;
+    const auto replace = [&](const std::string& from, const std::string& to) {
+      malformed.replace(malformed.find(from), from.size(), to);
+    };
+    switch (fault)
+    {
+    case 0:
+      replace("0 64 64", "nan 64 64");
+      break;
+    case 1:
+      replace("0 64 64", "0 0 64");
+      break;
+    case 2:
+      replace("0 64 64", "1 64 64");
+      break;
+    case 3:
+      replace("0 64 64", "0 64");
+      break;
+    case 4:
+      replace("0 64 64", "0 64 64 0");
+      break;
+    case 5:
+      malformed = R"(vertices_plus { v "0 0 64" v "64 64 64" v "0 64 64" v "64 0 64" })";
+      break;
+    case 6:
+      malformed += cache;
+      break;
+    case 7:
+      malformed.insert(malformed.size() - 1, "numpts 4");
+      break;
+    case 8:
+      replace("\"v\" \"0 64 64\"", "v { }");
+      break;
+    case 9:
+      replace("\"v\" \"0 64 64\"", "");
+      break;
+    case 10:
+      malformed.insert(malformed.size() - 1, "v \"0 0 64\"");
+      break;
+    case 11:
+      malformed +=
+        R"(point_data { numpts 4 point "0 0 0 64" point "1 0 64 64" point "2 64 64 64" point "3 64 0 64" })";
+      break;
+    }
+    const auto source = fixture(false, malformed);
+    auto scene = VmfScene::read(source, bounds);
+    auto& node = brush(scene.world());
+    auto moved = node.brush();
+    REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+              .is_success());
+    CHECK(scene.serialize(scene.world()) == source);
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+  SECTION("changed vertex cardinality refuses before dispatch")
+  {
+    auto scene = VmfScene::read(fixture(false, cache), bounds);
+    auto& node = brush(scene.world());
+    auto changed = node.brush();
+    REQUIRE(changed.removeVertices(bounds, {{64, 64, 64}}).is_success());
+    REQUIRE(changed.vertexCount() != node.brush().vertexCount());
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{changed}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == fixture(false, cache));
+  }
+  SECTION("known vertices_plus does not relax other operations")
+  {
+    const auto attachment = GENERATE(0, 1, 2);
+    const auto source = fixture(false, cache + (attachment == 1 ? test::displacementBlock() : attachment == 2 ? "unknown {}" : ""));
+    auto scene = VmfScene::read(source, bounds);
+    auto& node = brush(scene.world());
+    auto moved = node.brush();
+    REQUIRE(moved
+              .transform(
+                bounds,
+                attachment == 0 ? vm::scaling_matrix(vm::vec3d{-1, 1, 1})
+                                : vm::translation_matrix(vm::vec3d{16, 8, 4}),
+                true)
+              .is_success());
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
+    CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+    CHECK_THROWS_AS(
+      scene.validateClipContents(node, NodeContents{node.brush()}, bounds),
+      std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+  SECTION("misplaced cache and geometry references remain guarded")
+  {
+    const auto reference = GENERATE(false, true);
+    auto source = fixture(false, reference ? cache : "");
+    if (reference)
+    {
+      source += R"(entity { id 20 classname info_overlay sides "3" })";
+    }
+    else
+    {
+      source.insert(source.find("solid {") + std::string{"solid {"}.size(), cache);
+    }
+    auto scene = VmfScene::read(source, bounds);
+    auto& node = brush(scene.world());
+    auto moved = node.brush();
+    REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+              .is_success());
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+}
+
+TEST_CASE("VmfScene Hammer++ root settings strict inert schemas", "[vmf]")
+{
+  const auto settings = std::string{R"(
+palette_plus { color0 "0 128 255" color15 "255 0 64" }
+colorcorrection_plus { name0 "" weight0 "+0.2500" name3 "" weight3 "1" }
+light_plus { samples_sun 16 samples_ambient 8 samples_vis 4 texlight "" incremental_delay 0.5 bake_dist 1024 radius_scale 1 brightness_scale 1 ao_scale 1 bounced 2 incremental 1 supersample 2 bleed_hack 0 soften_cosine 0.5 debug 0 cubemap 2 }
+postprocess_plus { enable 1 copied_from_controller 0 bloom_scale 1 bloom_exponent 2 bloom_saturation 1 auto_exposure_min 0.5 auto_exposure_max 2 tonemap_percent_target 0.6 tonemap_percent_bright_pixels 0.02 tonemap_min_avg_luminance 0.1 tonemap_rate 1 vignette_enable 1 vignette_start 0.5 vignette_end 1 vignette_blur 0.2 }
+bgimages_plus { }
+)"};
+  const auto fault =
+    GENERATE(-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17);
+  auto roots = settings;
+  const auto replace = [&](const std::string& from, const std::string& to) {
+    roots.replace(roots.find(from), from.size(), to);
+  };
+  switch (fault)
+  {
+  case 0:
+    roots += "unknown_plus {}";
+    break;
+  case 1:
+    replace("color15", "color00");
+    break;
+  case 2:
+    replace("name3", "name00");
+    break;
+  case 3:
+    replace("0 128 255", "0 128 256");
+    break;
+  case 4:
+    replace("0 128 255", "0 128.5 255");
+    break;
+  case 5:
+    replace("samples_sun 16", "samples_sun 2147483648");
+    break;
+  case 6:
+    replace("incremental 1", "incremental 2");
+    break;
+  case 7:
+    replace("radius_scale 1", "radius_scale nan");
+    break;
+  case 8:
+    replace("texlight \"\"", "texlight \"synthetic/light\"");
+    break;
+  case 9:
+    replace("name0 \"\"", "name0 \"synthetic/lut.raw\"");
+    break;
+  case 10:
+    replace("weight0 \"+0.2500\"", "");
+    break;
+  case 11:
+    roots += "palette_plus {}";
+    break;
+  case 12:
+    roots += "palette_plus 0";
+    break;
+  case 13:
+    replace("bgimages_plus { }", "bgimages_plus 0");
+    break;
+  case 14:
+    replace("color15", "color0");
+    break;
+  case 15:
+    replace("color15 \"255 0 64\"", "color15 {}");
+    break;
+  case 16:
+    replace("bgimages_plus { }", "bgimages_plus { image 0 }");
+    break;
+  case 17:
+    replace("bloom_scale 1", "bloom_scale 1 unknown 0");
+    break;
+  }
+  const auto source = fixture() + roots;
+  const auto bounds = vm::bbox3d{4096};
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  const auto before = node.brush();
+  auto moved = before;
+  REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
+            .is_success());
+  REQUIRE(moved != before);
+  CHECK(scene.serialize(scene.world()) == source);
+  if (fault == -1)
+  {
+    REQUIRE_NOTHROW(scene.validateContents(node, NodeContents{moved}, bounds));
+    node.setBrush(moved);
+    const auto saved = scene.serialize(scene.world());
+    CHECK(saved != source);
+    CHECK(saved.ends_with(roots));
+    auto reopened = VmfScene::read(saved, bounds);
+    auto& next = brush(reopened.world());
+    auto continued = next.brush();
+    REQUIRE(continued.transform(bounds, vm::translation_matrix(vm::vec3d{1, 2, 3}), true)
+              .is_success());
+    REQUIRE(continued != next.brush());
+    CHECK_NOTHROW(reopened.validateContents(next, NodeContents{continued}, bounds));
+    node.setBrush(before);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+  else
+  {
+    CHECK_THROWS_AS(
+      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
   }
 }
 

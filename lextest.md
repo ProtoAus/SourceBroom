@@ -213,6 +213,19 @@ is pending, not inferred from source/model/tool/runtime checks:
   ambiguity remain guarded; report exact refusals rather than bypassing native
   preservation through MAP export. Test counts/review are not this observation.
 
+## A5.18 original and Hammer++ edits — pending owner retry
+
+- [ ] In the whole A5.18 kit, open a COPY of the original VMF OR its `_h++`
+  counterpart. Move the previously refused brush, undo/redo, Save As a new file
+  and reopen; report the exact tool and diagnostic if anything still refuses.
+- [ ] Optionally inspect the saved copy in matching Strata/Hammer++ for intact
+  brush shape/cached vertices/preview settings. No original is a write target.
+
+Pending, not inferred from automated actual-map54/focus80/model249/App50 passes.
+Only same-incidence/winding content changes; mixed caches/mirrors/topology/other
+opaque operations/combined displacement-base motion stay guarded. Nonempty LUT/
+texlight/backgrounds or future root data still refuse. Keep whole A5.17 recovery.
+
 ## A5.17 native point-data brush edits — pending owner retry
 
 Reported negative in A5.16: owner could load a Strata map but a native brush-content
@@ -228,8 +241,8 @@ Automated reproduction identified side point_data. This is NOT an A5.17 human pa
 
 All pending. Same-incidence/winding movement/rotation/positive-scale/content edits
 only; topology/mirrors/point-data clone/delete/group/clip and combined displacement
-base motion remain guarded. `_h++` uses vertices_plus and is still unsupported in
-this increment. Never strip blocks/overwrite originals as a workaround. Keep the
+base motion remain guarded. `_h++` uses vertices_plus and was unsupported in
+A5.17; A5.18 separately admits the bounded case above. Never strip blocks/overwrite originals as a workaround. Keep the
 whole A5.16 kit as recovery. Automated Map42/focus77/model246 are not human passes.
 
 ## A5.16 live native cordons — pending owner/Hammer check

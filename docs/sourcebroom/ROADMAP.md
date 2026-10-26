@@ -33,7 +33,17 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.17 candidate:** native Strata `point_data` polygons no longer blanket-block
+- **A5.18 candidate:** Hammer++ `vertices_plus` implicit-order polygons share the
+  strict indexed `point_data` ring/incidence/winding correspondence and surgical
+  xyz patcher. Exact block IDs prevent cross-schema admission; mixed caches refuse.
+  Observed inert preview-root shapes are separately validated, not `*_plus`
+  whitelisted. Both actual original and Hammer++ Map/save/reopen/further-edit/undo
+  paths pass54 assertions; fullmodel249/focus80/App50 and real productbuild0/new
+  warnings0 pass. Corpus load/metadata38/35/38 and original hashes unchanged, not
+  universal brush acceptance. Nonempty LUT/texlight/backgrounds, future root fields,
+  mirrors/topology and combined displacement/cache motion remain guarded. Owner
+  retry pending. Larger native visgroup/hidden authoring still needs its protocol.
+- **Retained A5.17 candidate:** native Strata `point_data` polygons no longer blanket-block
   supported brush-content edits. Strict indexed cache/ring matching, whole-brush
   vertex incidence and preserved relative winding admit same-combinatorics motion,
   positive scaling, bounded boundary edits and UV/material changes with surgical

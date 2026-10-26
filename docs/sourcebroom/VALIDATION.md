@@ -1,11 +1,53 @@
-# SourceBroom validation — A5.17 native point-data brush editing
+# SourceBroom validation — A5.18 Hammer++ polygon-cache editing
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.17 — strict indexed face-polygon content edits
+## A5.18 — Hammer++ cache and inert-root admission
+
+Thin schema-specific row parsing now supports implicit-order `vertices_plus` and
+indexed `point_data` using one per-brush correspondence. Only EXACT validated
+native block IDs enter the per-content opaque allowance; duplicate/mixed/malformed
+blocks cannot borrow a side's approval. Default other-operation/ref/displacement
+checks remain. No global transform guess, cache deletion or loader-authority change.
+
+- Compilable early desired H++ positive RED32:31 acted controls including the
+  original positive, one opaque-side failure. Side-only wiring then produced the
+  expected ROOT-RED32/31 controls/one unknown-root refusal, both retained.
+- Approved strict root wiring produced early BOTH-positive46 assertions; final
+  actual Map opt-in **54 assertions** passes for original and native-ID-resolved
+  H++ counterpart, including Save As/reopen/second ACTED edit/undo/redo/exact source
+  restore. Both original input SHA-256 hashes unchanged, writes test-owned only.
+- Final focused **80/80**, ONE fullmodel **249/249** after final code. Synthetic
+  cache/no-cache translate/rotate/positive-scale/boundary/UV/material, surgical
+  spelling, actual reopened edit and exact restore; malformed/nonfinite/noncyclic/
+  duplicate/misplaced/mixed cache, cardinality, reference, mirror and other-operation
+  refusals. Point-data behavior retained across shared tests.
+- Safe-root/no-cache motion acts. Unknown/future/nested/duplicate/malformed fields,
+  scalar known-root aliases, scalar+block root duplicates, color00/name00 slot
+  aliases, nonempty LUT/texlight/backgrounds refuse. Map later-invalid batches keep
+  brush, second entity, selection, native ID, history, dirty count and bytes.
+- Roots admitted only by exact scalar schema: integer RGB0..255; nonnegative
+  int32 sample/count-shaped values (ambiguous bounced/supersample/cubemap NOT claimed
+  booleans); explicit toggles0/1; finite other scalars; paired LUT slots with EMPTY
+  names; EMPTY texlight and EMPTY bgimages. All original root text stays raw.
+- Parent independently reviewed final three source files and raw hashes; no focused
+  blockers. Actual app/checker/App targets build0/zero new warnings and App50 passes.
+  Production load/metadata corpus38/35/38 retains exact same three strict refusals
+  and all38 input hashes. This corpus is NOT arbitrary brush-edit evidence.
+
+An early test-only compile failure/stale-binary42-assertion run is NOT RED evidence;
+fixed compilable desired subject and two runtime REDs above are the valid gates.
+No UI-source change/full-UI claim; LSP observations remain hints/inherited warnings,
+not a blanket clean claim. Same1e-6/cache-incidence/winding limits remain. Mixed
+caches, mirrors/topology/clone/remove/group/reparent/clip, combined displacement/base
+cache motion and unobserved root/resource shapes remain guarded. Owner/Hammer/
+visual/compiler retry and full Source support pending. Final receipt records the
+installed source/artifact/runtime hashes separately.
+
+## Retained A5.17 — strict indexed face-polygon content edits
 
 An owner reported a loaded VMF refusing brush-content edits. Actual production
 VmfDocument/VmfScene entry lookup reproduced it after a real transform: nine

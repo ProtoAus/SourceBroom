@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.17 point-data brush-edit candidate
+# Try the Windows SourceBroom A5.18 Hammer++ editing candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,28 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.17: edit ordinary native point-data brushes
+## A5.18: ordinary Hammer++ polygon-cache edits
+
+You can now retry the **Hammer++ counterpart as well as the original VMF** on
+copies. Repeated `vertices_plus` xyz rows have physical polygon order rather than
+Strata's explicit indices; they are separately parsed and strictly matched before
+sharing the same geometry correspondence. Known observed scalar preview roots are
+preserved raw and admitted only with their exact validated shapes.
+
+**Quick owner check (pending):** open a copy of either file, move the brush that
+refused, undo/redo, Save As a new file and reopen. Automated checks did this on BOTH
+actual inputs and performed another real edit after reopening. Keep the whole
+A5.17 folder as recovery; never merge DLLs or strip native cache/settings blocks.
+
+This does not unlock arbitrary topology: mirrors, changed vertex/face incidence,
+clone/remove/group/reparent/clip and combined displacement/cache base motion stay
+restricted. Same-side mixed cache formats refuse. Root settings must have exact
+known fields, finite numeric shapes, unique roots/fields; LUT names and texlight
+must be EMPTY and bgimages_plus must be EMPTY. Nonempty resources/backgrounds,
+unknown/nested/duplicate/malformed/future settings still guard geometry edits.
+Those are explicit limits, not a full Hammer++/compiler or all-map certification.
+
+## Retained A5.17: edit ordinary native point-data brushes
 
 A reported Strata map loaded correctly but refused an ordinary brush edit because
 its side `point_data` polygons were opaque. This candidate understands the strict
@@ -39,8 +60,8 @@ This is not a whitelist bypass. Malformed/unknown/mismatched caches still refuse
 Mirrors, topology/cardinality changes and point-data duplication/removal/grouping/
 reparenting/clipping remain guarded. Combined displacement + point-data base
 motion is still conservatively refused. The `_h++` counterpart uses a DIFFERENT
-`vertices_plus` schema: its controlled refusal is expected in this build, not a
-point-data success. Test the original file for this retry. Keep the **whole A5.16**
+`vertices_plus` schema: its controlled refusal was expected in A5.17, not a
+point-data success. A5.18 separately supports the bounded counterpart described above. Keep the **whole A5.16**
 kit as recovery and do not merge DLLs, strip cache blocks or overwrite originals.
 
 Corpus load/metadata-edit passes do not prove every brush or operation is editable.

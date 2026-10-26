@@ -61,6 +61,28 @@ Other CSG/arbitrary topology, displacement and hidden/opaque/reference ambiguity
 remain refused; no stripping or MAP conversion. Use a copy, Save As and reopen in
 matching Hammer++; no owner/visual acceptance is implied by automated/static checks.
 
+## Hammer++ polygons and observed preview settings — A5.18
+
+`vertices_plus` contains repeated finite xyz `v` rows in physical polygon order.
+`point_data` instead has explicit indices. Both use the same strict original-ring,
+vertex-incidence and relative-winding correspondence; only their EXACT validated
+blocks are admitted for supported content edits. Same-side mixed schemas refuse.
+Changed coordinate spans update surgically; untouched row spacing and root text
+remain raw. No other opaque operation becomes safe merely because a cache is known.
+
+The separate global geometry guard admits only exact observed scalar shapes for
+palette_plus, colorcorrection_plus, light_plus, postprocess_plus and EMPTY
+bgimages_plus. Duplicate roots/fields, known-root scalars, unknown/nested fields or
+slot aliases refuse. RGB is integer0..255, count-shaped values nonnegativeint32,
+explicit toggles0/1, other numeric values finite; paired LUT names and texlight
+must be EMPTY. Nonempty resources/backgrounds remain unsupported, not silently
+resolved or dropped. These are bounded preserved editor settings, not arbitrary
+future `*_plus` metadata or a Hammer/SDK certification.
+
+Both real-map variants pass supported Map/save/history/further-edit paths. Test
+copies; mirrors/topology/clone/remove/group/reparent/clip and combined displacement/
+polygon base motion stay guarded. No universal map/operation editability claim.
+
 ## Native side point-data brushes — A5.17
 
 Known Strata-style side `point_data` is indexed polygon geometry, not inert editor
@@ -79,8 +101,8 @@ exact source; reopened scenes must accept another actual supported edit.
 Out-of-tolerance (existing1e-6), malformed, unknown or inconsistent caches refuse.
 Mirror/topology/cardinality changes and point-data clone/remove/group/reparent/clip
 are NOT enabled. Combined displacement + point-data base motion remains guarded.
-Hammer++ `vertices_plus` is a different unsupported schema, even when the native
-solid ID matches another map variant. No map or cache block is silently rewritten
+Hammer++ `vertices_plus` is a different schema, separately admitted in A5.18 with
+the strict root limits above; equal native solid IDs alone never justify admission. No map or cache block is silently rewritten
 or removed to make an edit pass. The actual reported original brush passes the
 Map/save/history path; every other operation/map still requires its own evidence.
 

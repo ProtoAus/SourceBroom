@@ -221,9 +221,9 @@ bool supportedConnections(
   return true;
 }
 
-// point_data is a polygon cache, not inert metadata. Only content edits may
-// admit it, after matching the immutable polygon to the brush's actual ring.
-std::set<VmfEntryId> pointDataEdits(
+// Native face polygon caches are geometry, not inert metadata. Only content edits
+// may admit them, after matching the immutable polygon to the brush's actual ring.
+std::set<VmfEntryId> polygonCacheEdits(
   const VmfDocument& d,
   const Brush& before,
   const Brush& after,
@@ -279,7 +279,7 @@ std::set<VmfEntryId> pointDataEdits(
               !std::isfinite(position.x()) || !std::isfinite(position.y())
               || !std::isfinite(position.z()))
             {
-              refuse(block, "non-finite point_data geometry ring");
+              refuse(block, "non-finite native polygon cache geometry ring");
             }
             incidence[positionKey(position)].insert(face.lineNumber());
           }
@@ -295,26 +295,26 @@ std::set<VmfEntryId> pointDataEdits(
     {
       if (!oldIdentities.insert(identity).second)
       {
-        refuse(block, "ambiguous point_data vertex incidence");
+        refuse(block, "ambiguous native polygon cache vertex incidence");
       }
     }
     for (const auto& [position, identity] : newIncidence)
     {
       if (!newIdentities.insert(identity).second)
       {
-        refuse(block, "ambiguous point_data vertex incidence");
+        refuse(block, "ambiguous native polygon cache vertex incidence");
       }
     }
     if (oldIdentities != newIdentities)
     {
-      refuse(block, "point_data topology/incidence change unsupported");
+      refuse(block, "native polygon cache topology/incidence change unsupported");
     }
     // Check the entire brush once, including faces without cached polygons.
     for (auto& [binding, polygon] : correspondence)
     {
       if (polygon.before.empty() || polygon.before.size() != polygon.after.size())
       {
-        refuse(block, "point_data topology/cardinality change unsupported");
+        refuse(block, "native polygon cache topology/cardinality change unsupported");
       }
       auto targetIndices = std::map<std::set<size_t>, size_t>{};
       for (size_t i = 0; i < polygon.after.size(); ++i)
@@ -326,7 +326,7 @@ std::set<VmfEntryId> pointDataEdits(
         const auto match = targetIndices.find(oldIncidence.at(positionKey(position)));
         if (match == targetIndices.end())
         {
-          refuse(block, "point_data topology/incidence change unsupported");
+          refuse(block, "native polygon cache topology/incidence change unsupported");
         }
         polygon.indices.push_back(match->second);
       }
@@ -336,7 +336,7 @@ std::set<VmfEntryId> pointDataEdits(
           polygon.indices[(i + 1) % polygon.indices.size()]
           != (polygon.indices[i] + 1) % polygon.indices.size())
         {
-          refuse(block, "point_data winding reversal unsupported");
+          refuse(block, "native polygon cache winding reversal unsupported");
         }
       }
     }
@@ -347,11 +347,11 @@ std::set<VmfEntryId> pointDataEdits(
     auto block = std::optional<VmfEntryId>{};
     for (const auto child : d.entries()[side].children)
     {
-      if (key(d, child) == "point_data")
+      if (key(d, child) == "point_data" || key(d, child) == "vertices_plus")
       {
         if (block || !d.entries()[child].isBlock())
         {
-          refuse(side, "duplicate or non-block side point_data");
+          refuse(side, "duplicate, mixed or non-block native polygon cache");
         }
         block = child;
       }
@@ -364,6 +364,7 @@ std::set<VmfEntryId> pointDataEdits(
     {
       prepareCorrespondence(*block);
     }
+    const auto indexed = key(d, *block) == "point_data";
     const auto& polygon = correspondence.at(face.lineNumber());
     const auto& oldRing = polygon.before;
     const auto& newRing = polygon.after;
@@ -372,41 +373,47 @@ std::set<VmfEntryId> pointDataEdits(
     for (const auto row : d.entries()[*block].children)
     {
       const auto name = key(d, row);
-      if (d.entries()[row].isBlock() || (name != "numpts" && name != "point"))
+      if (
+        d.entries()[row].isBlock()
+        || (indexed ? (name != "numpts" && name != "point") : name != "v"))
       {
-        refuse(*block, "unknown or nested point_data field");
+        refuse(*block, "unknown or nested native polygon cache field");
       }
-      if (name == "point")
+      if (name == (indexed ? "point" : "v"))
       {
         rows.push_back(row);
       }
     }
-    const auto count = integer(value(d, *block, "numpts"), rows.size(), *block);
+    const auto count =
+      indexed ? integer(value(d, *block, "numpts"), rows.size(), *block) : rows.size();
     if (count < 3 || count != rows.size() || count != oldRing.size())
     {
-      refuse(*block, "point_data count does not match brush polygon");
+      refuse(*block, "native polygon cache count does not match brush polygon");
     }
     auto oldForIndex = std::vector<size_t>(count, count);
     auto usedOld = std::set<size_t>{};
-    for (const auto row : rows)
+    for (size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex)
     {
+      const auto row = rows[rowIndex];
       const auto raw = text(d, *d.entries()[row].value);
       auto input = std::istringstream{raw};
-      auto tokens = std::array<std::string, 4>{};
+      auto tokens = std::vector<std::string>(indexed ? 4 : 3);
       for (auto& token : tokens)
       {
         if (!(input >> token))
         {
-          refuse(row, "invalid point_data row");
+          refuse(row, "invalid native polygon cache row");
         }
       }
       input >> std::ws;
       if (!input.eof())
       {
-        refuse(row, "trailing point_data row data");
+        refuse(row, "trailing native polygon cache row data");
       }
-      const auto index = integer(tokens[0], count - 1, row);
-      const auto xyz = numbers(tokens[1] + " " + tokens[2] + " " + tokens[3], "nnn", row);
+      const auto offset = indexed ? size_t{1} : size_t{0};
+      const auto index = indexed ? integer(tokens[0], count - 1, row) : rowIndex;
+      const auto xyz = numbers(
+        tokens[offset] + " " + tokens[offset + 1] + " " + tokens[offset + 2], "nnn", row);
       const auto position = vm::vec3d{xyz[0], xyz[1], xyz[2]};
       auto match = std::optional<size_t>{};
       for (size_t i = 0; i < count; ++i)
@@ -415,21 +422,21 @@ std::set<VmfEntryId> pointDataEdits(
         {
           if (match)
           {
-            refuse(row, "ambiguous point_data polygon vertex");
+            refuse(row, "ambiguous native polygon cache polygon vertex");
           }
           match = i;
         }
       }
       if (!match || oldForIndex[index] != count || !usedOld.insert(*match).second)
       {
-        refuse(row, "duplicate or unmatched point_data index/vertex");
+        refuse(row, "duplicate or unmatched native polygon cache index/vertex");
       }
       oldForIndex[index] = *match;
       const auto& replacement = newRing[newForOld[*match]];
       auto updated = raw;
       auto cursor = size_t{0};
       // Patch backwards so unchanged coordinate/index lexemes and row spacing stay raw.
-      auto spans = std::array<std::pair<size_t, size_t>, 4>{};
+      auto spans = std::vector<std::pair<size_t, size_t>>(tokens.size());
       for (size_t i = 0; i < tokens.size(); ++i)
       {
         cursor = raw.find(tokens[i], cursor);
@@ -441,7 +448,9 @@ std::set<VmfEntryId> pointDataEdits(
         if (oldRing[*match][axis - 1] != replacement[axis - 1])
         {
           updated.replace(
-            spans[axis].first, spans[axis].second, number(replacement[axis - 1]));
+            spans[offset + axis - 1].first,
+            spans[offset + axis - 1].second,
+            number(replacement[axis - 1]));
         }
       }
       if (updated != raw)
@@ -452,16 +461,16 @@ std::set<VmfEntryId> pointDataEdits(
     const auto step = (oldForIndex[1] + count - oldForIndex[0]) % count;
     if (step != 1 && step != count - 1)
     {
-      refuse(*block, "point_data indices do not follow polygon winding");
+      refuse(*block, "native polygon cache indices do not follow polygon winding");
     }
     for (size_t i = 0; i < count; ++i)
     {
       if (oldForIndex[(i + 1) % count] != (oldForIndex[i] + step) % count)
       {
-        refuse(*block, "point_data indices do not form a cyclic polygon");
+        refuse(*block, "native polygon cache indices do not form a cyclic polygon");
       }
     }
-    admitted.insert(side);
+    admitted.insert(*block);
   }
   return admitted;
 }
@@ -470,7 +479,7 @@ bool opaque(
   const VmfDocument& d,
   VmfEntryId id,
   const std::set<VmfEntryId>* displacementSides = nullptr,
-  const std::set<VmfEntryId>* pointDataSides = nullptr)
+  const std::set<VmfEntryId>* polygonBlocks = nullptr)
 {
   if (referencesGeometry(d, id))
   {
@@ -499,12 +508,14 @@ bool opaque(
       const auto name = key(d, child);
       if (name == "solid" || name == "side" || name == "hidden")
       {
-        if (opaque(d, child, displacementSides, pointDataSides))
+        if (opaque(d, child, displacementSides, polygonBlocks))
         {
           return true;
         }
       }
-      else if (name == "point_data" && pointDataSides && pointDataSides->contains(id))
+      else if (
+        (name == "point_data" || name == "vertices_plus") && polygonBlocks
+        && polygonBlocks->contains(child))
       {
         // This exact side block was checked against both complete geometry rings.
       }
@@ -714,6 +725,124 @@ bool membershipOnlyGroupRecord(const VmfDocument& d, const VmfEntryId group)
   }
   return true;
 }
+bool hammerPlusSettingsName(const std::string& name)
+{
+  return name == "palette_plus" || name == "colorcorrection_plus" || name == "light_plus"
+         || name == "postprocess_plus" || name == "bgimages_plus";
+}
+
+// These observed scalar preview settings carry no geometry bindings. Preserve
+// them verbatim; future fields, resource strings and background images are opaque.
+bool inertHammerPlusSettings(const VmfDocument& d, const VmfEntryId root)
+{
+  if (!d.entries()[root].isBlock())
+  {
+    return false;
+  }
+  const auto name = key(d, root);
+  auto seen = std::set<std::string>{};
+  auto colors = std::set<std::string>{};
+  auto lutNames = std::set<std::string>{};
+  auto lutWeights = std::set<std::string>{};
+  for (size_t i = 0; i < 16; ++i)
+  {
+    colors.insert("color" + std::to_string(i));
+  }
+  for (size_t i = 0; i < 4; ++i)
+  {
+    lutNames.insert("name" + std::to_string(i));
+    lutWeights.insert("weight" + std::to_string(i));
+  }
+  const auto counts = std::set<std::string>{
+    "samples_sun", "samples_ambient", "samples_vis", "bounced", "supersample", "cubemap"};
+  const auto lightToggles = std::set<std::string>{"incremental", "bleed_hack", "debug"};
+  const auto lightScalars = std::set<std::string>{
+    "incremental_delay",
+    "bake_dist",
+    "radius_scale",
+    "brightness_scale",
+    "ao_scale",
+    "soften_cosine"};
+  const auto postToggles =
+    std::set<std::string>{"enable", "copied_from_controller", "vignette_enable"};
+  const auto postScalars = std::set<std::string>{
+    "bloom_scale",
+    "bloom_exponent",
+    "bloom_saturation",
+    "auto_exposure_min",
+    "auto_exposure_max",
+    "tonemap_percent_target",
+    "tonemap_percent_bright_pixels",
+    "tonemap_min_avg_luminance",
+    "tonemap_rate",
+    "vignette_start",
+    "vignette_end",
+    "vignette_blur"};
+  for (const auto field : d.entries()[root].children)
+  {
+    const auto& entry = d.entries()[field];
+    const auto fieldName = key(d, field);
+    if (entry.isBlock() || !seen.insert(fieldName).second)
+    {
+      return false;
+    }
+    const auto raw = text(d, *entry.value);
+    if (
+      (name == "colorcorrection_plus" && lutNames.contains(fieldName))
+      || (name == "light_plus" && fieldName == "texlight"))
+    {
+      if (!raw.empty())
+      {
+        return false;
+      }
+      continue;
+    }
+    const auto rgb = name == "palette_plus" && colors.contains(fieldName);
+    const auto count = name == "light_plus" && counts.contains(fieldName);
+    const auto toggle =
+      (name == "light_plus" && lightToggles.contains(fieldName))
+      || (name == "postprocess_plus" && postToggles.contains(fieldName));
+    const auto scalar =
+      (name == "light_plus" && lightScalars.contains(fieldName))
+      || (name == "postprocess_plus" && postScalars.contains(fieldName))
+      || (name == "colorcorrection_plus" && lutWeights.contains(fieldName));
+    if (!rgb && !count && !toggle && !scalar)
+    {
+      return false;
+    }
+    try
+    {
+      const auto parsed = numbers(raw, rgb ? "nnn" : "n", field);
+      for (const auto n : parsed)
+      {
+        if (
+          (rgb && (n < 0 || n > 255 || std::trunc(n) != n))
+          || (count && (n < 0 || n > std::numeric_limits<int32_t>::max() || std::trunc(n) != n))
+          || (toggle && n != 0 && n != 1))
+        {
+          return false;
+        }
+      }
+    }
+    catch (const std::invalid_argument&)
+    {
+      return false;
+    }
+  }
+  if (name == "colorcorrection_plus")
+  {
+    for (size_t i = 0; i < 4; ++i)
+    {
+      if (
+        seen.contains("name" + std::to_string(i))
+        != seen.contains("weight" + std::to_string(i)))
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 std::optional<std::string> geometryProblem(const VmfDocument& d, const WorldNode& world)
 {
   for (const auto child : d.entries()[world.lineNumber() - 1].children)
@@ -753,8 +882,18 @@ std::optional<std::string> geometryProblem(const VmfDocument& d, const WorldNode
       }
     }
   }
+  auto settings = std::set<std::string>{};
   for (const auto root : d.roots())
   {
+    const auto rootName = key(d, root);
+    if (hammerPlusSettingsName(rootName))
+    {
+      if (!settings.insert(rootName).second || !inertHammerPlusSettings(d, root))
+      {
+        return "unsupported Hammer++ root settings prevent safe brush edit/removal";
+      }
+      continue;
+    }
     if (d.entries()[root].isBlock())
     {
       const auto name = key(d, root);
@@ -2849,13 +2988,13 @@ void VmfScene::nodeEdits(
       }
       checkGeometryReferences(id);
     }
-    const auto pointDataEditStart = edits.size();
-    const auto pointDataSides = pointDataEdits(d, b, a, edits);
-    if (edits.size() != pointDataEditStart)
+    const auto polygonEditStart = edits.size();
+    const auto polygonBlocks = polygonCacheEdits(d, b, a, edits);
+    if (edits.size() != polygonEditStart)
     {
-      if (opaque(d, id, nullptr, &pointDataSides))
+      if (opaque(d, id, nullptr, &polygonBlocks))
       {
-        refuse(id, "opaque attachment prevents point_data polygon edit");
+        refuse(id, "opaque attachment prevents native polygon cache edit");
       }
       if (protectExistingGeometry)
       {
@@ -2990,7 +3129,7 @@ void VmfScene::nodeEdits(
       {
         continue;
       }
-      if (opaque(d, id, &displacementSides, &pointDataSides))
+      if (opaque(d, id, &displacementSides, &polygonBlocks))
       {
         refuse(id, "opaque attachment prevents safe brush edit");
       }
