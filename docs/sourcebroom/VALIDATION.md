@@ -1,11 +1,51 @@
-# SourceBroom validation — A5.10 bounded native rigid rotation
+# SourceBroom validation — A5.11 native uniform scale/static bodygroups
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.10 native rigid rotation / finite preservation controls
+## A5.11 uniform scale / bodygroups / transaction-path controls
+
+Typed command intent admits only positive uniform native terrain scale through
+both real Map APIs. Changed distance/elevation/offsets, retained direction magnitude,
+sparse/default row spelling, shared similarity frames, numeric sample covariance,
+UV cache/normals/indices, picking/bounds, undo, continued rotation/move/height edits
+and native save/reopen have acted controls. Tiny nonuniform/general/shear/flip,
+opaque references and unsafe numeric motion still refuse. A test stale face index
+after oblique rotation was corrected by resolving the actual native side and
+checking its original binding; this was an oracle fix, not a production pass.
+
+Full-context native saves exposed Windows transaction names exceeding the path
+budget. A valid248-character binary-input control passed its input checks then
+refused temporary creation before the fix. Short PID/clock/sequence sibling leaves
+now pass existing/fresh saves, exact backup preservation, stale-original refusal
+and locked-promotion recovery. No safety checks were relaxed; this is not general
+unlimited Windows path support. Native focus: **5,257 assertions/39 cases**.
+
+Static body selection retains decoded bases/counts and all model memberships,
+including blanks, without Cartesian geometry copies. Selected renderers, bounds,
+picking, entity refresh and canonical caches agree. The original independent
+review found duplicate GPU holders and default-body browser bounds. Parent
+reproduced VBO8/16 versus expected4 in **14 assertions/1 case**, then weak shared
+holders preserved four buffers across bodies/skins, released all with model data
+still alive and rebuilt body0 to two then zero. Browser bounds now query the same
+body as the renderer. Fresh focused fix review found no remaining blockers in
+that scope. Body focus **2,748/6**, weak-array **63/1**; these are not an SDK-wide
+memory/performance measurement or visual/browser acceptance.
+
+Current normal suites: model **187/187**, graphics **21/21**. Actual affected app,
+checker and UI ABI/callers rebuilt with zero new warnings; affected UI **129/3**.
+Corpus remains document38/38, strict35/38 and explicit read-only38/38, all38
+original SHA256 unchanged. Clean pinned portable staging independently opened
+owned CSS and Momentum document windows with System-only PATH and normal exits0;
+final installed hashes/runtime/ZIP provenance are recorded separately in the
+candidate receipt. No desktop capture, foreground changes or owner/peer-window
+manipulation were used; only the Popen-owned document HWND received normal WM_CLOSE.
+Manual/native/Hammer/Source runtime observations remain pending in lextest.
+The untouched full-UI preference rename failure remains unfixed, not all UI green.
+
+## Retained A5.10 native rigid rotation / finite preservation controls
 
 Actual Map controls rotate a native raised quad by quarter/oblique angles around
 a pivot with both UV locks, then pick, undo/redo, translate, distance edit, Save As,

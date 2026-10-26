@@ -80,7 +80,7 @@ compatible merely because they also use VMF.
   Fs20/Gl21 remain valid; the known untouched Windows preference failure is
   preserved/unfixed, not all UI green. Native appearance/Hammer checks remain
   pending; A5.9 is recovery.
-  Development source after A5.10 adds explicit **positive uniform scaling** of
+  The A5.11 candidate adds explicit **positive uniform scaling** of
   whole displacement brushes through both normal scale APIs, including numeric
   distance/elevation/offset handling, UV locks, continued rotation/movement/height
   edits, undo and native saves. Conservative exact input intent still denies
@@ -89,7 +89,7 @@ compatible merely because they also use VMF.
   Current source checks: model187/187, native5,257 assertions/39 cases and affected
   UI129/3; actual app/checker/UI callers rebuilt without new warnings. Fresh
   read-only source review found no blockers.
-  Development source also adds static Source model **bodygroup selection** across
+  A5.11 also adds static Source model **bodygroup selection** across
   multiple bodyparts/models and blank choices, with selected render geometry,
   bounds, picking, entity refresh and canonical caches. Source studio defaults
   honor `body`; explicit and non-Source declarations retain their semantics.
@@ -100,8 +100,10 @@ compatible merely because they also use VMF.
   callers rebuilt without new warnings. Fresh fix review found no remaining
   blockers in its inspected scope. Corpus remains document38/strict35/preview38
   with all38 originals unchanged. Root-pose/preview only, not animation or full
-  shader/FGD parity. New portable delivery and independent Hammer acceptance are
-  pending; A5.10 remains the current installed candidate.
+  shader/FGD parity. Clean pinned portable staging opened owned CSS and Momentum
+  document windows with System-only PATH and normal exits0; final installed
+  artifact/runtime provenance belongs in the candidate receipt. Independent
+  native/browser/Hammer acceptance remains pending; retain A5.10 as recovery.
   No Source compiler, Valve content, or third-party/user map is bundled. See
   [alpha instructions](ALPHA.md) for the owner test path.
 

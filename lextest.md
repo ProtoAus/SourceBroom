@@ -179,7 +179,7 @@ This is qualitative prior-build feedback, not A5.3 acceptance or measured timing
 
 The question about when VMFs become editable did not confirm an editing or saving
 observation. Basic editable VMFs already exist; preview-only windows still refuse
-editing. These checks are for the next candidate, not retrospectively passed:
+editing. These checks are for the new candidate, not retrospectively passed:
 
 - [ ] On a **copied** editable VMF, select one whole raised displacement brush,
   scale uniformly by2, undo/redo, and Save As a new VMF. Compare terrain position,

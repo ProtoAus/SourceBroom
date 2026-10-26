@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.10 native-rotation candidate
+# Try the Windows SourceBroom A5.11 terrain-scale/bodygroup candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,13 +20,44 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.10: rotate native terrain without flattening it
+## A5.11: uniformly scale terrain and preview static bodygroups
+
+Basic editable native VMFs already exist; **read-only compatibility preview is not
+an editing mode**. On a copied editable VMF, select a whole raised displacement
+brush and use the normal scale controls with equal positive factors (try2 or0.5).
+Base positions, offsets, elevation and distances scale together; normal-like
+vectors retain magnitude. UV locks, picking/bounds, undo/redo, native Save As and
+continued rotation/movement/distance edits have acted controls. Bounds-based
+commands conservatively require exactly uniform ratios; near-uniform arithmetic
+is not permission for nonuniform changes. Zero/negative/shear/flip/topology and
+unsafe numeric motion still refuse rather than flattening or dropping metadata.
+
+Supported static Source MDL/VVD/VTX models now select multiple bodyparts/models
+with the entity `body` value independently of `skin`. Blank choices hide those
+parts. Rendered surfaces, bounds, ray picking, entity refresh and browser layout
+use the same selection. Four authored meshes in the acted fixture share four
+VBOs across body/skin combinations and release buffers when renderers go away;
+this is not a whole-map VRAM/performance claim. Root-pose only, not animation,
+controllers, game collision or universal Source model/shader/FGD parity.
+
+Native save transactions also use short unique sibling names so a valid long
+Windows destination does not fail merely because its temporary filename repeats
+the full leaf. Exclusive creation, stale-original/overwrite/link guards, backups
+and failed-promotion recovery remain; this is not unlimited long-path support.
+
+**Quick owner check:** on a **copy**, uniformly scale one whole raised terrain
+brush by2, undo/redo and Save As; compare height, position and UVs in matching
+Hammer++. If convenient, separately change body and skin on one known bodygroup
+prop and compare the visible parts/bounds/browser thumbnail. All those human
+observations remain pending. Keep the whole A5.10 kit as recovery; never merge DLLs.
+
+## Retained A5.10: rotate native terrain without flattening it
 
 Select a whole displacement brush in object mode and use the normal rotation
 command. Its base, raised samples and authored vectors now rotate together,
 including arbitrary angles/pivots, UV-lock behavior, picking/bounds and undo/redo.
 Save As a new file, reopen, then continue moving or distance editing normally.
-Scale/shear/flip, face/vertex topology and sculpt/create/power/sew remain refused.
+Nonuniform scale/shear/flip, face/vertex topology and sculpt/create/power/sew remain refused.
 Opaque attachments and native references remain guarded; no conversion through MAP.
 
 Finite in-world geometry alone is not enough: precision-losing cancellation and
@@ -229,7 +260,7 @@ Hammer++ performance advantage is claimed.
 - Open a prop-containing copy using matching installed content. Supported
   MDL/VVD/VTX data has a bounded static/default-pose preview with material lookup;
   missing/unsupported data has a diagnostic fallback. Full animation, physics,
-  bodygroup and shader parity are not claimed.
+  controllers and shader parity are not claimed.
 - Save, then use **Run -> Compile -> Native metadata / Custom package…**. The
   metadata tab reads the **saved** snapshot: groups, visgroups, hidden state,
   cameras and cordons are read-only. **Go to camera eye** moves only the eye,
@@ -270,7 +301,7 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 - Basic plain-brush/point-entity creation, duplication, deletion and limited
   brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
   CSG/clipping, native editor-group/layer authoring, displacement creation/sculpt/
-  power/sew, native scale/shear/flip, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
+  power/sew, native nonuniform scale/shear/flip, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
   some upstream controls can remain visible and save guards stay authoritative.
 - Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
   does not apply cordon clipping itself; unchanged VMF is passed to external tools
@@ -280,16 +311,18 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- All **184 model** entries pass after rotation integration; native focus passes
-  **4,009 assertions/41 cases**, including real Map/cache/UV/guard controls.
-  The review overflow red-to-green passes **364 assertions/2 cases**. Affected
-  UI **129/3** and existing five-config GPU **2,539** evidence remain valid.
-  Earlier filesystem20/graphics21 remain valid. The prior full UI **42/43**
-  Windows preference-file replacement failure is preserved/unfixed; these
+- All **187 model** and **21 graphics** entries pass. Uniform-scale/save-path
+  native focus passes **5,257 assertions/39 cases**; body-focused tests pass
+  **2,748/6** and weak vertex-holder tests **63/1**. Actual app/checker/UI public
+  callers rebuilt with zero new compiler warnings; affected UI **129/3** passes.
+  The reviewed body GPU fault was reproduced before the fix, then shared-buffer
+  and release/rebuild controls passed. Existing five-config shader GPU **2,539**
+  evidence is not bodygroup/native visual acceptance. The prior full UI **42/43**
+  Windows preference-file replacement failure remains preserved/unfixed; these
   targeted passes are not an all-UI-green or manual/Hammer acceptance claim. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep prior A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
+  Keep prior A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

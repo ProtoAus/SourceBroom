@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.5 Patch-material follow-up to the A5 candidate:
+**Status:** Windows A5.11 bounded native-terrain/static-bodygroup candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -38,13 +38,17 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-The A5.10 candidate adds native displacement **rotation** through the normal whole-
-brush command, preserving vector fields, UV policy, undo and native saves. It
-retains A5.9 movement/fixed-studio skins and A5.8 mesh/distance/VTF tools; keep A5.9
-as recovery. Unsafe numeric overflow/precision loss refuses before world mutation.
-Native scale/shear/flip, sculpt/create/power/sew, blend materials and full Source
-support remain incomplete. See the roadmap/validation for exact controls and the
-retained preference failure; native appearance/Hammer acceptance remains pending.
+The A5.11 candidate adds **positive uniform displacement scaling**, static Source
+model **bodygroup selection**, and short safe-save transaction names for valid
+Windows filenames near the path budget. Native movement/rotation, UV locks,
+distance editing, undo and preserving saves remain available. Body choices agree
+across rendering, picking, bounds and caches without duplicating GPU geometry for
+every body/skin combination. Keep A5.10 as unmerged recovery.
+Unsafe numeric overflow/precision loss refuses before mutation. Nonuniform scale,
+shear/flip, sculpt/create/power/sew, blend materials, animation and full Source
+support remain incomplete. See roadmap/validation and the package receipt for
+source versus portable checks. Native appearance/Hammer acceptance and the known
+untouched Windows preference-test failure remain pending/unfixed.
 
 Strict editable loading still constructs **35/38** supplied maps. After explicit
 permission, a clearly labelled **read-only compatibility preview** opens all

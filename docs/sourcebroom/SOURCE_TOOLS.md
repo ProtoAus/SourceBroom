@@ -236,7 +236,7 @@ by a flat editable proxy. This is not a sculpt brush, creation/power/sew tool,
 blend-material preview or permission to transform arbitrary displacement bases.
 A5.9 remains recovery with native movement/distance tools but without rotation.
 
-Development source after A5.10 also permits **positive uniform scaling** of whole
+A5.11 also permits **positive uniform scaling** of whole
 native displacement brushes through the normal numeric and bounds-based scale
 commands. Positions, offsets, elevation and distances follow the scale while
 normal-like metadata retains magnitude. UV locks, undo/redo, native save/reopen
@@ -244,10 +244,10 @@ and continued distance edits have automated controls. Bounds-based authorization
 is conservative: ratios must be exactly uniform; near-uniform arithmetic is not
 permission for a nonuniform transform. Shear, reflection, topology changes and
 unsafe numeric motion remain refused. Legacy untyped offset-normal rows also
-refuse this new operation. This source change is verified, but not yet in the
-installed A5.10 kit; native appearance/Hammer acceptance remains pending.
+refuse this new operation. A5.10 remains unmerged recovery; source and portable
+checks do not fill native appearance/Hammer acceptance.
 
-Development source also previews supported static Source model **bodygroups**.
+A5.11 also previews supported static Source model **bodygroups**.
 An entity's bounded `body` value selects each decoded bodypart's model using its
 actual base/count, independently of skin and animation-frame index. Source studio
 FGDs default to the entity's body0; explicit definitions and other games are not
@@ -255,8 +255,8 @@ globally reinterpreted. Blank choices hide the relevant geometry. Bounds, pickin
 renderer caches and browser centering follow the same selection without copying
 all geometry for every combination. This remains static/root-pose preview, not
 animation, body controllers, game collision or complete model/shader parity.
-The source checks pass, but this is not yet in the installed A5.10 kit and no
-owner bodygroup/browser appearance acceptance is implied.
+Source checks pass and candidate receipts identify exact portable artifacts;
+no owner bodygroup/browser appearance acceptance is implied.
 
 ## Source model skins on fixed FGD paths
 
