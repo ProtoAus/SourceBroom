@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.18 Hammer++ polygon-cache editing candidate:
+**Status:** Windows A5.19 coupled native terrain-motion candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -38,7 +38,15 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.18 adds the corresponding **Hammer++ vertices_plus** content-edit path and
+A5.19 lets already-parsed **displacement terrain and its native polygon cache**
+move together: typed translation, proper rotation and positive uniform scaling.
+Both actual map variants passed a production-discovered terrain-brush move/save/
+reopen/further-edit/undo/redo path. Existing exact shared-frame, base/mesh, cache,
+reference and opacity guards remain; no new mesh schema or tolerance is admitted.
+Full model252/252, affected83, actual-map61 assertions and App50 pass with no new
+compiler warnings. Human retry pending; keep whole A5.18 as recovery.
+
+Retained A5.18 adds the corresponding **Hammer++ vertices_plus** content-edit path and
 strictly admits the observed scalar preview-settings roots without rewriting them.
 Both the original Strata map and its native-ID-matched Hammer++ counterpart passed
 real Map move/save/reopen/further-edit/undo/redo checks. Polygon caches use exact

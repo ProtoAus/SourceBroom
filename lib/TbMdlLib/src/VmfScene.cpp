@@ -2988,25 +2988,25 @@ void VmfScene::nodeEdits(
       }
       checkGeometryReferences(id);
     }
-    const auto polygonEditStart = edits.size();
-    const auto polygonBlocks = polygonCacheEdits(d, b, a, edits);
-    if (edits.size() != polygonEditStart)
-    {
-      if (opaque(d, id, nullptr, &polygonBlocks))
-      {
-        refuse(id, "opaque attachment prevents native polygon cache edit");
-      }
-      if (protectExistingGeometry)
-      {
-        checkGeometryReferences(id);
-      }
-    }
     auto displacementSides = std::set<VmfEntryId>{};
     for (const auto& face : b.faces())
     {
       if (face.sourceDisplacement())
       {
         displacementSides.insert(face.lineNumber() - 1);
+      }
+    }
+    const auto polygonEditStart = edits.size();
+    const auto polygonBlocks = polygonCacheEdits(d, b, a, edits);
+    if (edits.size() != polygonEditStart)
+    {
+      if (opaque(d, id, &displacementSides, &polygonBlocks))
+      {
+        refuse(id, "opaque attachment prevents native polygon cache edit");
+      }
+      if (protectExistingGeometry)
+      {
+        checkGeometryReferences(id);
       }
     }
     auto sides = std::map<size_t, const BrushFace*>{};

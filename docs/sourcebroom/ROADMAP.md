@@ -33,7 +33,17 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.18 candidate:** Hammer++ `vertices_plus` implicit-order polygons share the
+- **A5.19 candidate:** parsed displacement meshes and validated point_data OR
+  vertices_plus now compose for typed whole-brush translation/proper rotation/
+  positive uniform scale. No frame/schema/tolerance inference change: only the
+  existing parsed-side allowance reaches cache staging before unchanged later
+  shared-frame/base-mesh checks. Actual discovered same-ID terrain brushes in BOTH
+  files pass61 assertions; focus83/model252/App50/productbuild0/newwarnings0 pass.
+  Same load/metadata38/35/38/input hashes, separately scoped brush evidence. Unknown
+  mesh/cache, stale/one-sided or inconsistent frames, nonuniform/shear/reflection/
+  topology/other opaque operations remain guarded. Owner retry pending; larger
+  native operation/visgroup/hidden authoring still outstanding.
+- **Retained A5.18 candidate:** Hammer++ `vertices_plus` implicit-order polygons share the
   strict indexed `point_data` ring/incidence/winding correspondence and surgical
   xyz patcher. Exact block IDs prevent cross-schema admission; mixed caches refuse.
   Observed inert preview-root shapes are separately validated, not `*_plus`

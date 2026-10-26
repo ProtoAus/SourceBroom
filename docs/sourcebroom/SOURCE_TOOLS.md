@@ -61,6 +61,21 @@ Other CSG/arbitrary topology, displacement and hidden/opaque/reference ambiguity
 remain refused; no stripping or MAP conversion. Use a copy, Save As and reopen in
 matching Hammer++; no owner/visual acceptance is implied by automated/static checks.
 
+## Coupled terrain and native polygon motion — A5.19
+
+Already-parsed displacement meshes can compose with separately validated indexed
+point_data or implicit vertices_plus on the same brush. Use typed whole-brush
+translation/proper rotation/positive UNIFORM scaling. Both caches and rendered
+mesh/base/normals follow the existing exact shared similarity frame; later base/
+mesh/plane/structure checks are unchanged. This is composing known allowances,
+not admitting raw/unknown displacement data or extending transform inference.
+
+A displacement's nonuniform/tiny-anisotropic scale, shear/reflection, stale cache,
+one-sided mesh/base motion or inconsistent multiple mesh frames still refuses.
+Cache incidence/winding, opacity/reference/root and other-operation guards remain.
+Actual terrain subjects in both input variants passed move/save/history/reopened
+continuation; owner visual/Hammer retry pending. Always test copies.
+
 ## Hammer++ polygons and observed preview settings — A5.18
 
 `vertices_plus` contains repeated finite xyz `v` rows in physical polygon order.
@@ -80,8 +95,8 @@ resolved or dropped. These are bounded preserved editor settings, not arbitrary
 future `*_plus` metadata or a Hammer/SDK certification.
 
 Both real-map variants pass supported Map/save/history/further-edit paths. Test
-copies; mirrors/topology/clone/remove/group/reparent/clip and combined displacement/
-polygon base motion stay guarded. No universal map/operation editability claim.
+copies; mirrors/topology/clone/remove/group/reparent/clip stay guarded. A5.19 composes
+already-parsed displacement/base-cache motion only under the strict rules above. No universal map/operation editability claim.
 
 ## Native side point-data brushes — A5.17
 
@@ -100,7 +115,8 @@ exact source; reopened scenes must accept another actual supported edit.
 
 Out-of-tolerance (existing1e-6), malformed, unknown or inconsistent caches refuse.
 Mirror/topology/cardinality changes and point-data clone/remove/group/reparent/clip
-are NOT enabled. Combined displacement + point-data base motion remains guarded.
+are NOT enabled. A5.19 separately admits properly typed parsed displacement plus
+point-data base motion under unchanged shared-frame and safety rules.
 Hammer++ `vertices_plus` is a different schema, separately admitted in A5.18 with
 the strict root limits above; equal native solid IDs alone never justify admission. No map or cache block is silently rewritten
 or removed to make an edit pass. The actual reported original brush passes the

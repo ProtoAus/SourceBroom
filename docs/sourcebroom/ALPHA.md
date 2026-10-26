@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.18 Hammer++ editing candidate
+# Try the Windows SourceBroom A5.19 native terrain-motion candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,26 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.18: ordinary Hammer++ polygon-cache edits
+## A5.19: move native terrain and cached base polygons together
+
+A known parsed displacement can now move with its validated Strata point_data or
+Hammer++ vertices_plus base polygon. Use whole-brush **Move**, **Rotate**, or a
+**positive uniform Scale**. The base planes, cached polygon, submitted mesh and
+normals follow one proper similarity frame. No clipping, mirroring, shear or
+nonuniform terrain scaling is unlocked; unknown/malformed payloads stay opaque.
+
+**Quick owner check (pending):** on a COPY of either map, select a terrain brush,
+move one grid step, undo/redo, Save As a new file and reopen. If desired, try a
+proper rotation or uniform scale. Actual terrain subjects were discovered through
+the production parser and matched across variants by native ID, not guessed entry
+numbers; both passed the automated move/save/reopen/further-edit/history check.
+
+Stale cache, mesh-only/base-only motion, inconsistent multiple displacement frames,
+references, topology and unsupported root settings still refuse before partial
+publication. Existing non-terrain supported edits remain available. Keep the whole
+A5.18 kit as recovery; never strip blocks or overwrite originals for a refusal.
+
+## Retained A5.18: ordinary Hammer++ polygon-cache edits
 
 You can now retry the **Hammer++ counterpart as well as the original VMF** on
 copies. Repeated `vertices_plus` xyz rows have physical polygon order rather than

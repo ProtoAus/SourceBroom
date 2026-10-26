@@ -61,9 +61,10 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   before mutation; supported authoring, transforms, selection and undo still work.
 - **Native polygon-cache operation boundary — `mdl/VmfScene.cpp:polygonCacheEdits`.**
   A5.17 fixes indexed point_data content edits; A5.18 separately supports implicit
-  vertices_plus and strict observed inert preview roots. Mixed caches, mirrors/
-  topology/clone/delete/group/reparent/clip and combined displacement/base-cache
-  motion remain guarded. Nonempty LUT/texlight/backgrounds and future root fields
+  vertices_plus and strict observed inert preview roots. A5.19 composes already
+  parsed displacement/cache motion for typed proper similarities. Mixed caches,
+  mirrors/topology/clone/delete/group/reparent/clip and unsupported displacement
+  transforms/payloads remain guarded. Nonempty LUT/texlight/backgrounds and future root fields
   need their own evidenced contract, not a wider opaque/root whitelist. Falsifier: independent
   accepted/refused indexed/ring controls plus actual source bindings, surgical
   save/reopen/further edit/undo and unchanged original hashes for each new arm.

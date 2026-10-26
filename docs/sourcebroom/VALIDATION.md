@@ -1,11 +1,48 @@
-# SourceBroom validation — A5.18 Hammer++ polygon-cache editing
+# SourceBroom validation — A5.19 coupled native terrain motion
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.18 — Hammer++ cache and inert-root admission
+## A5.19 — parsed terrain and validated polygon-cache composition
+
+Production change is ONLY relocating existing immutable-before parsed displacement
+side collection before the polygon preguard and passing that same set instead of
+null. Later exact shared proper-similarity frame, base/mesh agreement, every plane,
+structure and editsFrom validation are unchanged. No raw/unparsed mesh allowance,
+new schema/tolerance/policy, matrix inference or other-operation relaxation.
+
+- Compilable synthetic desired positive RED619/613 acted controls/six preguard
+  failures; actual installed-input desired RED13/11 controls/two failures covered
+  direct admission and real Map motion. All evidence retained before wiring.
+- Early BOTH actual terrain-input GREEN **61 assertions**: production discovery
+  requires parsed displacement AND native polygon, same native ID resolves H++;
+  move/save/reopen/second ACTED move/undo/redo/exact source restore. No ordinary
+  brush ID or equal-entry assumption. Original hashes unchanged, writes test-owned.
+- Final affected **83/83** and ONE fullmodel **252/252** after final source, actual
+  compiler0/zero new warnings. Separate/no-cache and both cache-schema controls
+  cover typed translation/proper rotation/positive uniform scale, renderer position/
+  normal, exact mesh frame and raw emitted normals/offsets/offset_normals rows,
+  polygon motion, topology/alphas retained and acted reopened continuation.
+- Tiny base-only/mesh-only pose, stale cache, unknown/raw/misplaced mesh, extra
+  opaque/ref/root data, inconsistent exact multi-displacement frames, nonuniform/
+  shear/reflection/unclassified transforms/topology remain refused. Invalid Map
+  batches preserve independent entity/brush/selection/native IDs/history/dirty/
+  counts/bytes. Only previously unsupported legitimate coupled positives changed.
+- Parent independently read final three-file diff and checked frozen raw hashes:
+  no focused blocker. Actual app/checker/App build0/newwarnings0 and App50 pass.
+  Production load/metadata corpus38/35/38, same three strict refusals/all38 original
+  hashes unchanged. These metadata checks are NOT arbitrary brush acceptance.
+
+Test-only pointer/setter compile failure, stale-binary focus and two test-oracle
+faults are preserved and NOT runtime RED evidence. Corrected cache-relative fault
+injection and local brush lookup did not weaken production checks. LSP hints and
+inherited later-test warnings remain; actual MSVC is the zero-new-warning gate.
+Human terrain/visual/Hammer/compiler acceptance pending. Source/build evidence is
+not a deployed artifact; final candidate receipt records clean installed provenance.
+
+## Retained A5.18 — Hammer++ cache and inert-root admission
 
 Thin schema-specific row parsing now supports implicit-order `vertices_plus` and
 indexed `point_data` using one per-brush correspondence. Only EXACT validated

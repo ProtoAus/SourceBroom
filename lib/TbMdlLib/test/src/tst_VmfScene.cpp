@@ -31,6 +31,7 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -329,7 +330,7 @@ TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
       scene.validateClipContents(node, NodeContents{node.brush()}, bounds),
       std::invalid_argument);
   }
-  SECTION("combined point_data and displacement motion remains guarded")
+  SECTION("combined point_data and displacement translation stages purely")
   {
     const auto source = fixture(false, cache + test::displacementBlock());
     auto scene = VmfScene::read(source, bounds);
@@ -337,8 +338,7 @@ TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
     auto moved = node.brush();
     REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
               .is_success());
-    CHECK_THROWS_AS(
-      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK_NOTHROW(scene.validateContents(node, NodeContents{moved}, bounds));
     CHECK(scene.serialize(scene.world()) == source);
   }
   SECTION("misplaced cache remains opaque")
@@ -353,6 +353,219 @@ TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
     CHECK_THROWS_AS(
       scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
   }
+}
+
+TEST_CASE("VmfScene coupled polygon displacement proper similarity", "[vmf]")
+{
+  const auto schema = GENERATE(0, 1, 2);
+  const auto operation = GENERATE(0, 1, 2);
+  const auto polygon =
+    schema == 0 ? std::string{}
+    : schema == 1
+      ? std::
+          string{R"(point_data { numpts 4 point "2 64.00 64 64" point "0 0.00 0 64" point "3 64 0 64" point "1 0 64 64" })"}
+      : std::string{
+          R"(vertices_plus { v "64.00 64 64" v "64 0 64" v "0.00 0 64" v "0 64 64" })"};
+  auto vectors = std::string{"offsets {\n"};
+  for (size_t i = 0; i < 5; ++i)
+  {
+    vectors += "row" + std::to_string(i) + " \"1.00 2 3  1 2 3  1 2 3  1 2 3  1 2 3\"\n";
+  }
+  vectors += "}\noffset_normals {\n";
+  for (size_t i = 0; i < 5; ++i)
+  {
+    vectors += "row" + std::to_string(i) + " \"0 0 1  0 0 1  0 0 1  0 0 1  0 0 1\"\n";
+  }
+  vectors += "}\n";
+  auto displacement = test::displacementBlock();
+  displacement.insert(displacement.find("normals {"), vectors);
+  const auto source = fixture(false, polygon + displacement);
+  const auto bounds = vm::bbox3d{4096};
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  const auto before = node.brush();
+  const auto meshBinding = before.face(*before.findFace(vm::vec3d{0, 0, 1})).lineNumber();
+  const auto meshFace = [&](const Brush& value) -> const BrushFace& {
+    const auto found =
+      std::find_if(value.faces().begin(), value.faces().end(), [&](const auto& face) {
+        return face.lineNumber() == meshBinding;
+      });
+    REQUIRE(found != value.faces().end());
+    REQUIRE(found->sourceDisplacement());
+    return *found;
+  };
+  const auto& oldMesh = *meshFace(before).sourceDisplacement();
+  const auto transform = operation == 0   ? vm::translation_matrix(vm::vec3d{16, 8, 4})
+                         : operation == 1 ? vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37)
+                                          : vm::scaling_matrix(vm::vec3d{2, 2, 2});
+  const auto policy = operation == 0   ? SourceTransformPolicy::TranslationOnly
+                      : operation == 1 ? SourceTransformPolicy::ProperRotation
+                                       : SourceTransformPolicy::PositiveUniformScale;
+  auto changed = before;
+  REQUIRE(changed.transform(bounds, transform, true, policy).is_success());
+  REQUIRE(changed != before);
+  REQUIRE_NOTHROW(scene.validateContents(node, NodeContents{changed}, bounds));
+  node.setBrush(changed);
+  const auto& mesh = *meshFace(node.brush()).sourceDisplacement();
+  REQUIRE(mesh.baseTransformFrom(oldMesh));
+  CHECK(*mesh.baseTransformFrom(oldMesh) == transform);
+  auto cache = BrushRendererBrushCache{};
+  cache.validateVertexCache(node);
+  const auto& faces = cache.cachedFacesSortedByMaterial();
+  const auto rendered = std::find_if(faces.begin(), faces.end(), [](const auto& face) {
+    return bool(face.face->sourceDisplacement());
+  });
+  REQUIRE(rendered != faces.end());
+  const auto linear = vm::slice<3, 3>(transform, 0, 0) / (operation == 2 ? 2.0 : 1.0);
+  for (size_t i = 0; i < mesh.positions().size(); ++i)
+  {
+    CHECK(
+      vm::is_equal(mesh.positions()[i], transform * oldMesh.positions()[i], 0.000001));
+    CHECK(
+      vm::is_equal(
+        mesh.basePositions()[i], transform * oldMesh.basePositions()[i], 0.000001));
+    CHECK(vm::is_equal(mesh.normals()[i], linear * oldMesh.normals()[i], 0.000001));
+    const auto& vertex =
+      cache.cachedVertices()[rendered->indexOfFirstVertexRelativeToBrush + i];
+    CHECK(
+      vm::is_equal(vertex.attr, vm::vec3f{transform * oldMesh.positions()[i]}, 0.0001f));
+    CHECK(
+      vm::is_equal(vertex.rest.attr, vm::vec3f{linear * oldMesh.normals()[i]}, 0.0001f));
+  }
+  CHECK(mesh.indices() == oldMesh.indices());
+  CHECK(mesh.alphas() == oldMesh.alphas());
+  const auto saved = scene.serialize(scene.world());
+  REQUIRE(saved != source);
+  if (operation == 0)
+  {
+    auto translatedBlock = displacement;
+    translatedBlock.replace(translatedBlock.find("[0 0 64]"), 8, "[16 8 68]");
+    CHECK(saved.find(translatedBlock) != std::string::npos);
+    if (schema != 0)
+    {
+      CHECK(saved.find("80 72 68") != std::string::npos);
+    }
+  }
+  auto reopened = VmfScene::read(saved, bounds);
+  const auto& emitted = reopened.document();
+  auto vectorRows = size_t{0};
+  for (const auto& block : emitted.entries())
+  {
+    const auto name = emitted.tokenContents(block.key);
+    if (
+      block.isBlock()
+      && (name == "normals" || name == "offsets" || name == "offset_normals"))
+    {
+      for (const auto row : block.children)
+      {
+        if (emitted.tokenContents(emitted.entries()[row].key) == "row0")
+        {
+          ++vectorRows;
+          auto values = std::istringstream{
+            std::string{emitted.tokenContents(*emitted.entries()[row].value)}};
+          const auto expected = name == "offsets"
+                                  ? vm::slice<3, 3>(transform, 0, 0) * vm::vec3d{1, 2, 3}
+                                  : linear * vm::vec3d{0, 0, 1};
+          for (size_t i = 0; i < 5; ++i)
+          {
+            auto x = double{};
+            auto y = double{};
+            auto z = double{};
+            REQUIRE(static_cast<bool>(values >> x >> y >> z));
+            CHECK(vm::is_equal(vm::vec3d{x, y, z}, expected, 0.000001));
+          }
+          values >> std::ws;
+          CHECK(values.eof());
+        }
+      }
+    }
+  }
+  CHECK(vectorRows == 3);
+  auto& next = brush(reopened.world());
+  const auto& reopenedMesh = *meshFace(next.brush()).sourceDisplacement();
+  for (size_t i = 0; i < mesh.positions().size(); ++i)
+  {
+    CHECK(vm::is_equal(reopenedMesh.positions()[i], mesh.positions()[i], 0.000001));
+    CHECK(vm::is_equal(reopenedMesh.normals()[i], mesh.normals()[i], 0.000001));
+  }
+  auto continued = next.brush();
+  REQUIRE(continued
+            .transform(
+              bounds,
+              vm::translation_matrix(vm::vec3d{1, 2, 3}),
+              true,
+              SourceTransformPolicy::TranslationOnly)
+            .is_success());
+  REQUIRE(continued != next.brush());
+  REQUIRE_NOTHROW(reopened.validateContents(next, NodeContents{continued}, bounds));
+  next.setBrush(std::move(continued));
+  const auto continuedSaved = reopened.serialize(reopened.world());
+  REQUIRE(continuedSaved != saved);
+  auto final = VmfScene::read(continuedSaved, bounds);
+  CHECK(final.serialize(final.world()) == continuedSaved);
+  node.setBrush(before);
+  CHECK(scene.serialize(scene.world()) == source);
+}
+
+TEST_CASE("VmfScene coupled polygon displacement preserves guard boundaries", "[vmf]")
+{
+  const auto indexed = GENERATE(false, true);
+  const auto fault = GENERATE(0, 1, 2, 3, 4, 5);
+  auto polygon =
+    indexed
+      ? std::
+          string{R"(point_data { numpts 4 point "2 64 64 64" point "0 0 0 64" point "3 64 0 64" point "1 0 64 64" })"}
+      : std::string{
+          R"(vertices_plus { v "64 64 64" v "64 0 64" v "0 0 64" v "0 64 64" })"};
+  if (fault == 2)
+  {
+    polygon.replace(polygon.find("0 64 64"), 7, "1 64 64");
+  }
+  auto source = fixture(
+    false,
+    polygon + test::displacementBlock()
+      + (fault == 4 ? "future_attachment { value opaque }" : ""));
+  if (fault == 3)
+  {
+    source.insert(
+      source.find("solid {") + std::string{"solid {"}.size(), test::displacementBlock());
+  }
+  if (fault == 5)
+  {
+    source += R"(entity { id 20 classname info_overlay sides "8" })";
+  }
+  const auto bounds = vm::bbox3d{4096};
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  const auto before = node.brush();
+  const auto top = *before.findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(before.face(top).sourceDisplacement());
+  auto candidate = before;
+  const auto delta = fault < 2 ? vm::vec3d{0.00000001, 0, 0} : vm::vec3d{16, 8, 4};
+  if (fault == 0)
+  {
+    candidate.face(top).setSourceDisplacement(
+      before.face(top).sourceDisplacement()->translated(delta));
+  }
+  else
+  {
+    REQUIRE(candidate
+              .transform(
+                bounds,
+                vm::translation_matrix(delta),
+                true,
+                SourceTransformPolicy::TranslationOnly)
+              .is_success());
+    if (fault == 1)
+    {
+      candidate.face(top).setSourceDisplacement(*before.face(top).sourceDisplacement());
+    }
+  }
+  REQUIRE(candidate != before);
+  CHECK_THROWS_AS(
+    scene.validateContents(node, NodeContents{candidate}, bounds), std::invalid_argument);
+  CHECK(node.brush() == before);
+  CHECK(scene.serialize(scene.world()) == source);
 }
 
 TEST_CASE("VmfScene vertices_plus strict schema and operation guards", "[vmf]")
@@ -443,8 +656,15 @@ TEST_CASE("VmfScene vertices_plus strict schema and operation guards", "[vmf]")
                                 : vm::translation_matrix(vm::vec3d{16, 8, 4}),
                 true)
               .is_success());
-    CHECK_THROWS_AS(
-      scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    if (attachment == 1)
+    {
+      CHECK_NOTHROW(scene.validateContents(node, NodeContents{moved}, bounds));
+    }
+    else
+    {
+      CHECK_THROWS_AS(
+        scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    }
     CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
     CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
     CHECK_THROWS_AS(
@@ -861,12 +1081,20 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
 
 TEST_CASE("VmfScene every displacement agrees with whole base movement", "[vmf]")
 {
+  const auto schema = GENERATE(0, 1, 2);
+  const auto polygon =
+    schema == 0 ? std::string{}
+    : schema == 1
+      ? std::
+          string{R"(point_data { numpts 4 point "2 64 64 64" point "0 0 0 64" point "3 64 0 64" point "1 0 64 64" })"}
+      : std::string{
+          R"(vertices_plus { v "64 64 64" v "64 0 64" v "0 0 64" v "0 64 64" })"};
   const auto scenario = GENERATE(0, 1, 2);
   const auto motion = GENERATE(0, 1, 2);
   const auto rotation = motion == 1;
   const auto scaling = motion == 2;
   const auto bounds = vm::bbox3d{4096};
-  auto source = fixture(false, test::displacementBlock());
+  auto source = fixture(false, polygon + test::displacementBlock());
   auto bottom = test::displacementBlock();
   const auto start = bottom.find("[0 0 64]");
   REQUIRE(start != std::string::npos);

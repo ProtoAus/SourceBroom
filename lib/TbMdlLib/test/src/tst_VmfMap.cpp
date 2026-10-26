@@ -37,6 +37,7 @@
 #include "mdl/PasteType.h"
 #include "mdl/PickResult.h"
 #include "mdl/SourceEditorMetadata.h"
+#include "mdl/SourceTransformPolicy.h"
 #include "mdl/SwapNodeContentsCommand.h"
 #include "mdl/UndoableCommand.h"
 #include "mdl/VmfDocument.h"
@@ -120,7 +121,7 @@ std::string nativeGroupedRamp()
   return source;
 }
 
-std::string nativeDisplacementRoom()
+std::string nativeDisplacementRoom(const std::string& attachment = {})
 {
   auto original = nativeRamp(false);
   const auto plane = std::string{"(0 0 32) (0 64 32) (64 0 64)"};
@@ -131,7 +132,7 @@ std::string nativeDisplacementRoom()
   REQUIRE(topSide != std::string::npos);
   const auto field = original.find("\"smoothing_groups\" \"0\"", topSide);
   REQUIRE(field != std::string::npos);
-  original.insert(field, test::displacementBlock());
+  original.insert(field, test::displacementBlock() + attachment);
   return original;
 }
 
@@ -598,6 +599,305 @@ TEST_CASE("VmfMap point_data installed history opt-in", "[.][vmf][installed]")
     CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
     map.redoCommand();
     CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+    CHECK(readBinary(inputs[i]) == bytes);
+  }
+}
+
+TEST_CASE("VmfMap coupled polygon displacement history and atomic refusal", "[vmf]")
+{
+  const auto indexed = GENERATE(false, true);
+  const auto polygon =
+    indexed
+      ? std::
+          string{R"(point_data { numpts 4 point "2 64.00 64 64" point "0 0.00 0 64" point "3 64 0 64" point "1 0 64 64" })"}
+      : std::string{
+          R"(vertices_plus { v "64.00 64 64" v "64 0 64" v "0.00 0 64" v "0 64 64" })"};
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  SECTION("proper similarity saves and continues with an acted reopened edit")
+  {
+    const auto operation = GENERATE(0, 1, 2);
+    const auto source = nativeDisplacementRoom(polygon);
+    auto env = fs::TestEnvironment{};
+    const auto input = env.dir() / "coupled.vmf";
+    const auto output = env.dir() / "saved.vmf";
+    writeBinary(input, source);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(input, config);
+    auto& node = ramp(map);
+    auto* second =
+      dynamic_cast<EntityNode*>(map.worldNode().defaultLayer()->children().back());
+    REQUIRE(second);
+    const auto before = node.brush();
+    const auto oldEntity = second->entity();
+    const auto nativeId = map.vmfScene()->nativeId(node);
+    selectNodes(map, {&node, second});
+    const auto selection = map.selection().nodes;
+    const auto count = map.modificationCount();
+    const auto transform = operation == 0 ? vm::translation_matrix(vm::vec3d{16, 8, 4})
+                           : operation == 1
+                             ? vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37)
+                             : vm::scaling_matrix(vm::vec3d{2, 2, 2});
+    if (operation == 0)
+    {
+      REQUIRE(translateSelection(map, {16, 8, 4}));
+    }
+    else if (operation == 1)
+    {
+      REQUIRE(rotateSelection(map, {0, 0, 0}, {1, 0, 0}, 0.37));
+    }
+    else
+    {
+      REQUIRE(scaleSelection(map, {0, 0, 0}, {2, 2, 2}));
+    }
+    REQUIRE(node.brush() != before);
+    REQUIRE(second->entity() != oldEntity);
+    const auto& oldMesh =
+      *before.face(*before.findFace(vm::vec3d{0, 0, 1})).sourceDisplacement();
+    auto meshes = size_t{0};
+    for (const auto& face : node.brush().faces())
+    {
+      if (const auto& mesh = face.sourceDisplacement())
+      {
+        ++meshes;
+        REQUIRE(mesh->baseTransformFrom(oldMesh));
+        CHECK(*mesh->baseTransformFrom(oldMesh) == transform);
+        for (size_t i = 0; i < oldMesh.positions().size(); ++i)
+        {
+          CHECK(
+            vm::is_equal(
+              mesh->positions()[i], transform * oldMesh.positions()[i], 0.000001));
+        }
+      }
+    }
+    CHECK(meshes == 1);
+    CHECK(map.modificationCount() == count + 1);
+    CHECK(map.modified());
+    const auto saved = map.vmfScene()->serialize(map.worldNode());
+    REQUIRE(saved != source);
+    const auto ids = [](const std::string& bytes) {
+      const auto document = VmfDocument::parse(bytes);
+      auto result = std::vector<std::string>{};
+      for (const auto& entry : document.entries())
+      {
+        if (entry.value && document.tokenContents(entry.key) == "id")
+        {
+          result.emplace_back(document.tokenContents(*entry.value));
+        }
+      }
+      return result;
+    };
+    CHECK(ids(saved) == ids(source));
+    REQUIRE(map.saveAs(output).is_success());
+    CHECK_FALSE(map.modified());
+    CHECK(readBinary(output) == saved);
+    auto reopened = MapFixture{};
+    auto& loaded = reopened.load(output, config);
+    auto& next = ramp(loaded);
+    CHECK(loaded.vmfScene()->nativeId(next) == nativeId);
+    const auto nextBefore = next.brush();
+    selectNodes(loaded, {&next});
+    REQUIRE(translateSelection(loaded, {1, 2, 3}));
+    REQUIRE(next.brush() != nextBefore);
+    CHECK(loaded.vmfScene()->serialize(loaded.worldNode()) != saved);
+    const auto history = map.undoCommandName();
+    const auto afterCount = map.modificationCount();
+    const auto dirty = map.modified();
+    auto shear = vm::mat4x4d::identity();
+    shear[1][0] = 0.25;
+    CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {2, 1, 1}));
+    CHECK_FALSE(flipSelection(map, {0, 0, 0}, vm::axis::x));
+    CHECK_FALSE(transformSelection(map, "Coupled shear refusal", shear));
+    CHECK_FALSE(transformSelection(
+      map,
+      "Unclassified coupled rotation",
+      vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.37)));
+    CHECK(map.modificationCount() == afterCount);
+    CHECK(map.modified() == dirty);
+    CHECK(map.undoCommandName() == history);
+    CHECK(map.selection().nodes == selection);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+    CHECK(node.brush() == before);
+    CHECK(second->entity() == oldEntity);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+    CHECK(map.selection().nodes == selection);
+    CHECK(map.vmfScene()->nativeId(node) == nativeId);
+    CHECK(readBinary(input) == source);
+  }
+  SECTION("invalid batch preserves an independent entity and all history state")
+  {
+    const auto fault = GENERATE(0, 1, 2);
+    auto source = nativeDisplacementRoom(polygon);
+    if (fault == 0)
+    {
+      const auto cacheStart = source.find(polygon);
+      REQUIRE(cacheStart != std::string::npos);
+      source.replace(source.find("0 64 64", cacheStart), 7, "1 64 64");
+    }
+    if (fault == 1)
+    {
+      source += "future_root { value opaque }";
+    }
+    if (fault == 2)
+    {
+      source += R"(entity { id 20 classname info_overlay sides "8" })";
+    }
+    auto env = fs::TestEnvironment{};
+    const auto input = env.dir() / "refusal.vmf";
+    writeBinary(input, source);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(input, config);
+    auto* subject =
+      dynamic_cast<BrushNode*>(map.worldNode().defaultLayer()->children().front());
+    REQUIRE(subject);
+    auto& node = *subject;
+    auto* second = static_cast<EntityNode*>(nullptr);
+    for (auto* child : map.worldNode().defaultLayer()->children())
+    {
+      if (
+        auto* entity = dynamic_cast<EntityNode*>(child);
+        entity && map.vmfScene()->nativeId(*entity) == "9")
+      {
+        second = entity;
+      }
+    }
+    REQUIRE(second);
+    const auto before = node.brush();
+    const auto oldEntity = second->entity();
+    const auto nativeId = map.vmfScene()->nativeId(node);
+    selectNodes(map, {second, &node});
+    const auto selection = map.selection().nodes;
+    const auto count = map.modificationCount();
+    const auto history = map.undoCommandName();
+    const auto dirty = map.modified();
+    CHECK_FALSE(translateSelection(map, {16, 8, 4}));
+    CHECK(node.brush() == before);
+    CHECK(second->entity() == oldEntity);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.modified() == dirty);
+    CHECK(map.undoCommandName() == history);
+    CHECK(map.selection().nodes == selection);
+    CHECK(map.vmfScene()->nativeId(node) == nativeId);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+    CHECK(readBinary(input) == source);
+  }
+}
+
+TEST_CASE("VmfMap coupled polygon displacement installed opt-in", "[.][vmf][installed]")
+{
+  const auto* input = std::getenv("SOURCEBROOM_NATIVE_EDIT_INPUT");
+  const auto* variant = std::getenv("SOURCEBROOM_NATIVE_EDIT_VARIANT");
+  REQUIRE(input);
+  REQUIRE(variant);
+  const auto bounds = vm::bbox3d{VmfScene::PreviewWorldExtent};
+  const auto original = readBinary(input);
+  auto discovery = VmfScene::read(original, bounds);
+  auto nativeId = std::string{};
+  const auto coupled = [](const VmfScene& scene, const BrushNode& node) {
+    auto parsed = false;
+    auto polygon = false;
+    const auto& document = scene.document();
+    for (const auto& face : node.brush().faces())
+    {
+      parsed = parsed || bool(face.sourceDisplacement());
+      for (const auto child : document.entries()[face.lineNumber() - 1].children)
+      {
+        const auto name = document.tokenContents(document.entries()[child].key);
+        polygon = polygon || name == "point_data" || name == "vertices_plus";
+      }
+    }
+    return parsed && polygon;
+  };
+  const auto discover = [&](const auto& self, const Node& node) -> void {
+    if (nativeId.empty())
+    {
+      if (
+        const auto* brush = dynamic_cast<const BrushNode*>(&node);
+        brush && coupled(discovery, *brush))
+      {
+        nativeId = discovery.nativeId(node);
+      }
+      for (const auto* child : node.children())
+      {
+        self(self, *child);
+      }
+    }
+  };
+  discover(discover, discovery.world());
+  INFO("Discovered coupled native solid " << nativeId);
+  REQUIRE_FALSE(nativeId.empty());
+  const auto inputs = std::array<std::filesystem::path, 2>{input, variant};
+  auto env = fs::TestEnvironment{};
+  for (size_t i = 0; i < inputs.size(); ++i)
+  {
+    INFO("Input variant index " << i);
+    const auto bytes = readBinary(inputs[i]);
+    auto fixture = MapFixture{};
+    const auto config =
+      MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = bounds};
+    auto& map = fixture.load(inputs[i], config);
+    const auto find = [&](const auto& self, Node& node, VmfScene& scene) -> BrushNode* {
+      if (
+        auto* brush = dynamic_cast<BrushNode*>(&node);
+        brush && scene.nativeId(node) == nativeId)
+      {
+        return brush;
+      }
+      for (auto* child : node.children())
+      {
+        if (auto* found = self(self, *child, scene))
+        {
+          return found;
+        }
+      }
+      return nullptr;
+    };
+    auto* selected = find(find, map.worldNode(), *map.vmfScene());
+    REQUIRE(selected);
+    REQUIRE(coupled(*map.vmfScene(), *selected));
+    const auto before = selected->brush();
+    auto candidate = before;
+    REQUIRE(candidate
+              .transform(
+                bounds,
+                vm::translation_matrix(vm::vec3d{16, 8, 4}),
+                true,
+                SourceTransformPolicy::TranslationOnly)
+              .is_success());
+    REQUIRE(candidate != before);
+    CHECK_NOTHROW(
+      map.vmfScene()->validateContents(*selected, NodeContents{candidate}, bounds));
+    selectNodes(map, {selected});
+    const auto selection = map.selection().nodes;
+    const auto count = map.modificationCount();
+    REQUIRE(translateSelection(map, {16, 8, 4}));
+    REQUIRE(selected->brush() != before);
+    CHECK(map.modificationCount() == count + 1);
+    CHECK(map.selection().nodes == selection);
+    CHECK(map.vmfScene()->nativeId(*selected) == nativeId);
+    const auto saved = map.vmfScene()->serialize(map.worldNode());
+    REQUIRE(saved != bytes);
+    const auto output = env.dir() / ("coupled-" + std::to_string(i) + ".vmf");
+    REQUIRE(map.saveAs(output).is_success());
+    CHECK(readBinary(output) == saved);
+    auto reopened = MapFixture{};
+    auto& loaded = reopened.load(output, config);
+    CHECK(loaded.vmfScene()->serialize(loaded.worldNode()) == saved);
+    auto* next = find(find, loaded.worldNode(), *loaded.vmfScene());
+    REQUIRE(next);
+    REQUIRE(coupled(*loaded.vmfScene(), *next));
+    const auto reopenedBefore = next->brush();
+    selectNodes(loaded, {next});
+    REQUIRE(translateSelection(loaded, {1, 2, 3}));
+    REQUIRE(next->brush() != reopenedBefore);
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+    CHECK(map.selection().nodes == selection);
     CHECK(readBinary(inputs[i]) == bytes);
   }
 }

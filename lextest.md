@@ -213,6 +213,18 @@ is pending, not inferred from source/model/tool/runtime checks:
   ambiguity remain guarded; report exact refusals rather than bypassing native
   preservation through MAP export. Test counts/review are not this observation.
 
+## A5.19 native terrain movement — pending owner retry
+
+- [ ] In the whole A5.19 kit, open a COPY of either map. Select a terrain brush,
+  move one grid step, undo/redo, Save As a new file and reopen.
+- [ ] If useful, try a proper rotation or positive UNIFORM scale and check terrain
+  shape/normals in the editor or matching Hammer tools. State the exact tool and
+  diagnostic if it refuses; don't strip native payloads or overwrite originals.
+
+Pending. Both actual terrain Map61/focus83/model252/App50 are automated evidence,
+NOT human visual/Hammer/compiler passes. Nonuniform/shear/reflection/topology and
+unknown/stale/unmatched payloads remain guarded. Keep whole A5.18 as recovery.
+
 ## A5.18 original and Hammer++ edits — pending owner retry
 
 - [ ] In the whole A5.18 kit, open a COPY of the original VMF OR its `_h++`

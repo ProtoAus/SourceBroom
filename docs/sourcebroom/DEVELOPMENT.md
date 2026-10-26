@@ -21,6 +21,32 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Compose polygon cache with parsed displacement — A5.19
+
+The entire production change moves existing before-face parsed displacementSides
+collection ahead of polygonCacheEdits/preguard and passes that SAME set to opaque
+instead of null. Later exact shared frame/proper similarity/base-mesh consistency/
+every-plane/structure/editsFrom checks remain byte-for-byte unchanged. Unknown/raw
+mesh still has no allowance. Topology path and other opaque/ref/root operation
+admission unchanged; no SourceDisplacement API/header/policy/schema/tolerance change.
+
+Desired positive BEFORE wiring: syntheticRED619/613controls/6preguard failures;
+actual direct+MapRED13/11controls/2failures. Original/H++ terrain subjects must be
+PRODUCTION-discovered parsed+cached brushes then SAME native-ID matched, not the
+previous ordinary subject or same entry offset. Final BOTHactual61 assertions,
+source restore/inputSHA unchanged; source retained by hash after test-only additions.
+
+Final affected83/fullmodel252 after final source; actual compiler0/newwarnings0.
+Synthetic separate/no-cache/both-cache translation/rotation/uniformscale verify
+renderer positions/normals, exact frame, emitted normal/offset/offset_normal vectors,
+raw translation preservation and ACTED reopened continuation. Existing exact shared
+multi-mesh guard now runs with both caches. Negative tinyone-sidedpose/stalecache/
+opaque/ref/malformedmesh/nonuniform/shear/reflection/unclassified operation and
+invalid-batch Map state controls remain. Test-only compile/stalebinary/oracle errors
+retained separately, not credited as runtime RED. Parent independent final3hash/
+source review/product0/App50/corpus38/35/38 pass; human retry pending, not inferred.
+Keep whole A5.18 recovery. Larger topology/visgroup/hidden gaps remain.
+
 ## Hammer++ polygons and strict inert roots — A5.18
 
 polygonCacheEdits shares per-brush correspondence with thin row parsing: explicit
@@ -49,7 +75,8 @@ App50 and separate metadata/loadcorpus38/35/38 pass. Parent final read/hash revi
 found no focused blocker; owner/Hammer/compiler retry remains pending.
 
 Known limitations remain same1e-6/incidence/winding, mixed caches, mirrors/topology/
-other operations, combined displacement/base motion and nonempty/future root data.
+other operations and nonempty/future root data. Coupled parsed displacement/base
+motion is separately admitted in A5.19 above.
 Keep whole A5.17 as recovery. Larger visgroup/hidden protocol is not implemented.
 
 ## Native side point_data — A5.17
@@ -70,8 +97,8 @@ preserves unchanged index/coordinate lexemes and spacing inside changed rows.
 Local edits are unpublished until complete validation; later refusal stays atomic.
 
 Keep default clone/remove/group/reparent/clip/reference and parsed-displacement
-guards. Combined point-data/displacement geometry motion is conservatively refused
-by the cache preguard; mesh-only existing displacement behavior is not broadened.
+guards. A5.17/18 conservatively refused coupled geometry at the cache preguard;
+A5.19 passes the already-parsed side set there while retaining all later checks.
 Vertices_plus is NOT point_data. Variant checks resolve native ID through production
 bindings; entry offsets differ. Its ACTED negative control is not a positive pass.
 
