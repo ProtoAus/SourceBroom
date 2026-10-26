@@ -5,7 +5,7 @@ paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## Development after A5.11 — native ordinary one-output clip
+## A5.12 — native ordinary one-output clip
 
 Loaded visible ordinary world brushes use the real Map/ClipTool Front/Back path
 in place, not delete/add replacements. Surviving native side bytes/IDs, original
@@ -34,8 +34,9 @@ app/checker rebuild remain green with zero new warnings; identity/guard logic di
 not change. Compiler const-result/incomplete-face-header failures were preserved
 and corrected; this is not a claim that LSP diagnostics alone proved compilation.
 
-This is verified development source, not an installed A5.11 feature, all-UI-green
-claim or owner/Hammer acceptance. The known untouched full-UI preference failure
+This is bounded candidate/source evidence, not an all-UI-green claim or owner/
+Hammer acceptance. Final installed hashes/portable windows/corpus/ZIP provenance
+belong separately to the candidate receipt. The known untouched full-UI preference failure
 remains unfixed. The small copied-plain-brush human check remains pending in lextest.
 
 ## A5.11 uniform scale / bodygroups / transaction-path controls

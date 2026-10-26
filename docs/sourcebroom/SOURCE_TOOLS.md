@@ -47,12 +47,13 @@ This is not arbitrary topology support. Generic content edits keep the current
 complete, unique side-identity set; unregistered/aliased topology and unsupported
 clipboard/CSG operations refuse before mutation, with a preserving-save backstop.
 
-Development source after A5.11 enables **Front/Back one-output clipping** of a
+A5.12 enables **Front/Back one-output clipping** of a
 loaded, visible, ordinary world brush. It edits in place: solid ID and surviving
 native side subtrees remain, retired sides are removed surgically and one new cut
 side receives a stable ID at explicit command admission. Repeat clip, undo/redo
-and native Save As/reopen have acted controls. This is not yet in the installed
-A5.11 kit. BOTH halves, generated/duplicated solids, brush entities, displacement,
+and native Save As/reopen have acted controls. Cut material/UV attributes match
+the preview's nearest-normal original face. Retain A5.11 as unmerged recovery.
+BOTH halves, generated/duplicated solids, brush entities, displacement,
 hidden/opaque/reference-ambiguous data still refuse; they are not stripped or
 converted through MAP. Use a copy, Save As and independently reopen in matching
 Hammer++; no owner/visual acceptance is implied by the automated checks.

@@ -191,10 +191,10 @@ editing. These checks are for the new candidate, not retrospectively passed:
   should hide that part. No asset/original VMF is a write target; static preview
   does not certify animation, collision, all models or measured GPU memory.
 
-## Next native ordinary clip — pending owner/Hammer check
+## A5.12 native ordinary clip — pending owner/Hammer check
 
-This is development source after A5.11, not available in the installed A5.11 kit.
-When the next candidate is delivered:
+The candidate receipt identifies the final portable binary. This new human check
+is pending, not inferred from source/model/tool/runtime checks:
 
 - [ ] On a **copy** of an editable VMF, select one loaded ordinary world brush
   (no displacement). Clip with Front or Back, undo/redo and Save As a new VMF.

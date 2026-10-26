@@ -33,14 +33,16 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **Development source after A5.11:** loaded visible ordinary world brushes admit
+- **A5.12 candidate:** loaded visible ordinary world brushes admit
   native single-output Front/Back clipping in place. Solid ID, surviving side
   subtrees, command history and preserving saves remain native; a registered new
   cut side gets its own stable ID. Model191/191 and App49/49 pass; original corpus
   remains38/35/38 across document/strict/preview with38 original hashes unchanged.
   Generated/duplicated solids, brush entities and BOTH-halves remain next in-scope
   work, not silently unlocked. No arbitrary topology, displacement/opaque/ref
-  bypass, installed A5.11 inclusion or owner/Hammer acceptance is implied.
+  bypass or owner/Hammer acceptance is implied. Cut material/UV commits now match
+  preview after a real two-failure red-to-green control; candidate receipts identify
+  final portable artifacts. Retain the whole A5.11 kit as recovery.
 - **A5 bounded candidate implemented; full exit pending:** FGD-backed property
   hints and ordered/repeated Source outputs, bounded static MDL/VVD/VTX preview,
   saved-file metadata inspection/camera-eye navigation, native capability

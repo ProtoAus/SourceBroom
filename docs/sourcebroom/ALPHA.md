@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.11 terrain-scale/bodygroup candidate
+# Try the Windows SourceBroom A5.12 native one-output clip candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,30 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.11: uniformly scale terrain and preview static bodygroups
+## A5.12: clip an ordinary native world brush without replacing it
+
+On a **copy** of an editable VMF, select one loaded, visible, ordinary world brush
+(no displacement or brush entity). Use the normal clipping tool with **Front** or
+**Back**, undo/redo and Save As a new VMF. The original solid ID and surviving
+native side subtrees stay native; retired sides are removed surgically and the
+new cut side gets a stable ID at command admission, not on saving. Its material/
+UV attributes match the same nearest-normal original face as the preview.
+Repeated clip, undo/redo, deterministic saves and independent reopen have acted
+model/tool controls. Whole invalid batches refuse before live geometry changes.
+
+This first slice intentionally does **not** clip generated/duplicated solids or
+brush entities, keep **BOTH** halves, touch displacement topology or bypass hidden/
+opaque/global-reference ambiguity. BOTH remains preview-only/nonexecutable in a
+native document. Do not route refusals through MAP export or overwrite an original
+as an experiment. Those remaining ordinary ownership/split branches are next work,
+not a claim of full Source topology support.
+
+**Quick owner check:** clip one copied, loaded plain world brush with Front/Back,
+undo/redo and Save As, then compare shape and cut material/UVs in matching Hammer++.
+That human check is pending; automated geometry/data controls are not a visual
+or universal SDK acceptance. Keep A5.11 as unmerged recovery.
+
+## Retained A5.11: uniformly scale terrain and preview static bodygroups
 
 Basic editable native VMFs already exist; **read-only compatibility preview is not
 an editing mode**. On a copied editable VMF, select a whole raised displacement
@@ -311,7 +334,12 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- All **187 model** and **21 graphics** entries pass. Uniform-scale/save-path
+- Full **191 model** and **49 App/tool** entries pass; existing **21 graphics**
+  evidence remains valid for unchanged graphics code. Native ordinary clip focus
+  **4/4** plus retained/native ClipTool **3/3** pass. A real changed-bounds cut
+  reproduced two preview material/UV failures, then both and Front/Back attributes
+  passed after the fix. Actual app/checker/UI callers rebuilt with zero new warnings.
+  Uniform-scale/save-path
   native focus passes **5,257 assertions/39 cases**; body-focused tests pass
   **2,748/6** and weak vertex-holder tests **63/1**. Actual app/checker/UI public
   callers rebuilt with zero new compiler warnings; affected UI **129/3** passes.
