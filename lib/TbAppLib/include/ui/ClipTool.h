@@ -66,6 +66,8 @@ public:
   static const mdl::HitType::Type PointHitType;
 
 private:
+  friend struct ClipToolTestAccess;
+
   enum class ClipSide
   {
     Front,

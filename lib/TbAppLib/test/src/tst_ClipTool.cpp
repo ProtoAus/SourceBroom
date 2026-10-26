@@ -34,6 +34,7 @@
 #include "mdl/Map_Brushes.h"
 #include "mdl/Map_CopyPaste.h"
 #include "mdl/Map_Entities.h"
+#include "mdl/Map_Geometry.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/PasteType.h"
@@ -48,6 +49,7 @@
 
 #include "kd/result.h"
 
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <string>
@@ -57,6 +59,12 @@
 
 namespace tb::ui
 {
+struct ClipToolTestAccess
+{
+  static const auto& frontBrushes(const ClipTool& tool) { return tool.m_frontBrushes; }
+  static const auto& backBrushes(const ClipTool& tool) { return tool.m_backBrushes; }
+};
+
 namespace
 {
 
@@ -344,11 +352,10 @@ TEST_CASE("ClipTool")
   }
 }
 
-TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
+namespace
 {
-  const auto preview = GENERATE(false, true);
-  const auto ownership = GENERATE(0, 1, 2, 3);
-  CAPTURE(ownership);
+std::string nativeClipToolCube(const bool distinctAttributes = false)
+{
   auto bytes = std::string{
     "versioninfo { formatversion 100 } world { id 1 classname worldspawn solid { id 2 "};
   const auto planes = std::array<std::string, 6>{
@@ -360,10 +367,23 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
     "(0 0 64) (0 64 64) (64 0 64)"};
   for (size_t i = 0; i < planes.size(); ++i)
   {
+    const auto material =
+      distinctAttributes ? "synthetic/face" + std::to_string(i) : "synthetic/grid";
+    const auto offset = distinctAttributes ? std::to_string(i + 1) : "0";
     bytes += "side { id " + std::to_string(i + 3) + " plane \"" + planes[i]
-      + "\" material synthetic/grid uaxis \"[1 0 0 0] 0.25\" vaxis \"[0 -1 0 0] 0.25\" rotation 0 } ";
+             + "\" material " + material + " uaxis \"[1 0 0 " + offset
+             + "] 0.25\" vaxis \"[0 -1 0 " + offset + "] 0.25\" rotation 0 } ";
   }
-  bytes += "} }";
+  return bytes + "} }";
+}
+} // namespace
+
+TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
+{
+  const auto preview = GENERATE(false, true);
+  const auto ownership = GENERATE(0, 1, 2, 3);
+  CAPTURE(ownership);
+  const auto bytes = nativeClipToolCube();
   auto env = fs::TestEnvironment{};
   const auto path = env.dir() / "native clip tool.vmf";
   {
@@ -421,18 +441,121 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
   tool.addPoint({32, 64, 0}, {});
   if (preview)
   {
-    CHECK_FALSE(tool.canClip());
-    tool.performClip();
-    CHECK(map.modificationCount() == count);
-    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+    for (size_t side = 0; side < 3; ++side)
+    {
+      CHECK_FALSE(tool.canClip());
+      tool.performClip();
+      CHECK(map.modificationCount() == count);
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+      tool.toggleSide();
+    }
   }
   else
   {
     REQUIRE(tool.canClip());
-    tool.toggleSide(); // Both remains refused, and can still be toggled away.
-    CHECK_FALSE(tool.canClip());
+    // Inspect the actual preview caches before committing either orientation.
+    const auto& frontCache = ClipToolTestAccess::frontBrushes(tool);
+    const auto& backCache = ClipToolTestAccess::backBrushes(tool);
+    REQUIRE(frontCache.size() == 1);
+    REQUIRE(backCache.size() == 1);
+    REQUIRE(frontCache.begin()->second.size() == 1);
+    REQUIRE(backCache.begin()->second.size() == 1);
+    const auto frontPreview =
+      static_cast<const mdl::BrushNode*>(frontCache.begin()->second.front())->brush();
+    const auto backPreview =
+      static_cast<const mdl::BrushNode*>(backCache.begin()->second.front())->brush();
+    const auto checkPreview = [&](const auto& previewBrush, const auto& committed) {
+      CHECK(previewBrush.bounds() == committed.bounds());
+      const auto previewCut = previewBrush.findFace(
+        vm::vec3d{previewBrush.bounds().min.x() == 32 ? -1.0 : 1.0, 0, 0});
+      REQUIRE(previewCut);
+      const auto committedCut =
+        committed.findFace(previewBrush.face(*previewCut).normal());
+      REQUIRE(committedCut);
+      const auto& actual = previewBrush.face(*previewCut);
+      const auto& expected = committed.face(*committedCut);
+      CHECK(actual.materialName() == expected.materialName());
+      CHECK(actual.uvAttributes() == expected.uvAttributes());
+      CHECK(actual.surfaceAttributes() == expected.surfaceAttributes());
+      CHECK(actual.uAxis() == expected.uAxis());
+      CHECK(actual.vAxis() == expected.vAxis());
+    };
+    const auto points = std::array<vm::vec3d, 3>{
+      vm::vec3d{32, 0, 0}, vm::vec3d{32, 0, 64}, vm::vec3d{32, 64, 0}};
+    REQUIRE(mdl::clipBrushes(map, {node}, points));
+    checkPreview(frontPreview, node->brush());
+    map.undoCommand();
+    REQUIRE(mdl::clipBrushes(map, {node}, {points[0], points[2], points[1]}));
+    checkPreview(backPreview, node->brush());
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == initial);
+    tool.toggleSide(); // Both must produce two actual native halves.
+    CHECK(tool.canClip());
     tool.performClip();
-    CHECK(map.modificationCount() == count);
+    CHECK(map.selection().brushes.size() == 2);
+    CHECK(map.modificationCount() == count + 1);
+    if (map.selection().brushes.size() == 2)
+    {
+      const auto outputs = map.selection().brushes;
+      REQUIRE(std::ranges::find(outputs, node) != outputs.end());
+      auto* sibling = outputs.front() == node ? outputs.back() : outputs.front();
+      CHECK(sibling->parent() == node->parent());
+      CHECK(node->brush().closed());
+      CHECK(node->brush().fullySpecified());
+      CHECK(sibling->brush().closed());
+      CHECK(sibling->brush().fullySpecified());
+      CHECK(node->brush().bounds() == frontPreview.bounds());
+      CHECK(sibling->brush().bounds() == backPreview.bounds());
+      checkPreview(frontPreview, node->brush());
+      checkPreview(backPreview, sibling->brush());
+      CHECK(map.vmfScene()->nativeId(*node) == nativeId);
+      const auto siblingId = map.vmfScene()->nativeId(*sibling);
+      CHECK(siblingId != nativeId);
+      const auto frontBrush = node->brush();
+      const auto backBrush = sibling->brush();
+      const auto both = map.vmfScene()->serialize(map.worldNode());
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == both);
+      const auto savedPath = env.dir() / "both saved.vmf";
+      {
+        auto stream = std::ofstream{savedPath, std::ios::binary};
+        stream << both;
+      }
+      auto reopenedFixture = MapDocumentFixture{};
+      auto& reopened = reopenedFixture.load(
+        savedPath,
+        mdl::MapFixtureConfig{
+          .mapFormat = mdl::MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+      CHECK(reopened.map().vmfScene()->serialize(reopened.map().worldNode()) == both);
+      auto reopenedHalves = size_t{0};
+      const auto checkReopened = [&](const auto& self, const mdl::Node& current) -> void {
+        if (const auto* brushNode = dynamic_cast<const mdl::BrushNode*>(&current))
+        {
+          const auto id = reopened.map().vmfScene()->nativeId(*brushNode);
+          if (id == nativeId || id == siblingId)
+          {
+            ++reopenedHalves;
+            checkPreview(id == nativeId ? frontPreview : backPreview, brushNode->brush());
+          }
+        }
+        for (const auto* child : current.children())
+        {
+          self(self, *child);
+        }
+      };
+      checkReopened(checkReopened, reopened.map().worldNode());
+      CHECK(reopenedHalves == 2);
+      map.undoCommand();
+      CHECK(map.selection().nodes == std::vector<mdl::Node*>{node});
+      CHECK(sibling->parent() == nullptr);
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == initial);
+      map.redoCommand();
+      CHECK(map.selection().brushes == outputs);
+      CHECK(node->brush() == frontBrush);
+      CHECK(sibling->brush() == backBrush);
+      CHECK(map.vmfScene()->nativeId(*sibling) == siblingId);
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == both);
+      map.undoCommand();
+    }
     tool.toggleSide(); // Back
     REQUIRE(tool.canClip());
     tool.performClip();
@@ -461,6 +584,102 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
     }
     CHECK(map.vmfScene()->nativeId(*node) == nativeId);
   }
+}
+
+TEST_CASE("ClipTool native preview nearest-normal ties", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "native clip preview ties.vmf";
+  {
+    auto stream = std::ofstream{path, std::ios::binary};
+    stream << nativeClipToolCube(true);
+  }
+  auto fixture = MapDocumentFixture{};
+  auto& document = fixture.load(
+    path,
+    mdl::MapFixtureConfig{
+      .mapFormat = mdl::MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto& map = document.map();
+  auto* node =
+    dynamic_cast<mdl::BrushNode*>(map.worldNode().defaultLayer()->children().front());
+  REQUIRE(node);
+  mdl::selectNodes(map, {node});
+  const auto original = node->brush();
+  const auto initial = map.vmfScene()->serialize(map.worldNode());
+  const auto points = std::array<vm::vec3d, 3>{
+    vm::vec3d{0, 64, 0}, vm::vec3d{0, 64, 64}, vm::vec3d{64, 0, 0}};
+  auto tool = ClipTool{document};
+  REQUIRE(tool.activate());
+  for (const auto& point : points)
+  {
+    tool.addPoint(point, {});
+  }
+  REQUIRE(tool.canClip());
+  tool.toggleSide(); // Both must expose both actual preview orientations.
+  REQUIRE(tool.canClip());
+  const auto& frontCache = ClipToolTestAccess::frontBrushes(tool);
+  const auto& backCache = ClipToolTestAccess::backBrushes(tool);
+  REQUIRE(frontCache.size() == 1);
+  REQUIRE(backCache.size() == 1);
+  REQUIRE(frontCache.begin()->second.size() == 1);
+  REQUIRE(backCache.begin()->second.size() == 1);
+  const auto front =
+    static_cast<const mdl::BrushNode*>(frontCache.begin()->second.front())->brush();
+  const auto back =
+    static_cast<const mdl::BrushNode*>(backCache.begin()->second.front())->brush();
+  const auto checkCut = [&](const auto& preview, const auto& committed) {
+    const mdl::BrushFace* cut = nullptr;
+    for (const auto& face : preview.faces())
+    {
+      if (!original.findFace(face.normal()))
+      {
+        REQUIRE_FALSE(cut);
+        cut = &face;
+      }
+    }
+    REQUIRE(cut);
+    // An exact diagonal ties the two positive-facing axial source normals.
+    const mdl::BrushFace* firstMatch = nullptr;
+    auto ties = 0;
+    for (const auto& face : original.faces())
+    {
+      if (vm::dot(face.normal(), cut->normal()) > 0.5)
+      {
+        if (!firstMatch)
+        {
+          firstMatch = &face;
+        }
+        ++ties;
+      }
+    }
+    REQUIRE(ties == 2);
+    REQUIRE(firstMatch);
+    CHECK(cut->materialName() == firstMatch->materialName());
+    CHECK(cut->uvAttributes() == firstMatch->uvAttributes());
+    CHECK(cut->surfaceAttributes() == firstMatch->surfaceAttributes());
+    const auto committedIndex = committed.findFace(cut->normal());
+    REQUIRE(committedIndex);
+    const auto& actual = committed.face(*committedIndex);
+    CHECK(cut->materialName() == actual.materialName());
+    CHECK(cut->uvAttributes() == actual.uvAttributes());
+    CHECK(cut->surfaceAttributes() == actual.surfaceAttributes());
+    CHECK(cut->uAxis() == actual.uAxis());
+    CHECK(cut->vAxis() == actual.vAxis());
+  };
+  REQUIRE(mdl::clipBrushes(map, {node}, points));
+  checkCut(front, node->brush());
+  map.undoCommand();
+  REQUIRE(mdl::clipBrushes(map, {node}, {points[0], points[2], points[1]}));
+  checkCut(back, node->brush());
+  map.undoCommand();
+  tool.performClip();
+  REQUIRE(map.selection().brushes.size() == 2);
+  checkCut(front, node->brush());
+  const auto& outputs = map.selection().brushes;
+  const auto* sibling = outputs.front() == node ? outputs.back() : outputs.front();
+  checkCut(back, sibling->brush());
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == initial);
 }
 
 } // namespace tb::ui

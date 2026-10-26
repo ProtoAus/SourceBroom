@@ -20,12 +20,14 @@
 #include "mdl/Map_Geometry.h"
 
 #include "base/Logger.h"
+#include "base/Uuid.h"
 #include "mdl/AddRemoveNodesCommand.h"
 #include "mdl/ApplyAndSwap.h"
 #include "mdl/BrushBuilder.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushNode.h"
 #include "mdl/BrushVertexCommands.h"
+#include "mdl/ClipBrushesBothCommand.h"
 #include "mdl/EditorContext.h"
 #include "mdl/EntityNode.h"
 #include "mdl/GameConfig.h"
@@ -60,7 +62,9 @@
 #include "kd/vector_utils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <ranges>
+#include <set>
 
 namespace tb::mdl
 {
@@ -117,6 +121,112 @@ bool clipBrushes(
   return map.executeAndStore(
     std::make_unique<SwapNodeContentsCommand>(
       "Clip Brushes", std::move(candidates), true));
+}
+
+bool clipBrushesBoth(
+  Map& map,
+  const std::vector<BrushNode*>& brushes,
+  const std::array<vm::vec3d, 3>& points)
+{
+  if (!map.vmfScene() || brushes.empty())
+  {
+    return false;
+  }
+  for (const auto& point : points)
+  {
+    for (size_t i = 0; i < 3; ++i)
+    {
+      if (!std::isfinite(point[i]))
+      {
+        return false;
+      }
+    }
+  }
+  auto keepers = std::vector<std::pair<Node*, NodeContents>>{};
+  auto siblings = std::vector<std::unique_ptr<BrushNode>>{};
+  auto seen = std::set<BrushNode*>{};
+  for (auto* node : brushes)
+  {
+    if (
+      !node || !seen.insert(node).second || !map.editorContext().visible(*node)
+      || node->hasChildren() || node->brush().faces().empty())
+    {
+      return false;
+    }
+    const auto cutFace = [&](const bool back) -> Result<BrushFace> {
+      auto result = BrushFace::create(
+        points[0],
+        points[back ? 2 : 1],
+        points[back ? 1 : 2],
+        map.currentMaterialName(),
+        UvAttributes{},
+        SurfaceAttributes{},
+        map.worldNode().mapFormat());
+      if (!result.is_success())
+      {
+        return result;
+      }
+      auto cut = std::move(result).value();
+      const auto& sourceFaces = node->brush().faces();
+      const auto closest =
+        std::ranges::min_element(sourceFaces, {}, [&](const auto& source) {
+          return vm::squared_length(source.boundary().normal - cut.boundary().normal);
+        });
+      cut.copyAttributes(*closest);
+      return cut;
+    };
+    auto frontFace = cutFace(false);
+    if (!frontFace.is_success())
+    {
+      return false;
+    }
+    auto below = false;
+    auto above = false;
+    for (const auto& vertex : node->brush().vertexPositions())
+    {
+      const auto status = frontFace.value().boundary().point_status(vertex);
+      below = below || status == vm::plane_status::below;
+      above = above || status == vm::plane_status::above;
+    }
+    if (!below || !above)
+    {
+      continue;
+    }
+    auto backFace = cutFace(true);
+    if (!backFace.is_success())
+    {
+      return false;
+    }
+    auto front = node->brush();
+    auto back = node->brush();
+    if (
+      !front.clip(map.worldBounds(), std::move(frontFace).value()).is_success()
+      || !back.clip(map.worldBounds(), std::move(backFace).value()).is_success())
+    {
+      return false;
+    }
+    auto sibling =
+      std::unique_ptr<BrushNode>{static_cast<BrushNode*>(node->clone(map.worldBounds()))};
+    sibling->setLinkId(generateUuid());
+    sibling->setBrush(std::move(back));
+    keepers.emplace_back(node, NodeContents{std::move(front)});
+    siblings.push_back(std::move(sibling));
+  }
+  if (keepers.empty())
+  {
+    try
+    {
+      map.vmfScene()->validateBothClipReplay(brushes, {}, {}, map.worldBounds());
+    }
+    catch (const std::exception& e)
+    {
+      map.logger().error() << "Native VMF Both clip refused: " << e.what();
+    }
+    return false;
+  }
+  return map.executeAndStore(
+    std::make_unique<ClipBrushesBothCommand>(
+      brushes, std::move(keepers), std::move(siblings)));
 }
 
 static bool transformSelectionWithSourcePolicy(

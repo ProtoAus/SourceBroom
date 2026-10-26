@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.13 ordinary native clipping candidate
+# Try the Windows SourceBroom A5.14 native BOTH-halves clipping candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,32 +20,36 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.13: clip fresh, duplicated and plain brush-entity solids natively
+## A5.14: keep BOTH halves of an ordinary native brush
 
-In a new editable map or **copy** of a VMF, draw a small ordinary closed brush.
-Use the normal clipping tool with **Front** or **Back**, undo/redo and Save As a
-new VMF. Fresh/template and duplicated brushes now work before their first save,
-world-owned or in a supported plain brush entity such as `func_detail`. Loaded
-world brushes from A5.12 still work. The solid ID and surviving native side
-subtrees remain; retired sides are removed surgically and a new cut side gets a
-stable ID at command admission, not on saving. Cut material/UVs match preview.
+In a new editable map or **copy** of a VMF, select a visible ordinary closed brush
+and place a cutting plane through it. Choose **Both** in the normal clipping tool.
+Front keeps the original solid identity; Back is a new sibling in the same world
+or supported plain brush entity, with its own remapped side IDs. Both halves are
+selected. Loaded, fresh/template and duplicated plain brushes work before first
+save. Undo restores the original and selection; redo restores the SAME halves/IDs.
+A plane missing/tangent to a brush is a no-op, not a deletion or extra history item;
+mixed selections retain unchanged subjects.
 
-Live parent/owner and visibility are checked before mutation; invalid whole
-batches refuse. A certified registered-clip pre-swap redo refusal can retain the
-same command for retry without issuing another cut ID. This does not change
-other failed redo/undo/transaction policies. Safe notification-lifetime controls
-also cover history-clearing/new-edit observers and exception unwind.
+One whole-batch native admission checks parents/visibility, contents and identity
+budgets before predictable mutation. It is not duplicate + two unrelated clips or
+MAP replacement. Parked siblings do not appear in saved output. Front/Back remains
+supported, and its narrow retry certificate remains; compound failures do not
+inherit retry permission. Other failed redo/undo/transaction policies stay unchanged.
 
-**BOTH** halves remain preview-only/nonexecutable in native documents. Displacement
-topology, hidden/opaque/global-reference ambiguity and arbitrary CSG remain gated.
-Do not route refusals through MAP export or overwrite an original as an experiment.
-This is ordinary one-output clipping, not complete Source topology support.
+Actual preview cut material/UV data is now checked against committed cuts for both
+orientations and first-nearest ties. Those controls reproduced a native preview
+mismatch before repair; earlier post-commit checks alone did not prove preview
+parity. Human visual acceptance is still pending.
 
-**Quick owner check:** draw and duplicate one plain brush, Front/Back clip one,
-undo/redo and Save As. Compare shape and cut material/UVs in matching Hammer++.
-Optionally repeat within a plain `func_detail`. Human acceptance is pending;
-automated geometry/data controls are not visual or universal SDK acceptance.
-Keep the whole A5.12 kit as unmerged recovery.
+Displacement topology, hidden/opaque/global-reference ambiguity and other CSG/
+arbitrary topology remain gated. Do not bypass refusals through MAP export or
+use an original as an experiment.
+
+**Quick owner check:** Both-cut one copied or fresh plain brush, undo/redo, then
+Save As a new VMF. Confirm two closed halves and matching cut texture placement in
+Hammer++. Optionally repeat within `func_detail`. Keep the whole A5.13 kit as
+unmerged recovery; automated tests are not universal SDK/visual acceptance.
 
 ## Retained A5.11: uniformly scale terrain and preview static bodygroups
 
@@ -327,7 +331,7 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 
 - Basic plain-brush/point-entity creation, duplication, deletion and limited
   brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
-  BOTH-halves/other CSG, native editor-group/layer authoring, displacement creation/sculpt/
+  other CSG/arbitrary topology, native editor-group/layer authoring, displacement creation/sculpt/
   power/sew, native nonuniform scale/shear/flip, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
   some upstream controls can remain visible and save guards stay authoritative.
 - Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
@@ -338,11 +342,12 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Full **194 model** and **49 App/tool** entries pass; existing **21 graphics**
-  evidence remains valid for unchanged graphics code. Core/native ordinary clip
-  focus **8/8** plus retained/native ClipTool **3/3** pass. Certified same-command
-  redo controls and safe lifetime red15-to-green controls act; focused follow-up
-  static review found no remaining lifetime-scope blockers. A real changed-bounds cut
+- Full **201 model** and **50 App/tool** entries pass; existing **21 graphics**
+  evidence remains valid for unchanged graphics code. Both focus **9/9**, retained
+  native/core **8/8**, and ClipTool **4/4** (670 assertions) pass. Independent focused
+  review found no remaining blockers. Actual preview red24 (12 attribute mismatches
+  plus inherited Both red12) became green. Retained certified redo/lifetime controls
+  still act. A real changed-bounds cut
   reproduced two preview material/UV failures, then both and Front/Back attributes
   passed after the fix. Actual app/checker/UI callers rebuilt with zero new warnings.
   Uniform-scale/save-path
@@ -356,7 +361,7 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   targeted passes are not an all-UI-green or manual/Hammer acceptance claim. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep prior A5.12/A5.11/A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
+  Keep prior A5.13/A5.12/A5.11/A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

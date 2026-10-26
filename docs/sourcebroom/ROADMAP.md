@@ -33,22 +33,20 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.13 candidate:** native single-output Front/Back clipping now also admits
-  fresh/template and duplicated plain brushes, both world-owned and in supported
-  plain brush entities, before their first save. Loaded-world clipping from A5.12
-  remains. Live ownership/visibility and exact admitted states are checked; solid
-  IDs, surviving side subtrees and registered cut IDs remain native through undo,
-  preserving saves and reopen. Model194/194 and App49/49 pass; original corpus
-  remains38/35/38 across document/strict/preview with38 original hashes unchanged.
-  A certified registered-clip pre-swap redo refusal retains the same command;
-  other failed redo/undo/transaction policies do not change. Safe marker controls
-  reproduced15 premature-destruction failures before a scoped notification-lifetime
-  fix, then passed including clear/new edits, reentry refusal and exception unwind.
-  Focused follow-up static review found no remaining scoped blockers. BOTH-halves,
-  displacement/opaque/ref
-  bypass and arbitrary topology remain next/gated, not silently unlocked. No owner/
-  Hammer acceptance is implied. Candidate receipts identify final portable artifacts;
-  retain the whole A5.12 kit as recovery.
+- **A5.14 candidate:** ordinary native BOTH clipping now retains Front under its
+  original identity and adds Back as a same-parent sibling with remapped stable
+  IDs. Loaded/new/template/duplicated world and supported plain brush-entity
+  routes use one staged whole-batch admission and command; no-op subjects remain
+  untouched, mixed selections retain them, and undo parks exact siblings without
+  leaking them into saves. Redo restores the same nodes/IDs and native source
+  attributes. Actual preview cut material/UV mismatch was reproduced and repaired;
+  first-nearest ties and both orientations are tested. Full Model201/App50, Both9,
+  retained native8 and ClipTool4/670assert pass, actual app/checker/UI build0/zero
+  new warnings. Focused independent review found no remaining blockers. Corpus
+  remains38/35/38 with38 original hashes unchanged; final receipts record portable
+  boundary evidence. Other CSG/topology and displacement/hidden/opaque/ref bypass
+  remain guarded. Generic failure policies stay unchanged. Owner/Hammer checks
+  remain pending; keep the whole A5.13 kit as recovery.
 - **A5 bounded candidate implemented; full exit pending:** FGD-backed property
   hints and ordered/repeated Source outputs, bounded static MDL/VVD/VTX preview,
   saved-file metadata inspection/camera-eye navigation, native capability

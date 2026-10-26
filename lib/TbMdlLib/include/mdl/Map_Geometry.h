@@ -43,6 +43,13 @@ bool clipBrushes(
   const std::vector<BrushNode*>& brushes,
   const std::array<vm::vec3d, 3>& points);
 
+/** Native Both: true only for an actual split; all-no-op batches leave history/IDs
+ * unchanged. */
+bool clipBrushesBoth(
+  Map& map,
+  const std::vector<BrushNode*>& brushes,
+  const std::array<vm::vec3d, 3>& points);
+
 bool transformSelection(
   Map& map, const std::string& commandName, const vm::mat4x4d& transformation);
 

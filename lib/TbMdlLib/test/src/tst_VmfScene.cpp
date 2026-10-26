@@ -1501,4 +1501,277 @@ TEST_CASE("VmfScene generated clip exact states and live owner guards", "[vmf]")
   }
 }
 
+TEST_CASE("VmfScene Both stages provenance siblings and keeper identities once", "[vmf]")
+{
+  const auto bounds = vm::bbox3d{4096};
+  const auto original = fixture(
+    false,
+    "// retained literal side data\r\n\"lightmapscale\" \"00032\" "
+    "\"smoothing_groups\" \"0017\" \"smoothing_groups\" \"4\" "
+    "editor { \"color\" \"2 4 6\" }");
+  auto scene = VmfScene::read(original, bounds);
+  auto& node = brush(scene.world());
+  const auto before = node.brush();
+  const auto half = [&](const bool back) {
+    auto result = before;
+    auto face = BrushFace::create(
+      {32, 0, 0},
+      back ? vm::vec3d{32, 64, 0} : vm::vec3d{32, 0, 64},
+      back ? vm::vec3d{32, 0, 64} : vm::vec3d{32, 64, 0},
+      "synthetic/cut",
+      UvAttributes{},
+      SurfaceAttributes{},
+      MapFormat::SourceVMF);
+    REQUIRE(face.is_success());
+    REQUIRE(result.clip(bounds, std::move(face).value()).is_success());
+    return result;
+  };
+  auto sibling = std::unique_ptr<BrushNode>{static_cast<BrushNode*>(node.clone(bounds))};
+  sibling->setBrush(half(true));
+  const auto backBefore = sibling->brush();
+  auto keepers =
+    std::vector<std::pair<Node*, NodeContents>>{{&node, NodeContents{half(false)}}};
+  auto siblings = std::vector<BrushNode*>{sibling.get()};
+
+  const auto refuseFirst = GENERATE(false, true);
+  CAPTURE(refuseFirst);
+  if (refuseFirst)
+  {
+    auto other = std::unique_ptr<BrushNode>{static_cast<BrushNode*>(node.clone(bounds))};
+    other->setBrush(half(true));
+    keepers.push_back(keepers.front());
+    siblings.push_back(other.get());
+    CHECK_THROWS_AS(
+      scene.registerBothClips({&node}, keepers, siblings, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == original);
+    CHECK(sibling->lineNumber() == node.lineNumber());
+    CHECK(
+      std::ranges::any_of(
+        std::get<Brush>(keepers.front().second.get()).faces(),
+        [](const auto& face) { return !face.lineNumber(); }));
+    keepers.pop_back();
+    siblings.pop_back();
+    auto bad = std::get<Brush>(keepers.front().second.get());
+    auto& survivor = *std::ranges::find_if(
+      bad.faces(), [](const auto& face) { return face.lineNumber() != 0; });
+    survivor.setMaterialName("synthetic/forged");
+    auto forged = std::vector<std::pair<Node*, NodeContents>>{{&node, NodeContents{bad}}};
+    CHECK_THROWS_AS(
+      scene.registerBothClips({&node}, forged, siblings, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == original);
+  }
+  scene.registerBothClips({&node}, keepers, siblings, bounds);
+  CHECK(scene.nativeId(*sibling) == "10");
+  const auto front = std::get<Brush>(keepers.front().second.get());
+  const auto savedBack = sibling->brush();
+  node.setBrush(front);
+  auto* back = sibling.release();
+  node.parent()->addChild(back);
+  const auto saved = scene.serialize(scene.world());
+  CHECK(saved.find("side\n{\n\"id\" \"9\"") != std::string::npos);
+  auto objectIds = std::set<std::string>{};
+  auto sideIds = std::set<std::string>{};
+  const auto reparsed = VmfDocument::parse(saved);
+  for (const auto& entry : reparsed.entries())
+  {
+    if (entry.value && reparsed.tokenContents(entry.key) == "id")
+    {
+      REQUIRE(entry.parent);
+      const auto side =
+        reparsed.tokenContents(reparsed.entries()[*entry.parent].key) == "side";
+      auto& ids = side ? sideIds : objectIds;
+      CHECK(ids.insert(std::string{reparsed.tokenContents(*entry.value)}).second);
+    }
+  }
+  for (const auto& face : node.brush().faces())
+  {
+    if (face.lineNumber() <= scene.document().entries().size())
+    {
+      CHECK(
+        saved.find(scene.document().serializeEntry(face.lineNumber() - 1))
+        != std::string::npos);
+    }
+  }
+  for (size_t i = 0; i < backBefore.faceCount(); ++i)
+  {
+    const auto& sourceFace = backBefore.faces()[i];
+    if (sourceFace.lineNumber())
+    {
+      const auto source = sourceFace.lineNumber() - 1;
+      auto idEntry = VmfEntryId{};
+      for (const auto child : scene.document().entries()[source].children)
+      {
+        const auto& entry = scene.document().entries()[child];
+        if (entry.value && scene.document().tokenContents(entry.key) == "id")
+        {
+          idEntry = child;
+        }
+      }
+      // IDs are not exposed for faces; check the emitted side by its allocated
+      // sequence, which is deterministic and independent of plane matching.
+      const auto generatedId = std::to_string(10 + i);
+      const auto edits = std::vector<VmfValueEdit>{{idEntry, "\"" + generatedId + "\""}};
+      const auto expected = scene.document().serializeEntry(source, edits);
+      CHECK(saved.find(expected) != std::string::npos);
+    }
+  }
+  CHECK_NOTHROW(VmfScene::read(saved, bounds));
+  auto* parent = back->parent();
+  parent->removeChild(back);
+  sibling.reset(back);
+  node.setBrush(before);
+  CHECK(scene.serialize(scene.world()) == original);
+  CHECK_NOTHROW(scene.validateBothClipReplay({&node}, keepers, siblings, bounds));
+  auto tampered = sibling->brush();
+  tampered.faces().front().setFilePosition(node.brush().faces().front().lineNumber(), 1);
+  sibling->setBrush(std::move(tampered));
+  CHECK_THROWS_AS(
+    scene.validateBothClipReplay({&node}, keepers, siblings, bounds),
+    std::invalid_argument);
+  sibling->setBrush(savedBack);
+  CHECK_NOTHROW(scene.validateBothClipReplay({&node}, keepers, siblings, bounds));
+  parent->addChild(sibling.release());
+  node.setBrush(front);
+  CHECK(scene.serialize(scene.world()) == saved);
+}
+
+TEST_CASE(
+  "VmfScene Both native identity length budgets refuse before publication", "[vmf]")
+{
+  const auto objectBudget = GENERATE(false, true);
+  const auto exhausted = GENERATE(false, true);
+  CAPTURE(objectBudget, exhausted);
+  const auto bounds = vm::bbox3d{4096};
+  const auto huge = std::string(exhausted ? 4096 : 4095, '9');
+  auto source = fixture();
+  // Recognized editor payload reserves namespaces without becoming opaque geometry.
+  const auto at = source.find("editor { \"color\"");
+  REQUIRE(at != std::string::npos);
+  source.insert(
+    at + 9,
+    objectBudget ? "solid { id \"" + huge + "\" } " : "side { id \"" + huge + "\" } ");
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  const auto half = [&](const bool back) {
+    auto result = node.brush();
+    auto face = BrushFace::create(
+      {32, 0, 0},
+      back ? vm::vec3d{32, 64, 0} : vm::vec3d{32, 0, 64},
+      back ? vm::vec3d{32, 0, 64} : vm::vec3d{32, 64, 0},
+      "synthetic/cut",
+      UvAttributes{},
+      SurfaceAttributes{},
+      MapFormat::SourceVMF);
+    REQUIRE(face.is_success());
+    REQUIRE(result.clip(bounds, std::move(face).value()).is_success());
+    return result;
+  };
+  auto sibling = std::unique_ptr<BrushNode>{static_cast<BrushNode*>(node.clone(bounds))};
+  sibling->setBrush(half(true));
+  auto keepers =
+    std::vector<std::pair<Node*, NodeContents>>{{&node, NodeContents{half(false)}}};
+  const auto originalBinding = sibling->lineNumber();
+  if (exhausted)
+  {
+    CHECK_THROWS_AS(
+      scene.registerBothClips({&node}, keepers, {sibling.get()}, bounds),
+      std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+    CHECK(sibling->lineNumber() == originalBinding);
+    CHECK(
+      std::ranges::any_of(
+        std::get<Brush>(keepers.front().second.get()).faces(),
+        [](const auto& face) { return !face.lineNumber(); }));
+    if (objectBudget)
+    {
+      // A cut side was staged before the sibling object ID overflow. Ordinary
+      // clipping still gets side 9, proving no partial counter publication.
+      scene.registerClips(keepers, bounds);
+      node.setBrush(std::get<Brush>(keepers.front().second.get()));
+      CHECK(
+        scene.serialize(scene.world()).find("side\n{\n\"id\" \"9\"")
+        != std::string::npos);
+    }
+  }
+  else
+  {
+    CHECK_NOTHROW(scene.registerBothClips({&node}, keepers, {sibling.get()}, bounds));
+    node.setBrush(std::get<Brush>(keepers.front().second.get()));
+    node.parent()->addChild(sibling.release());
+    const auto saved = scene.serialize(scene.world());
+    CHECK(saved.find("\"id\" \"1" + std::string(4095, '0') + "\"") != std::string::npos);
+    CHECK_NOTHROW(VmfScene::read(saved, bounds));
+  }
+}
+
+TEST_CASE("VmfScene Both combined ID byte budget is atomic after staged halves", "[vmf]")
+{
+  const auto bounds = vm::bbox3d{4096};
+  auto source = fixture();
+  const auto at = source.find("editor { \"color\"");
+  REQUIRE(at != std::string::npos);
+  source.insert(at + 9, "side { id \"" + std::string(4095, '9') + "\" } ");
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  auto owned = std::vector<std::unique_ptr<BrushNode>>{};
+  auto roots = std::vector<Node*>{};
+  // 4,086 generated sides at 4,096 ID bytes each leave room for one Both
+  // output pair, but not two. This reaches the real production byte guard
+  // without a private budget override or a million-object fixture.
+  for (size_t i = 0; i < 681; ++i)
+  {
+    owned.emplace_back(static_cast<BrushNode*>(node.clone(bounds)));
+    roots.push_back(owned.back().get());
+  }
+  scene.validateAdditions(*node.parent(), roots, true);
+  scene.registerAdditions(roots, true);
+  for (auto& root : owned)
+  {
+    node.parent()->addChild(root.release());
+  }
+  const auto before = scene.serialize(scene.world());
+  auto* other = static_cast<BrushNode*>(roots.front());
+  auto keepers = std::vector<std::pair<Node*, NodeContents>>{};
+  auto siblings = std::vector<std::unique_ptr<BrushNode>>{};
+  for (auto* target : {&node, other})
+  {
+    const auto half = [&](const bool back) {
+      auto result = target->brush();
+      auto cut = BrushFace::create(
+        {32, 0, 0},
+        back ? vm::vec3d{32, 64, 0} : vm::vec3d{32, 0, 64},
+        back ? vm::vec3d{32, 0, 64} : vm::vec3d{32, 64, 0},
+        "synthetic/cut",
+        UvAttributes{},
+        SurfaceAttributes{},
+        MapFormat::SourceVMF);
+      REQUIRE(cut.is_success());
+      REQUIRE(result.clip(bounds, std::move(cut).value()).is_success());
+      return result;
+    };
+    keepers.emplace_back(target, NodeContents{half(false)});
+    auto sibling =
+      std::unique_ptr<BrushNode>{static_cast<BrushNode*>(target->clone(bounds))};
+    sibling->setBrush(half(true));
+    siblings.push_back(std::move(sibling));
+  }
+  CHECK_THROWS_AS(
+    scene.registerBothClips(
+      {&node, other}, keepers, {siblings[0].get(), siblings[1].get()}, bounds),
+    std::invalid_argument);
+  CHECK(scene.serialize(scene.world()) == before);
+  CHECK(siblings[0]->lineNumber() == node.lineNumber());
+  CHECK(
+    std::ranges::any_of(
+      std::get<Brush>(keepers.front().second.get()).faces(),
+      [](const auto& face) { return !face.lineNumber(); }));
+  keepers.pop_back();
+  CHECK_NOTHROW(scene.registerClips(keepers, bounds));
+  node.setBrush(std::get<Brush>(keepers.front().second.get()));
+  const auto expectedId = "1" + std::string(4091, '0') + "4086";
+  CHECK(
+    scene.serialize(scene.world()).find("\"id\" \"" + expectedId + "\"")
+    != std::string::npos);
+}
+
 } // namespace tb::mdl

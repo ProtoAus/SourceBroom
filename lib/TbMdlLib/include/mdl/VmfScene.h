@@ -138,6 +138,19 @@ public:
   void validateClipContents(
     const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const;
 
+  /** One publication for both outputs; siblings are detached and correspond to keepers.
+   * Subjects includes unchanged brushes, which must pass the same live admission. */
+  void registerBothClips(
+    const std::vector<BrushNode*>& subjects,
+    std::vector<std::pair<Node*, NodeContents>>& keepers,
+    const std::vector<BrushNode*>& siblings,
+    const vm::bbox3d& worldBounds);
+  void validateBothClipReplay(
+    const std::vector<BrushNode*>& subjects,
+    const std::vector<std::pair<Node*, NodeContents>>& keepers,
+    const std::vector<BrushNode*>& siblings,
+    const vm::bbox3d& worldBounds) const;
+
   /** Immutable-source delta. Plain native additions/deletions and brush-entity
    * wrapping retain unrelated bytes and opaque payloads. Unsupported edits fail
    * closed with std::invalid_argument; no MAP re-export or filesystem writes. */

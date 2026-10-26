@@ -213,6 +213,15 @@ is pending, not inferred from source/model/tool/runtime checks:
   ambiguity remain guarded; report exact refusals rather than bypassing native
   preservation through MAP export. Test counts/review are not this observation.
 
+## A5.14 BOTH clipping / actual preview — pending owner/Hammer check
+
+- [ ] On a copied or fresh plain brush, place a plane through it and choose Both.
+  Confirm two closed halves are selected; undo restores the original, redo restores
+  the halves. Save As a new VMF and compare shape/cut texture placement in matching
+  Hammer++. If convenient repeat in a plain brush entity. A missing/tangent plane
+  should not delete an untouched brush. No originals are write targets; automated
+  data/identity/preview checks do not substitute for this observation.
+
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation
 or support for other Source branches from a visual check.

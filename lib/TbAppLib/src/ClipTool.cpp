@@ -615,8 +615,7 @@ bool ClipTool::hasBrushes() const
 bool ClipTool::canClip() const
 {
   const auto* scene = m_document.map().vmfScene();
-  return m_strategy && m_strategy->canClip()
-         && (!scene || (!scene->isReadOnlyPreview() && m_clipSide != ClipSide::Both));
+  return m_strategy && m_strategy->canClip() && (!scene || !scene->isReadOnlyPreview());
 }
 
 void ClipTool::performClip()
@@ -629,7 +628,12 @@ void ClipTool::performClip()
     if (map.vmfScene())
     {
       const auto points = m_strategy->getPoints();
-      if (keepFrontBrushes())
+      if (m_clipSide == ClipSide::Both)
+      {
+        mdl::clipBrushesBoth(
+          map, map.selection().brushes, {points[0], points[1], points[2]});
+      }
+      else if (keepFrontBrushes())
       {
         mdl::clipBrushes(map, map.selection().brushes, {points[0], points[1], points[2]});
       }
@@ -868,10 +872,7 @@ void ClipTool::updateBrushes()
         mdl::SurfaceAttributes{},
         map.worldNode().mapFormat())
         | kdl::and_then([&](mdl::BrushFace&& clipFace) {
-            if (!map.vmfScene())
-            {
-              setFaceAttributes(brush.faces(), clipFace);
-            }
+            setFaceAttributes(brush.faces(), clipFace);
             return brush.clip(worldBounds, std::move(clipFace));
           })
         | kdl::transform([&]() {

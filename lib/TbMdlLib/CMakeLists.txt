@@ -16,6 +16,7 @@ target_sources(TbMdlLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/BrushNode.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/BrushRendererBrushCache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CircleShape.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ClipBrushesBothCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ColorRange.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Command.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CommandProcessor.cpp

@@ -29,6 +29,7 @@
 #include "mdl/Map_World.h"
 #include "mdl/Node.h"
 #include "mdl/NodeQueries.h"
+#include "mdl/SwapNodeContentsUtils.h"
 #include "mdl/VmfScene.h"
 
 #include "kd/ranges/to.h"
@@ -75,7 +76,9 @@ auto notifySpecialWorldProperties(
   return std::tuple{false, false, false};
 }
 
-void doSwapNodeContents(
+} // namespace
+
+void swapNodeContentsAndNotify(
   std::vector<std::pair<Node*, NodeContents>>& nodesToSwap, Map& map)
 {
   const auto nodes = nodesToSwap | std::views::keys | kdl::ranges::to<std::vector>();
@@ -125,8 +128,6 @@ void doSwapNodeContents(
         }));
   }
 }
-
-} // namespace
 
 SwapNodeContentsCommand::SwapNodeContentsCommand(
   std::string name,
@@ -195,13 +196,13 @@ bool SwapNodeContentsCommand::doPerformDo(Map& map)
       return false;
     }
   }
-  doSwapNodeContents(m_nodes, map);
+  swapNodeContentsAndNotify(m_nodes, map);
   return true;
 }
 
 bool SwapNodeContentsCommand::doPerformUndo(Map& map)
 {
-  doSwapNodeContents(m_nodes, map);
+  swapNodeContentsAndNotify(m_nodes, map);
   return true;
 }
 

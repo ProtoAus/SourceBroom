@@ -1,11 +1,42 @@
-# SourceBroom validation — A5.13 ordinary clipping/ownership/history
+# SourceBroom validation — A5.14 BOTH clipping and actual preview parity
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.13 — fresh/duplicated/entity one-output clips and bounded retry lifetime
+## A5.14 — native BOTH, one admission and actual preview parity
+
+One compound command and staged scene admission split proper ordinary brushes:
+Front keeps original identity, Back is a same-parent sibling with remapped stable
+IDs and preserved native prototypes. Loaded/fresh/template/duplicate world and
+plain-entity origins act. No-op/tangent subjects retain identity; mixed selections
+retain unchanged subjects. Undo parks exact siblings, restores original selection
+and excludes them from save. Redo validates live originals AND parked payloads and
+restores the same nodes/IDs. Deterministic preserving save/reparse, continued
+edits, multi-parent and refusal controls pass. Invalid mixed/hidden/opaque/ref/
+displacement/owner/budget input refuses before predictable mutation. Actual object/
+side ID-length and aggregate ID-byte refusal have allocator controls; million-entry
+ceilings are checked, not dynamically exhausted. Arbitrary OOM/notification strong
+atomicity is not claimed; local ownership reconciles attachment/removal unwind.
+
+Parent preproduction Both RED12 and actual native preview RED24 (12 material/UV
+mismatches + inheritedBoth12) are retained. Actual preview-vs-commit assertions
+cover both orientations and first-nearest-normal ties, not just saved cut faces.
+These repair an earlier evidence gap: post-commit checks alone did not establish
+preview parity. Admitted default surface data is checked; arbitrary nondefault
+SurfaceAttributes are not newly supported.
+
+Both **9/9**, retained native/core **8/8**, ClipTool **4/4** (670 assertions), parent
+full model **201/201**, full App **50/50**, and real app/checker/UI caller builds
+pass with zero new warnings. Independent focused review found no remaining static
+blockers. The unchanged private corpus remains38/35/38 with38 original hashes;
+final installed portable/checker/archive evidence belongs to the candidate receipt.
+Manual/Hammer and the untouched full-UI preference failure remain pending/unfixed.
+Global failed redo/undo/transaction policies are unchanged; Both is not certified
+retryable by inheriting single-output clip permission. Keep A5.13 as recovery.
+
+## Retained A5.13 — fresh/duplicated/entity one-output clips and bounded retry lifetime
 
 Visible fresh/template and duplicated plain brushes, world-owned or within a
 supported plain brush entity, now use the same native Front/Back in-place command
@@ -206,7 +237,7 @@ manual native mesh appearance and independent Hammer checks remain pending.
 | Area | Implemented and checked | Not implied |
 | --- | --- | --- |
 | Native document | Ordered/repeated keys, comments, unknown blocks, numeric text, byte-exact no-edit serialization; surgical token edits and entry/nesting bounds | All VMF branch semantics or independent Hammer acceptance |
-| Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; ordinary one-output Front/Back clips; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | BOTH halves/other CSG/arbitrary topology, native editor-group/layer/displacement/overlay/instance authoring |
+| Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; ordinary Front/Back/Both clips; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | Other CSG/arbitrary topology, native editor-group/layer/displacement/overlay/instance authoring |
 | Compatibility preview | Explicit opt-in immutable partial reader; duplicate IDs/bytes unchanged; omitted-solid counts and labelled plane samples; selection-only commands; create-new unchanged copy | Editable repair, complete geometry, proxy hulls, normal save/export/build or relaxed syntax/resource limits |
 | Entity tools | FGD property hints, choices/flags and I/O metadata; ordered/repeated outputs; unknown data retained, definition defaults not blindly inserted | FGD completeness or correctness for every game; malformed data silently repaired |
 | Props/materials | Bounded static MDL44/48/49 with matching VVD/VTX, root/default pose, installed loose/VPK materials; Source fixed-studio entity skins and static body selection; explicit fallbacks | Animation, physics/full shader parity or every model variant |

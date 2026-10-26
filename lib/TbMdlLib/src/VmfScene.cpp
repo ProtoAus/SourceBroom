@@ -1495,6 +1495,227 @@ void VmfScene::registerClips(
   }
 }
 
+void VmfScene::registerBothClips(
+  const std::vector<BrushNode*>& subjects,
+  std::vector<std::pair<Node*, NodeContents>>& keepers,
+  const std::vector<BrushNode*>& siblings,
+  const vm::bbox3d& worldBounds)
+{
+  // No-op subjects participate in admission too, before any staged allocation.
+  validateBothClipReplay(subjects, {}, {}, worldBounds);
+  if (keepers.empty() || keepers.size() != siblings.size())
+  {
+    refuse(0, "invalid native Both batch");
+  }
+  auto generated = m_generated;
+  auto states = m_clipStates;
+  auto memberships = m_sideStateMemberships;
+  auto binding = m_nextBinding;
+  auto sideId = m_nextSideId;
+  auto objectId = m_nextObjectId;
+  auto idBytes = m_generatedIdBytes;
+  auto faceAssignments = std::vector<std::pair<const BrushFace*, size_t>>{};
+  auto nodeAssignments = std::vector<std::pair<BrushNode*, size_t>>{};
+  auto seen = std::set<const Node*>{};
+  auto seenSiblings = std::set<const Node*>{};
+  const auto allocate = [&](
+                          const GeneratedKind kind,
+                          const std::optional<VmfEntryId> source,
+                          const size_t owner) {
+    auto& id = kind == GeneratedKind::Side ? sideId : objectId;
+    if (
+      binding == std::numeric_limits<size_t>::max() || generated.size() >= 1'000'000
+      || id.size() > 4096 || id.size() > 16 * 1024 * 1024 - idBytes)
+    {
+      refuse(0, "native identity budget exhausted; save/reopen before further creation");
+    }
+    const auto result = binding++;
+    generated.emplace(result, GeneratedBinding{kind, id, source, owner});
+    idBytes += id.size();
+    id = incrementId(id);
+    return result;
+  };
+  const auto admit = [&](const size_t owner, std::set<size_t> sides) {
+    auto& admitted = states[owner];
+    if (std::ranges::find(admitted, sides) == admitted.end())
+    {
+      if (sides.size() > 1'000'000 - memberships)
+      {
+        refuse(0, "native admitted side-state budget exhausted");
+      }
+      memberships += sides.size();
+      admitted.push_back(std::move(sides));
+    }
+  };
+  for (size_t i = 0; i < keepers.size(); ++i)
+  {
+    auto* before = dynamic_cast<BrushNode*>(keepers[i].first);
+    auto* front = std::get_if<Brush>(&keepers[i].second.get());
+    auto* sibling = siblings[i];
+    if (
+      !before || !front || !sibling || sibling->parent() || sibling->hasChildren()
+      || before->hasChildren() || !seen.insert(before).second
+      || !seenSiblings.insert(sibling).second
+      || std::ranges::find(subjects, before) == subjects.end()
+      || sibling->lineNumber() != before->lineNumber()
+      || sibling->visibilityState() != VisibilityState::Inherited
+      || !before->parent()->canAddChild(*sibling))
+    {
+      refuse(0, "invalid native Both keeper/sibling ownership");
+    }
+    const auto oldSides = sideBindings(before->brush());
+    const auto checkHalf = [&](const Brush& half) -> const BrushFace* {
+      const BrushFace* cut = nullptr;
+      auto survivors = std::set<size_t>{};
+      for (const auto& face : half.faces())
+      {
+        if (face.sourceDisplacement())
+        {
+          refuse(0, "native displacement clipping unsupported");
+        }
+        if (!face.lineNumber())
+        {
+          if (cut)
+          {
+            refuse(0, "native Both requires one cut face per half");
+          }
+          cut = &face;
+        }
+        else if (
+          !oldSides.contains(face.lineNumber())
+          || !survivors.insert(face.lineNumber()).second)
+        {
+          refuse(0, "foreign or duplicate native Both survivor");
+        }
+      }
+      if (!cut || !half.closed() || !half.fullySpecified())
+      {
+        refuse(0, "empty or no-op native Both half");
+      }
+      static_cast<void>(VmfDocument::parse(freshSideText(*cut, sideId)));
+      auto expected = before->brush();
+      if (
+        !expected.clip(worldBounds, *cut).is_success()
+        || expected.faceCount() != half.faceCount())
+      {
+        refuse(0, "native Both half is not an ordinary clip");
+      }
+      for (const auto& face : expected.faces())
+      {
+        const auto found = std::ranges::find_if(half.faces(), [&](const auto& other) {
+          return face.lineNumber() == other.lineNumber();
+        });
+        if (found == half.faces().end() || !sameClipFaceData(face, *found))
+        {
+          refuse(0, "native Both changed survivor provenance or data");
+        }
+      }
+      return cut;
+    };
+    const auto* frontCut = checkHalf(*front);
+    const auto* backCut = checkHalf(sibling->brush());
+    const auto& fp = frontCut->points();
+    const auto& bp = backCut->points();
+    if (fp[0] != bp[0] || fp[1] != bp[2] || fp[2] != bp[1])
+    {
+      refuse(0, "native Both halves do not share the opposite cut");
+    }
+    auto frontSides = std::set<size_t>{};
+    for (const auto& face : front->faces())
+    {
+      if (face.lineNumber())
+      {
+        frontSides.insert(face.lineNumber());
+      }
+    }
+    const auto frontBinding =
+      allocate(GeneratedKind::Side, std::nullopt, before->lineNumber());
+    frontSides.insert(frontBinding);
+    faceAssignments.emplace_back(frontCut, frontBinding);
+    admit(before->lineNumber(), std::move(frontSides));
+
+    const auto solid = allocate(GeneratedKind::Solid, prototype(before->lineNumber()), 0);
+    nodeAssignments.emplace_back(sibling, solid);
+    auto backSides = std::set<size_t>{};
+    for (const auto& face : sibling->brush().faces())
+    {
+      const auto source = face.lineNumber() ? prototype(face.lineNumber()) : std::nullopt;
+      const auto side = allocate(GeneratedKind::Side, source, solid);
+      faceAssignments.emplace_back(&face, side);
+      backSides.insert(side);
+    }
+    admit(solid, std::move(backSides));
+  }
+  // One publication for the entire selected batch, including both namespaces,
+  // exact side states and detached-node provenance. No registerAdditions/Clips calls.
+  m_generated.swap(generated);
+  m_clipStates.swap(states);
+  m_sideStateMemberships = memberships;
+  m_nextBinding = binding;
+  m_nextSideId.swap(sideId);
+  m_nextObjectId.swap(objectId);
+  m_generatedIdBytes = idBytes;
+  for (const auto& [face, allocated] : faceAssignments)
+  {
+    face->setFilePosition(allocated, 1);
+  }
+  for (const auto& [node, allocated] : nodeAssignments)
+  {
+    node->setFilePosition(allocated, 1);
+  }
+}
+
+void VmfScene::validateBothClipReplay(
+  const std::vector<BrushNode*>& subjects,
+  const std::vector<std::pair<Node*, NodeContents>>& keepers,
+  const std::vector<BrushNode*>& siblings,
+  const vm::bbox3d& worldBounds) const
+{
+  requireEditing();
+  requireEditableVersion(m_document);
+  auto seen = std::set<const Node*>{};
+  for (const auto* subject : subjects)
+  {
+    if (!subject || subject->hasChildren() || !seen.insert(subject).second)
+    {
+      refuse(0, "invalid or repeated native Both subject");
+    }
+    validateClipOwner(*subject);
+    validateContents(*subject, NodeContents{subject->brush()}, worldBounds);
+  }
+  if (keepers.size() != siblings.size())
+  {
+    refuse(0, "invalid native Both replay batch");
+  }
+  auto original = NodeMap{};
+  collect(*m_original, original);
+  for (size_t i = 0; i < keepers.size(); ++i)
+  {
+    const auto& [node, contents] = keepers[i];
+    const auto* sibling = siblings[i];
+    if (
+      !node || !seen.contains(node) || !sibling || sibling->parent()
+      || sibling->hasChildren()
+      || sibling->visibilityState() != VisibilityState::Inherited
+      || !node->parent()->canAddChild(*sibling))
+    {
+      refuse(0, "invalid parked native Both ownership");
+    }
+    validateClipContents(*node, contents, worldBounds);
+    validateSideState(*sibling);
+    const auto record = m_generated.find(sibling->lineNumber());
+    if (
+      record == m_generated.end() || record->second.kind != GeneratedKind::Solid
+      || !sibling->brush().closed() || !sibling->brush().fullySpecified()
+      || !worldBounds.contains(sibling->brush().bounds()))
+    {
+      refuse(0, "invalid parked native Both solid");
+    }
+    // Detached validation deliberately does not call the live-owner validator.
+    static_cast<void>(emitNode(*sibling, original));
+  }
+}
+
 void VmfScene::validateContents(
   const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const
 {

@@ -48,9 +48,9 @@ These are observed limitations/follow-ups, not a claim that all have a product f
 - **Alpha operation affordances — `ui/MapWindow.cpp`, `mdl/VmfScene.cpp`.**
   A5.2 enables basic native creation/duplication/deletion/brush-entity ownership
   and gates common unsupported clipboard/CSG/clip/content changes before mutation.
-  A5.13 extends one-output plain brush clipping to fresh/template and duplicated
-  world/brush-entity solids before first save. Two-half and opaque/displacement/
-  reference cases still refuse. Some upstream topology/hierarchy tools can remain visible.
+  A5.14 enables ordinary Front/Back/Both clipping for loaded/fresh/template and
+  duplicated world/plain brush-entity solids. Other CSG/topology and opaque/
+  displacement/reference cases still refuse. Some upstream topology/hierarchy tools remain visible.
   Follow-up: complete capability-specific affordances before full A5, not merely save-time
   refusal. Falsifier: each unsupported action is unavailable or explains refusal
   before mutation; supported authoring, transforms, selection and undo still work.

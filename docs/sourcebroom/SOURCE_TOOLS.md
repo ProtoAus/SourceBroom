@@ -47,18 +47,19 @@ This is not arbitrary topology support. Generic content edits keep the current
 complete, unique side-identity set; unregistered/aliased topology and unsupported
 clipboard/CSG operations refuse before mutation, with a preserving-save backstop.
 
-A5.13 extends **Front/Back one-output clipping** to visible fresh/template and
-duplicated plain brushes, world-owned or within supported plain brush entities,
-before first save. Loaded-world clipping from A5.12 remains. It edits in place:
-solid ID and surviving native side subtrees remain, retired sides are removed
-surgically and new cut sides receive stable IDs at explicit command admission.
-Repeat clip, undo/redo and native Save As/reopen have acted controls. Cut material/
-UVs match preview. A narrowly certified registered-clip pre-swap redo refusal keeps
-the same command; other failed redo/undo/transaction policies remain unchanged.
-Retain the whole A5.12 kit as unmerged recovery. BOTH halves, displacement and
-hidden/opaque/reference-ambiguous data still refuse; they are not stripped or
-converted through MAP. Use a copy, Save As and independently reopen in matching
-Hammer++; no owner/visual acceptance is implied by automated or static checks.
+A5.14 adds **Both-halves clipping** alongside retained Front/Back for visible
+loaded/fresh/template/duplicated plain world and supported brush-entity solids.
+Front keeps its original identity; Back is a new same-parent sibling with remapped
+stable IDs. One staged batch admission/command preserves native side prototypes,
+undo/redo, selection and native Save As/reopen. No-op/tangent subjects stay intact;
+mixed selections retain them without extra identities. Undo-parked siblings are
+not serialized. Actual preview cut material/UV parity now has direct controls for
+both orientations and nearest-normal ties, repairing a reproduced mismatch.
+Single-output narrow retry remains; Both/default failed redo/undo/transaction
+policies do not gain certification. Retain whole A5.13 as unmerged recovery.
+Other CSG/arbitrary topology, displacement and hidden/opaque/reference ambiguity
+remain refused; no stripping or MAP conversion. Use a copy, Save As and reopen in
+matching Hammer++; no owner/visual acceptance is implied by automated/static checks.
 
 ## Entity properties and ordered outputs
 

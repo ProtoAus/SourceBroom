@@ -21,14 +21,23 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Native ordinary one-output clipping — A5.12/A5.13
+## Native ordinary clipping — A5.12–A5.14
 
-`mdl::clipBrushes` uses actual BrushFace/Brush clipping and one in-place
-SwapNodeContents command; native ClipTool must not use the upstream delete/add
-replacement path. A5.13 also admits visible fresh/template and duplicated plain
-brushes, world-owned or within supported plain brush entities, before first save.
-Validate the live parent/owner and visibility, not only parsed source ownership.
-BOTH halves, displacements, hidden and opaque/reference ambiguity remain refused.
+Single-output `mdl::clipBrushes` uses actual BrushFace/Brush clipping and one
+in-place SwapNodeContents command. A5.14 `mdl::clipBrushesBoth` uses one native-only
+ClipBrushesBothCommand and one staged VmfScene whole-batch admission, never public
+duplication + two clip transactions or the MAP delete/add path. Front keeps the
+original node/solid; Back is a same-parent sibling with fully remapped native IDs.
+Loaded/fresh/template/duplicated plain world/entity brushes are supported. No-op
+subjects validate and remain selected in mixed batches, all-no-op returns false
+without history/count/identity consumption. Undo parks exact siblings; replay
+validates live originals AND detached siblings without temporary attachment or
+new IDs. Only detached siblings are uniquely owned; tree edits reconcile each
+sibling's actual parentage on unwind. Predictable refusals are mutation-free;
+arbitrary OOM/notification strong atomicity is not claimed.
+
+Validate live parent/owner and visibility, not only parsed source ownership.
+Displacements, hidden and opaque/reference ambiguity remain refused.
 Generated admission must retain exact accepted states, not use guessed plane
 matches or make generic swaps an arbitrary-topology route.
 
@@ -81,6 +90,23 @@ Normal/throwing clear, execute/store, later observers, exactly-one destruction a
 throw-without-clear followed by successful redo all pass. Independent follow-up
 static review found no remaining blockers in this lifetime scope. This is not
 whole-Source, compiler, packaging or owner/Hammer acceptance.
+
+## A5.14 Both and actual preview controls
+
+Parent Both runtime RED12 preceded production edits. Component Both9/retained8,
+ClipTool4/670assert, parent fullModel201/App50 and real app/checker/UI builds0/
+zero new warnings pass. Independent focused static review found no blockers.
+ID-length/aggregate ID-byte refusals act after earlier candidate staging with a
+valid allocator control. Production million-identity/membership caps are checked
+but not dynamically exhausted; no stronger numeric claim is made.
+
+Actual native preview skipped nearest-normal attribute copying while committed
+cuts used it. Direct cache-face data assertions reproduced12 material/scalar-UV
+mismatches (plus inheritedBoth12); repair and first-nearest-tie controls pass.
+Earlier post-commit checks/prose alone were not preview evidence. A tiny private
+read-only friend exposes existing preview data to tests, not a runtime channel.
+Actual installed-boundary provenance belongs to the candidate receipt; manual/
+Hammer acceptance remains separate. No global history/failure policy changed.
 
 ## Build
 
