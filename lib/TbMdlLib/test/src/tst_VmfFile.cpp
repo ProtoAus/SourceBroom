@@ -7,6 +7,8 @@
 
 #include <fstream>
 #include <iterator>
+#include <string>
+#include <variant>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -82,6 +84,37 @@ TEST_CASE("VmfFile unchanged save does not create backups", "[vmf]")
 }
 
 #ifdef _WIN32
+TEST_CASE("VmfFile long leaf saves", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto parentSize = env.dir().native().size();
+  REQUIRE(parentSize < 180);
+  const auto stemSize = size_t{248} - parentSize - 1 - 4;
+  const auto path = env.dir() / (std::string(stemSize, 'm') + ".vmf");
+  const auto freshPath = env.dir() / (std::string(stemSize, 'n') + ".vmf");
+  REQUIRE(path.native().size() == 248);
+  const auto original = std::string{"world { id 1 }\r\n"};
+  const auto changed = std::string{"world { id 2 }\n"};
+  {
+    auto stream = std::ofstream{path, std::ios::binary};
+    stream << original;
+  }
+  REQUIRE(loadBytes(path) == original);
+  const auto saved = saveVmfFile(path, changed, original);
+  INFO((saved ? std::string{} : std::get<Error>(saved.error()).msg));
+  REQUIRE(saved);
+  REQUIRE(saved.value().backupPath);
+  CHECK(saved.value().backupPath->parent_path() == env.dir());
+  CHECK(loadBytes(path) == changed);
+  CHECK(loadBytes(*saved.value().backupPath) == original);
+  REQUIRE(saveVmfFile(freshPath, original));
+  CHECK(loadBytes(freshPath) == original);
+  CHECK(loadBytes(path) == changed);
+  CHECK_FALSE(saveVmfFile(path, "unapproved", original));
+  CHECK(loadBytes(path) == changed);
+  CHECK(loadBytes(*saved.value().backupPath) == original);
+}
+
 TEST_CASE("VmfFile failed atomic promotion retains original and recovery file", "[vmf]")
 {
   auto env = fs::TestEnvironment{};

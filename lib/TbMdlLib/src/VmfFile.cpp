@@ -32,10 +32,16 @@ std::filesystem::path uniqueSibling(const std::filesystem::path& path, const cha
 {
   static auto sequence = std::atomic<unsigned long long>{0};
   const auto clock = std::chrono::steady_clock::now().time_since_epoch().count();
-  auto result = path;
-  result += ".sourcebroom-" + std::to_string(clock) + "-"
-            + std::to_string(sequence.fetch_add(1)) + suffix;
-  return result;
+#ifdef _WIN32
+  const auto process = GetCurrentProcessId();
+#else
+  const auto process = ::getpid();
+#endif
+  // A valid destination leaf can already approach the platform's path limit.
+  // Independent leaves also need a process ID to separate concurrent editors.
+  return path.parent_path()
+         / (".sourcebroom-" + std::to_string(process) + "-" + std::to_string(clock) + "-"
+            + std::to_string(sequence.fetch_add(1)) + suffix);
 }
 
 struct PendingFile

@@ -286,6 +286,18 @@ real inspector Apply/undo plus the large-grid-to-small-grid queued-refresh case.
 This foundation is not sculpt/create/power/sew, alpha-material blending, overlays,
 instances or complete Source rendering. Build/test is not visual owner acceptance.
 
+## Native VMF transaction path budget
+
+Transaction siblings use a short directory-local PID/steady-clock/atomic-sequence
+leaf, rather than appending a nonce to the complete destination filename. A valid
+248-character Windows target previously could not create its longer temporary
+path; a binary-input control reproduced the refusal before the naming change.
+The same regression now checks create-new saving, replacement, exact original
+backup bytes and stale-original refusal. Exclusive creation, no-replace promotion,
+link/overwrite/expected-byte checks and failed-promotion recovery remain unchanged.
+This is not unlimited Windows long-path support: the parent directory and actual
+destination must still be usable. No Windows path-prefix bypass is introduced.
+
 ## Source fixed-literal model skins
 
 `FgdParser` and `loadEntityDefinitions` have a default-off Source studio-skin
