@@ -1446,7 +1446,7 @@ void VmfScene::nodeEdits(
           const auto transform = current.sourceDisplacement()->baseTransformFrom(*mesh);
           if (!transform)
           {
-            refuse(id, "displacement bases require shared proper rigid motion");
+            refuse(id, "displacement bases require shared proper similarity motion");
           }
           if (baseTransform)
           {
@@ -1480,7 +1480,7 @@ void VmfScene::nodeEdits(
                 *baseTransform * face.points()[i],
                 SourceDisplacement::TransformEpsilon))
           {
-            refuse(id, "all displacement base planes must follow one rigid frame");
+            refuse(id, "all displacement base planes must follow one similarity frame");
           }
         }
       }

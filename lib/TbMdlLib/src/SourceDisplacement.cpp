@@ -225,7 +225,10 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
   }
   if (const auto elevation = member(document, *block, "elevation", false))
   {
-    result.m_elevation = numbers(value(document, *elevation), 1, *elevation)[0].value;
+    const auto text = value(document, *elevation);
+    const auto scalar = numbers(text, 1, *elevation)[0];
+    result.m_elevation = scalar.value;
+    result.m_elevationRow = Row{*elevation, text, {{scalar.begin, scalar.end}}};
   }
   auto clockwise = corners;
   std::reverse(clockwise.begin(), clockwise.end());
@@ -429,7 +432,7 @@ void SourceDisplacement::rebuild()
   }
 }
 
-void SourceDisplacement::validateRigidSamples(
+void SourceDisplacement::validateTransformedSamples(
   const SourceDisplacement& before, const vm::mat4x4d& transform) const
 {
   for (size_t i = 0; i < m_positions.size(); ++i)
@@ -441,7 +444,7 @@ void SourceDisplacement::validateRigidSamples(
       || !vm::is_equal(m_positions[i], expected, TransformEpsilon)
       || !vm::is_equal(m_basePositions[i], expectedBase, TransformEpsilon))
     {
-      invalid(m_entry, "rigid motion loses native sample precision");
+      invalid(m_entry, "base motion loses native sample precision");
     }
   }
 }
@@ -508,7 +511,7 @@ SourceDisplacement SourceDisplacement::translated(const vm::vec3d& delta) const
   const auto transform = vm::translation_matrix(delta);
   result.m_baseTransform = transform * m_baseTransform;
   result.rebuild();
-  result.validateRigidSamples(*this, transform);
+  result.validateTransformedSamples(*this, transform);
   return result;
 }
 
@@ -528,8 +531,46 @@ SourceDisplacement SourceDisplacement::rigidlyTransformed(
   {
     invalid(m_entry, "rotation requires typed native offset_normals rows");
   }
+  return similarityTransformed(transform, 1);
+}
+
+SourceDisplacement SourceDisplacement::uniformlyScaled(const vm::mat4x4d& transform) const
+{
+  const auto scale = transform[0][0];
+  const auto delta = transform * vm::vec3d{};
+  if (
+    !std::isfinite(scale) || scale <= 0 || !vm::is_finite(delta)
+    || transform
+         != vm::translation_matrix(delta)
+              * vm::scaling_matrix(vm::vec3d{scale, scale, scale}))
+  {
+    invalid(m_entry, "native scale requires an exact finite positive uniform matrix");
+  }
+  if (scale == 1)
+  {
+    return translated(delta);
+  }
+  if (!m_rotationSupported)
+  {
+    invalid(m_entry, "scale requires typed native offset_normals rows");
+  }
+  return similarityTransformed(transform, scale);
+}
+
+SourceDisplacement SourceDisplacement::similarityTransformed(
+  const vm::mat4x4d& transform, const double scale) const
+{
   auto result = *this;
-  const auto rotation = vm::slice<3, 3>(transform, 0, 0);
+  const auto linear = vm::slice<3, 3>(transform, 0, 0);
+  const auto rotation = linear / scale;
+  const auto scaleScalar = [&](const double value) {
+    const auto scaled = value * scale;
+    if (!std::isfinite(scaled) || (value != 0 && scaled == 0))
+    {
+      invalid(m_entry, "native scalar scaling is not representable");
+    }
+    return scaled;
+  };
   result.m_start = transform * m_start;
   for (auto& corner : result.m_corners)
   {
@@ -549,15 +590,44 @@ SourceDisplacement SourceDisplacement::rigidlyTransformed(
   }
   for (auto& offset : result.m_offsets)
   {
-    rotateVector(offset);
+    if (scale == 1)
+    {
+      offset = linear * offset;
+    }
+    else
+    {
+      for (size_t c = 0; c < 3; ++c)
+      {
+        offset[c] = scaleScalar(offset[c]);
+      }
+    }
+    if (!vm::is_finite(offset))
+    {
+      invalid(m_entry, "native offset scaling overflows");
+    }
   }
   for (auto& normal : result.m_offsetNormals)
   {
     rotateVector(normal);
   }
+  result.m_baseScale = m_baseScale * scale;
+  result.m_elevation = scaleScalar(m_elevation);
+  for (auto& distance : result.m_distances)
+  {
+    distance = scaleScalar(distance);
+  }
   result.m_baseTransform = transform * m_baseTransform;
+  if (
+    !std::isfinite(result.m_baseScale) || result.m_baseScale <= 0
+    || !std::isfinite(result.m_elevation)
+    || !properRigidTransform(
+      result.m_baseTransform
+      * vm::scaling_matrix(vm::vec3d{1, 1, 1} / result.m_baseScale)))
+  {
+    invalid(m_entry, "native scale frame or elevation is not representable");
+  }
   result.rebuild();
-  result.validateRigidSamples(*this, transform);
+  result.validateTransformedSamples(*this, transform);
   return result;
 }
 
@@ -579,7 +649,9 @@ std::optional<vm::mat4x4d> SourceDisplacement::baseTransformFrom(
   const auto transform = m_baseTransform == before.m_baseTransform
                            ? vm::mat4x4d::identity()
                            : m_baseTransform * *inverse;
-  if (!properRigidTransform(transform))
+  const auto scale = m_baseScale / before.m_baseScale;
+  const auto rigid = transform * vm::scaling_matrix(vm::vec3d{1, 1, 1} / scale);
+  if (!std::isfinite(scale) || scale <= 0 || !properRigidTransform(rigid))
   {
     return std::nullopt;
   }
@@ -593,9 +665,7 @@ std::optional<vm::mat4x4d> SourceDisplacement::baseTransformFrom(
   if (
     !vm::is_equal(m_start, transform * before.m_start, TransformEpsilon)
     || !vm::is_equal(
-      m_faceNormal,
-      vm::slice<3, 3>(transform, 0, 0) * before.m_faceNormal,
-      TransformEpsilon))
+      m_faceNormal, vm::slice<3, 3>(rigid, 0, 0) * before.m_faceNormal, TransformEpsilon))
   {
     return std::nullopt;
   }
@@ -639,7 +709,7 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   const auto transform = baseTransformFrom(before);
   if (
     !transform || m_entry != before.m_entry || m_power != before.m_power
-    || m_size != before.m_size || m_elevation != before.m_elevation
+    || m_size != before.m_size || m_elevationRow != before.m_elevationRow
     || m_startRow != before.m_startRow || m_worldBounds != before.m_worldBounds
     || m_normalsBound != before.m_normalsBound
     || m_rotationSupported != before.m_rotationSupported || m_alphas != before.m_alphas
@@ -649,30 +719,39 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   {
     invalid(m_entry, "unsupported displacement structure or provenance edit");
   }
-  const auto rotation = vm::slice<3, 3>(*transform, 0, 0);
-  const auto followsRotation = [&](const auto& oldValues, const auto& newValues) {
-    if (oldValues.size() != newValues.size())
-    {
-      return false;
-    }
-    for (size_t i = 0; i < oldValues.size(); ++i)
-    {
-      const auto expected = rotation * oldValues[i];
-      if (
-        !vm::is_finite(newValues[i]) || !vm::is_finite(expected)
-        || !vm::is_equal(newValues[i], expected, TransformEpsilon))
+  const auto scale = m_baseScale / before.m_baseScale;
+  if (
+    !std::isfinite(m_elevation)
+    || std::abs(m_elevation - before.m_elevation * scale) > TransformEpsilon)
+  {
+    invalid(m_entry, "native elevation must follow the base scale");
+  }
+  const auto linear = vm::slice<3, 3>(*transform, 0, 0);
+  const auto rotation = linear / scale;
+  const auto followsLinearFrame =
+    [&](const auto& oldValues, const auto& newValues, const auto& matrix) {
+      if (oldValues.size() != newValues.size())
       {
         return false;
       }
-    }
-    return true;
-  };
+      for (size_t i = 0; i < oldValues.size(); ++i)
+      {
+        const auto expected = matrix * oldValues[i];
+        if (
+          !vm::is_finite(newValues[i]) || !vm::is_finite(expected)
+          || !vm::is_equal(newValues[i], expected, TransformEpsilon))
+        {
+          return false;
+        }
+      }
+      return true;
+    };
   if (
-    !followsRotation(before.m_directions, m_directions)
-    || !followsRotation(before.m_offsets, m_offsets)
-    || !followsRotation(before.m_offsetNormals, m_offsetNormals))
+    !followsLinearFrame(before.m_directions, m_directions, rotation)
+    || !followsLinearFrame(before.m_offsets, m_offsets, linear)
+    || !followsLinearFrame(before.m_offsetNormals, m_offsetNormals, rotation))
   {
-    invalid(m_entry, "displacement vectors do not follow the base rotation");
+    invalid(m_entry, "displacement vectors do not follow the base frame");
   }
   auto edits = std::vector<VmfValueEdit>{};
   const auto editRow = [&](const Row& row, const auto& oldValues, const auto& newValues) {
@@ -699,6 +778,7 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
       edits.push_back({*row.entry, "\"" + text + "\""});
     }
   };
+  editRow(before.m_elevationRow, std::array{before.m_elevation}, std::array{m_elevation});
   editRow(
     before.m_startRow,
     std::array{before.m_start.x(), before.m_start.y(), before.m_start.z()},

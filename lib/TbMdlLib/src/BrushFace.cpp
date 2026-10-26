@@ -739,7 +739,9 @@ void BrushFace::flipUv(
 }
 
 Result<void> BrushFace::transform(
-  const vm::mat4x4d& transform, const bool lockAlignment, const bool sourceRotation)
+  const vm::mat4x4d& transform,
+  const bool lockAlignment,
+  const SourceTransformPolicy sourcePolicy)
 {
   using std::swap;
 
@@ -748,9 +750,11 @@ Result<void> BrushFace::transform(
   {
     const auto delta = transform * vm::vec3d{};
     const auto translationOnly = transform == vm::translation_matrix(delta);
-    if (!translationOnly && !sourceRotation)
+    if (!translationOnly && sourcePolicy == SourceTransformPolicy::TranslationOnly)
     {
-      return Error{"Native displacement affine changes require explicit rotation intent"};
+      return Error{
+        "Native displacement affine changes require explicit rotation or uniform-scale "
+        "intent"};
     }
     if (transform != vm::mat4x4d::identity())
     {
@@ -758,7 +762,9 @@ Result<void> BrushFace::transform(
       {
         displacement = std::make_shared<const SourceDisplacement>(
           translationOnly ? displacement->translated(delta)
-                          : displacement->rigidlyTransformed(transform));
+          : sourcePolicy == SourceTransformPolicy::PositiveUniformScale
+            ? displacement->uniformlyScaled(transform)
+            : displacement->rigidlyTransformed(transform));
       }
       catch (const std::invalid_argument& error)
       {

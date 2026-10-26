@@ -47,6 +47,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -471,6 +472,7 @@ TEST_CASE("VmfMap displacement rotation undo and continued saving", "[vmf]")
       vm::is_equal(
         mesh.basePositions()[i], transform * oldMesh.basePositions()[i], 0.000001));
   }
+  CHECK(node.physicalBounds().contains(mesh.bounds()));
   CHECK(mesh.indices() == oldMesh.indices());
   CHECK(mesh.alphas() == oldMesh.alphas());
   const auto base = mesh.basePositions()[12];
@@ -541,6 +543,238 @@ TEST_CASE("VmfMap displacement rotation undo and continued saving", "[vmf]")
   REQUIRE(map.save().is_success());
   CHECK(readBinary(outputPath) == saved);
   CHECK(readBinary(originalPath) == original);
+}
+
+TEST_CASE(
+  "VmfMap displacement uniform scaling through both APIs undo and continued saving",
+  "[vmf]")
+{
+  const auto lockUv = GENERATE(false, true);
+  const auto factor = GENERATE(2.0, 0.5);
+  const auto boundingBoxApi = GENERATE(false, true);
+  auto env = fs::TestEnvironment{};
+  const auto originalPath = env.dir() / "displacement.vmf";
+  const auto outputPath = env.dir() / "rotated displacement.vmf";
+  auto original = nativeDisplacementRoom();
+  const auto elevation = original.find("elevation 0");
+  REQUIRE(elevation != std::string::npos);
+  original.replace(
+    elevation,
+    std::string{"elevation 0"}.size(),
+    "elevation 2 offsets { row2 \"0 0 0 0 0 0 1 2 3 0 0 0 0 0 0\" } "
+    "offset_normals { row2 \"0 0 0 0 0 0 4 5 6 0 0 0 0 0 0\" }");
+  writeBinary(originalPath, original);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(originalPath, config);
+  map.editorContext().setAlignmentLock(lockUv);
+  auto& node = ramp(map);
+  const auto before = node.brush();
+  const auto oldFace = before.findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(oldFace);
+  const auto& oldMesh = *before.face(*oldFace).sourceDisplacement();
+  REQUIRE(oldMesh.positions()[12] == vm::vec3d{33, 34, 85});
+  const auto center = vm::vec3d{8, 16, 24};
+  const auto transform = vm::translation_matrix(center)
+                         * vm::scaling_matrix(vm::vec3d{factor, factor, factor})
+                         * vm::translation_matrix(-center);
+  auto control = before;
+  control.face(*oldFace).setSourceDisplacement(std::nullopt);
+  REQUIRE(control.transform(map.worldBounds(), transform, lockUv).is_success());
+  selectNodes(map, {&node});
+  const auto count = map.modificationCount();
+  if (boundingBoxApi)
+  {
+    const auto box = node.brush().bounds();
+    REQUIRE(
+      scaleSelection(map, box, vm::bbox3d{transform * box.min, transform * box.max}));
+  }
+  else
+  {
+    REQUIRE(scaleSelection(map, center, {factor, factor, factor}));
+  }
+  CHECK(map.modificationCount() == count + 1);
+  const auto meshFace = [](const Brush& brush) {
+    for (size_t i = 0; i < brush.faceCount(); ++i)
+    {
+      if (brush.face(i).sourceDisplacement())
+      {
+        return i;
+      }
+    }
+    throw std::logic_error{"Rotated mesh disappeared"};
+  };
+  const auto faceIndex = meshFace(node.brush());
+  const auto& mesh = *node.brush().face(faceIndex).sourceDisplacement();
+  for (size_t i = 0; i < oldMesh.positions().size(); ++i)
+  {
+    CHECK(
+      vm::is_equal(mesh.positions()[i], transform * oldMesh.positions()[i], 0.000001));
+    CHECK(
+      vm::is_equal(
+        mesh.basePositions()[i], transform * oldMesh.basePositions()[i], 0.000001));
+  }
+  CHECK(node.physicalBounds().contains(mesh.bounds()));
+  CHECK(mesh.indices() == oldMesh.indices());
+  CHECK(mesh.alphas() == oldMesh.alphas());
+  const auto base = mesh.basePositions()[12];
+  CHECK(
+    vm::is_equal(
+      node.brush().face(faceIndex).uvCoords(base),
+      control.face(faceIndex).uvCoords(base),
+      0.0001f));
+  auto hits = PickResult{};
+  pick(map, vm::ray3d{transform * vm::vec3d{33, 34, 128}, vm::vec3d{0, 0, -1}}, hits);
+  REQUIRE_FALSE(hits.empty());
+  CHECK(hits.all()[0].distance() == Catch::Approx(43 * factor).margin(0.000001));
+  CHECK(
+    vm::is_equal(
+      hits.all()[0].hitPoint(), transform * oldMesh.positions()[12], 0.000001));
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  map.redoCommand();
+  const auto rotation = vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37);
+  REQUIRE(rotateSelection(map, {0, 0, 0}, {1, 0, 0}, 0.37));
+  const auto delta = vm::vec3d{16, 8, 4};
+  REQUIRE(translateSelection(map, delta));
+  deselectAll(map);
+  const auto continuedFace = meshFace(node.brush());
+  REQUIRE(node.brush().face(continuedFace).sourceDisplacement());
+  CHECK(
+    node.brush().face(continuedFace).lineNumber() == before.face(*oldFace).lineNumber());
+  selectBrushFaces(map, {BrushFaceHandle{node, continuedFace}});
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24 * factor));
+  const auto expected = rotation * (transform * vm::vec3d{33, 34, 93}) + delta;
+  CHECK(
+    vm::is_equal(
+      node.brush().face(continuedFace).sourceDisplacement()->positions()[12],
+      expected,
+      0.000001));
+  CAPTURE(lockUv, factor, boundingBoxApi);
+  const auto saveResult = map.saveAs(outputPath);
+  auto saveError = std::string{};
+  saveResult | kdl::if_error([&](const auto& error) { saveError = error.msg; })
+    | kdl::ignore();
+  INFO(saveError);
+  REQUIRE(saveResult.is_success());
+  const auto saved = readBinary(outputPath);
+  CHECK(saved != original);
+  CHECK(nativeFragment(saved, "9") == nativeFragment(original, "9"));
+  CHECK(readBinary(originalPath) == original);
+  auto reopened = MapFixture{};
+  auto& loaded = reopened.load(outputPath, config);
+  CHECK(
+    vm::is_equal(
+      ramp(loaded)
+        .brush()
+        .face(meshFace(ramp(loaded).brush()))
+        .sourceDisplacement()
+        ->positions()[12],
+      expected,
+      0.000001));
+  deselectAll(map);
+  selectNodes(map, {&node});
+  const auto beforeCount = map.modificationCount();
+  const auto beforeHistory = map.undoCommandName();
+  CHECK_FALSE(rotateSelection(map, center, {2, 0, 0}, 0.37));
+  CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {1.0000000000001, 1, 1}));
+  CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {2, 1, 1}));
+  CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {-1, -1, -1}));
+  CHECK_FALSE(scaleSelection(map, {0, 0, 0}, {0, 0, 0}));
+  CHECK_FALSE(
+    scaleSelection(map, {0, 0, 0}, {std::numeric_limits<double>::quiet_NaN(), 1, 1}));
+  CHECK_FALSE(transformSelection(
+    map, "Unclassified uniform scale", vm::scaling_matrix(vm::vec3d{2, 2, 2})));
+  const auto box = node.brush().bounds();
+  CHECK_FALSE(scaleSelection(
+    map,
+    box,
+    vm::bbox3d{box.min, box.min + box.size() * vm::vec3d{1.0000000000001, 1, 1}}));
+  CHECK_FALSE(flipSelection(map, {0, 0, 0}, vm::axis::x));
+  CHECK(map.modificationCount() == beforeCount);
+  CHECK(map.undoCommandName() == beforeHistory);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+  deselectAll(map);
+  selectBrushFaces(map, {BrushFaceHandle{node, continuedFace}});
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 32 * factor));
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(outputPath) != saved);
+  map.undoCommand();
+  REQUIRE(map.save().is_success());
+  CHECK(readBinary(outputPath) == saved);
+  CHECK(readBinary(originalPath) == original);
+  deselectAll(map);
+  selectNodes(map, {&node});
+  // Continue scaling an already obliquely rotated, moved and height-edited frame.
+  if (boundingBoxApi)
+  {
+    const auto continuedBox = node.brush().bounds();
+    REQUIRE(scaleSelection(
+      map, continuedBox, vm::bbox3d{continuedBox.min * 0.5, continuedBox.max * 0.5}));
+  }
+  else
+  {
+    REQUIRE(scaleSelection(map, {0, 0, 0}, {0.5, 0.5, 0.5}));
+  }
+  CHECK(
+    vm::is_equal(
+      node.brush().face(meshFace(node.brush())).sourceDisplacement()->positions()[12],
+      expected * 0.5,
+      0.000001));
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+}
+
+TEST_CASE(
+  "VmfMap native scale overflow and cancellation refuse before history changes", "[vmf]")
+{
+  const auto boundingBoxApi = GENERATE(false, true);
+  const auto overflow = GENERATE(false, true);
+  const auto factor = overflow ? 2.0 : 0.5;
+  const auto center = overflow ? vm::vec3d{} : vm::vec3d{0, 0, 2};
+  const auto transform = vm::translation_matrix(center)
+                         * vm::scaling_matrix(vm::vec3d{factor, factor, factor})
+                         * vm::translation_matrix(-center);
+  auto original = nativeDisplacementRoom();
+  const auto elevation = original.find("elevation 0");
+  REQUIRE(elevation != std::string::npos);
+  original.replace(elevation, std::string{"elevation 0"}.size(), "elevation 1e308");
+  for (const auto row : {"0.00 +0  0  0 0", "0.00 +0  16  0 0"})
+  {
+    while (original.find(row) != std::string::npos)
+    {
+      original.replace(
+        original.find(row),
+        std::string{row}.size(),
+        "-1e308 -1e308 -1e308 -1e308 -1e308");
+    }
+  }
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "finite cancelled displacement.vmf";
+  writeBinary(path, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    path,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto& node = ramp(map);
+  selectNodes(map, {&node});
+  const auto count = map.modificationCount();
+  const auto history = map.undoCommandName();
+  if (boundingBoxApi)
+  {
+    const auto box = node.brush().bounds();
+    CHECK_FALSE(
+      scaleSelection(map, box, vm::bbox3d{transform * box.min, transform * box.max}));
+  }
+  else
+  {
+    CHECK_FALSE(scaleSelection(map, center, {factor, factor, factor}));
+  }
+  CHECK(map.modificationCount() == count);
+  CHECK(map.undoCommandName() == history);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  CHECK(readBinary(path) == original);
 }
 
 TEST_CASE("VmfMap untyped or overflowing native vectors refuse rotation", "[vmf]")

@@ -259,11 +259,21 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
     node.setBrush(std::move(changed));
     CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
   }
-  SECTION("rotation updates submitted positions normals UVs and retained topology")
+  SECTION("rotation and uniform scale update submitted cache and retained topology")
   {
-    const auto transform = vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37);
+    const auto scale = GENERATE(1.0, 2.0, 0.5);
+    const auto rotation = scale == 1;
+    const auto transform = rotation ? vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37)
+                                    : vm::scaling_matrix(vm::vec3d{scale, scale, scale});
     auto changed = node.brush();
-    REQUIRE(changed.transform(bounds, transform, true, true).is_success());
+    REQUIRE(changed
+              .transform(
+                bounds,
+                transform,
+                true,
+                rotation ? SourceTransformPolicy::ProperRotation
+                         : SourceTransformPolicy::PositiveUniformScale)
+              .is_success());
     CHECK_NOTHROW(scene.validateContents(node, NodeContents{changed}, bounds));
     node.setBrush(std::move(changed));
     auto cache = BrushRendererBrushCache{};
@@ -284,7 +294,7 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
       CHECK(
         vm::is_equal(
           vertex.rest.attr,
-          vm::vec3f{vm::slice<3, 3>(transform, 0, 0) * mesh.normals()[i]},
+          vm::vec3f{(vm::slice<3, 3>(transform, 0, 0) / scale) * mesh.normals()[i]},
           0.0001f));
       CHECK(
         vertex.rest.rest.attr
@@ -325,7 +335,9 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
     }
     else
     {
-      REQUIRE(changed.transform(bounds, transform, false, true).is_success());
+      REQUIRE(
+        changed.transform(bounds, transform, false, SourceTransformPolicy::ProperRotation)
+          .is_success());
       const auto binding = face.lineNumber();
       for (size_t i = 0; i < changed.faceCount(); ++i)
       {
@@ -357,7 +369,9 @@ TEST_CASE("VmfScene native displacement mesh", "[vmf]")
 TEST_CASE("VmfScene every displacement agrees with whole base movement", "[vmf]")
 {
   const auto scenario = GENERATE(0, 1, 2);
-  const auto rotation = GENERATE(false, true);
+  const auto motion = GENERATE(0, 1, 2);
+  const auto rotation = motion == 1;
+  const auto scaling = motion == 2;
   const auto bounds = vm::bbox3d{4096};
   auto source = fixture(false, test::displacementBlock());
   auto bottom = test::displacementBlock();
@@ -393,9 +407,18 @@ TEST_CASE("VmfScene every displacement agrees with whole base movement", "[vmf]"
   auto changed = node.brush();
   if (scenario != 1)
   {
-    const auto transform = rotation ? vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.37)
-                                    : vm::translation_matrix(vm::vec3d{16, 8, 4});
-    REQUIRE(changed.transform(bounds, transform, false, rotation).is_success());
+    const auto transform = rotation  ? vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.37)
+                           : scaling ? vm::scaling_matrix(vm::vec3d{2, 2, 2})
+                                     : vm::translation_matrix(vm::vec3d{16, 8, 4});
+    REQUIRE(changed
+              .transform(
+                bounds,
+                transform,
+                false,
+                rotation  ? SourceTransformPolicy::ProperRotation
+                : scaling ? SourceTransformPolicy::PositiveUniformScale
+                          : SourceTransformPolicy::TranslationOnly)
+              .is_success());
   }
   if (scenario == 0)
   {
@@ -426,7 +449,9 @@ TEST_CASE("VmfScene every displacement agrees with whole base movement", "[vmf]"
     changed.face(later).setSourceDisplacement(
       rotation
         ? mesh.rigidlyTransformed(vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.00000001))
-        : mesh.translated({0.00000001, 0, 0}));
+      : scaling ? mesh.uniformlyScaled(
+                    vm::scaling_matrix(vm::vec3d{1.00000001, 1.00000001, 1.00000001}))
+                : mesh.translated({0.00000001, 0, 0}));
     CHECK_THROWS_AS(
       scene.validateContents(node, NodeContents{changed}, bounds), std::invalid_argument);
     CHECK(scene.serialize(scene.world()) == source);
@@ -448,9 +473,16 @@ TEST_CASE(
   auto& node = brush(scene.world());
   CHECK(scene.serialize(scene.world()) == source);
   auto changed = node.brush();
-  REQUIRE(
-    changed.transform(bounds, vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37), false, true)
-      .is_success());
+  const auto scale = GENERATE(false, true);
+  REQUIRE(changed
+            .transform(
+              bounds,
+              scale ? vm::scaling_matrix(vm::vec3d{2, 2, 2})
+                    : vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37),
+              false,
+              scale ? SourceTransformPolicy::PositiveUniformScale
+                    : SourceTransformPolicy::ProperRotation)
+            .is_success());
   CHECK_THROWS_AS(
     scene.validateContents(node, NodeContents{changed}, bounds), std::invalid_argument);
   CHECK(scene.serialize(scene.world()) == source);

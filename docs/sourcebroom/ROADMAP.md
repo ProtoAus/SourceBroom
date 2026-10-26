@@ -72,7 +72,7 @@ compatible merely because they also use VMF.
   A5.9 also adds bounded Source-only entity skins for simple fixed FGD studio
   paths, preserving other-game/explicit/legacy/dynamic declaration semantics.
   Common integer VTF formats retain bounded RGBA8 preview. Full A6/Source support
-  is not claimed: native scale/shear/flip, sculpt/create/power/sew, blend
+  is not claimed: native nonuniform scale/shear/flip, sculpt/create/power/sew, blend
   materials, overlays/instances and broader shader/model tools remain pending.
   All 184 model entries and native focus4,009 assertions/41 cases pass. Review
   overflow red->green364/2 acts through Core and Map; affected UI129/3 and existing
@@ -80,6 +80,16 @@ compatible merely because they also use VMF.
   Fs20/Gl21 remain valid; the known untouched Windows preference failure is
   preserved/unfixed, not all UI green. Native appearance/Hammer checks remain
   pending; A5.9 is recovery.
+  Development source after A5.10 adds explicit **positive uniform scaling** of
+  whole displacement brushes through both normal scale APIs, including numeric
+  distance/elevation/offset handling, UV locks, continued rotation/movement/height
+  edits, undo and native saves. Conservative exact input intent still denies
+  nonuniform transforms. A short transaction-leaf fix also preserves saving valid
+  Windows filenames whose old temporary names exceeded the path budget.
+  Current source checks: model187/187, native5,257 assertions/39 cases and affected
+  UI129/3; actual app/checker/UI callers rebuilt without new warnings. Fresh
+  read-only source review found no blockers. New portable delivery and independent
+  Hammer acceptance are pending; A5.10 remains the current installed candidate.
   No Source compiler, Valve content, or third-party/user map is bundled. See
   [alpha instructions](ALPHA.md) for the owner test path.
 

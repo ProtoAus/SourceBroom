@@ -24,6 +24,7 @@
 #include "mdl/AssetReference.h"
 #include "mdl/BrushGeometry.h"
 #include "mdl/SourceDisplacement.h"
+#include "mdl/SourceTransformPolicy.h"
 #include "mdl/SurfaceAttributes.h"
 #include "mdl/Tag.h"
 #include "mdl/UvAttributes.h"
@@ -308,7 +309,9 @@ public:
     vm::direction cameraRelativeFlipDirection);
 
   Result<void> transform(
-    const vm::mat4x4d& transform, bool lockAlignment, bool sourceRotation = false);
+    const vm::mat4x4d& transform,
+    bool lockAlignment,
+    SourceTransformPolicy sourcePolicy = SourceTransformPolicy::TranslationOnly);
   void invert();
 
   Result<void> updatePointsFromVertices();

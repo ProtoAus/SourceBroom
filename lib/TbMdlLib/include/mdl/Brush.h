@@ -21,6 +21,7 @@
 
 #include "base/Result.h"
 #include "mdl/BrushGeometry.h"
+#include "mdl/SourceTransformPolicy.h"
 
 #include "kd/reflection_decl.h"
 
@@ -328,7 +329,7 @@ public:
     const vm::bbox3d& worldBounds,
     const vm::mat4x4d& transformation,
     bool lockMaterials,
-    bool sourceRotation = false);
+    SourceTransformPolicy sourcePolicy = SourceTransformPolicy::TranslationOnly);
 
 public:
   bool contains(const vm::bbox3d& bounds) const;

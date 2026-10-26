@@ -69,7 +69,7 @@ static bool transformSelectionWithSourcePolicy(
   Map& map,
   const std::string& commandName,
   const vm::mat4x4d& transformation,
-  const bool sourceRotation)
+  const SourceTransformPolicy sourcePolicy)
 {
   if (map.nodeHandles().anyHandleSelected<VertexHandle>())
   {
@@ -157,7 +157,7 @@ static bool transformSelectionWithSourcePolicy(
 
               auto brush = brushNode.brush();
               return brush.transform(
-                       map.worldBounds(), transformation, lockAlignment, sourceRotation)
+                       map.worldBounds(), transformation, lockAlignment, sourcePolicy)
                      | kdl::and_then([&]() -> TransformResult {
                          return std::make_pair(
                            &brushNode, NodeContents{std::move(brush)});
@@ -183,9 +183,8 @@ static bool transformSelectionWithSourcePolicy(
 
   if (success)
   {
-    map.pushRepeatableCommand([&, commandName, transformation, sourceRotation]() {
-      transformSelectionWithSourcePolicy(
-        map, commandName, transformation, sourceRotation);
+    map.pushRepeatableCommand([&, commandName, transformation, sourcePolicy]() {
+      transformSelectionWithSourcePolicy(map, commandName, transformation, sourcePolicy);
     });
   }
 
@@ -195,7 +194,8 @@ static bool transformSelectionWithSourcePolicy(
 bool transformSelection(
   Map& map, const std::string& commandName, const vm::mat4x4d& transformation)
 {
-  return transformSelectionWithSourcePolicy(map, commandName, transformation, false);
+  return transformSelectionWithSourcePolicy(
+    map, commandName, transformation, SourceTransformPolicy::TranslationOnly);
 }
 
 bool translateSelection(mdl::Map& map, const vm::vec3d& delta)
@@ -209,21 +209,38 @@ bool rotateSelection(
   const auto transformation = vm::translation_matrix(center)
                               * vm::rotation_matrix(axis, angle)
                               * vm::translation_matrix(-center);
-  return transformSelectionWithSourcePolicy(map, "Rotate Objects", transformation, true);
+  return transformSelectionWithSourcePolicy(
+    map, "Rotate Objects", transformation, SourceTransformPolicy::ProperRotation);
 }
 
 bool scaleSelection(mdl::Map& map, const vm::bbox3d& oldBBox, const vm::bbox3d& newBBox)
 {
+  const auto factors = newBBox.size() / oldBBox.size();
+  const auto uniform = vm::is_finite(factors) && factors.x() > 0
+                       && factors.x() == factors.y() && factors.x() == factors.z();
   const auto transformation = vm::scale_bbox_matrix(oldBBox, newBBox);
-  return transformSelection(map, "Scale Objects", transformation);
+  return transformSelectionWithSourcePolicy(
+    map,
+    "Scale Objects",
+    transformation,
+    uniform ? SourceTransformPolicy::PositiveUniformScale
+            : SourceTransformPolicy::TranslationOnly);
 }
 
 bool scaleSelection(mdl::Map& map, const vm::vec3d& center, const vm::vec3d& scaleFactors)
 {
+  const auto uniform = vm::is_finite(scaleFactors) && scaleFactors.x() > 0
+                       && scaleFactors.x() == scaleFactors.y()
+                       && scaleFactors.x() == scaleFactors.z();
   const auto transformation = vm::translation_matrix(center)
                               * vm::scaling_matrix(scaleFactors)
                               * vm::translation_matrix(-center);
-  return transformSelection(map, "Scale Objects", transformation);
+  return transformSelectionWithSourcePolicy(
+    map,
+    "Scale Objects",
+    transformation,
+    uniform ? SourceTransformPolicy::PositiveUniformScale
+            : SourceTransformPolicy::TranslationOnly);
 }
 
 bool shearSelection(

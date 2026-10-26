@@ -1199,11 +1199,11 @@ Result<void> Brush::transform(
   const vm::bbox3d& worldBounds,
   const vm::mat4x4d& transformation,
   const bool lockMaterials,
-  const bool sourceRotation)
+  const SourceTransformPolicy sourcePolicy)
 {
   for (auto& face : m_faces)
   {
-    if (!face.transform(transformation, lockMaterials, sourceRotation))
+    if (!face.transform(transformation, lockMaterials, sourcePolicy))
     {
       return Error{"Brush has invalid face"};
     }

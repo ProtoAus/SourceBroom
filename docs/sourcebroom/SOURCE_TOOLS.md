@@ -1,4 +1,4 @@
-# Native Source authoring tools — bounded A5.7 candidate
+# Native Source authoring tools — bounded alpha candidates
 
 SourceBroom edits native Source 1 VMF, not a converted Quake MAP. CSS and
 Momentum/Strata are the first tested profiles; generic Source paths and external
@@ -235,6 +235,17 @@ references remain guarded; missing or malformed meshes are not silently replaced
 by a flat editable proxy. This is not a sculpt brush, creation/power/sew tool,
 blend-material preview or permission to transform arbitrary displacement bases.
 A5.9 remains recovery with native movement/distance tools but without rotation.
+
+Development source after A5.10 also permits **positive uniform scaling** of whole
+native displacement brushes through the normal numeric and bounds-based scale
+commands. Positions, offsets, elevation and distances follow the scale while
+normal-like metadata retains magnitude. UV locks, undo/redo, native save/reopen
+and continued distance edits have automated controls. Bounds-based authorization
+is conservative: ratios must be exactly uniform; near-uniform arithmetic is not
+permission for a nonuniform transform. Shear, reflection, topology changes and
+unsafe numeric motion remain refused. Legacy untyped offset-normal rows also
+refuse this new operation. This source change is verified, but not yet in the
+installed A5.10 kit; native appearance/Hammer acceptance remains pending.
 
 ## Source model skins on fixed FGD paths
 

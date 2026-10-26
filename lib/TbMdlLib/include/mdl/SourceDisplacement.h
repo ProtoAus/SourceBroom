@@ -44,10 +44,13 @@ private:
   vm::vec3d m_start;
   Row m_startRow;
   double m_elevation = 0;
+  Row m_elevationRow;
   std::array<vm::vec3d, 4> m_corners;
   std::array<vm::vec3d, 4> m_originalCorners;
   vm::vec3d m_originalFaceNormal;
   vm::mat4x4d m_baseTransform = vm::mat4x4d::identity();
+  // Keep accepted scale independent of approximate rotation-matrix arithmetic.
+  double m_baseScale = 1;
   vm::vec3d m_faceNormal;
   vm::bbox3d m_worldBounds;
   std::vector<vm::vec3d> m_directions;
@@ -68,7 +71,9 @@ private:
   vm::bbox3d m_bounds;
 
   void rebuild();
-  void validateRigidSamples(
+  SourceDisplacement similarityTransformed(
+    const vm::mat4x4d& transform, double scale) const;
+  void validateTransformedSamples(
     const SourceDisplacement& before, const vm::mat4x4d& transform) const;
 
 public:
@@ -99,6 +104,8 @@ public:
   SourceDisplacement translated(const vm::vec3d& delta) const;
   /** Explicit rotation path only; not permission for generic affine commands. */
   SourceDisplacement rigidlyTransformed(const vm::mat4x4d& transform) const;
+  /** Explicit positive uniform scale path; the linear matrix must be exactly s*I. */
+  SourceDisplacement uniformlyScaled(const vm::mat4x4d& transform) const;
   std::optional<vm::mat4x4d> baseTransformFrom(const SourceDisplacement& before) const;
   /** Only a uniform base translation, within plane-intersection roundoff. */
   std::optional<vm::vec3d> baseTranslationFrom(const SourceDisplacement& before) const;

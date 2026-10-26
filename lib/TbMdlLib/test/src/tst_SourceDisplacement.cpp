@@ -152,6 +152,99 @@ TEST_CASE("SourceDisplacement")
         authored.translated({0, 8, 0}).editsFrom(authored))
       == replaceOnce(spelled, "[0.00  +0 0]", "[0.00  8 0]"));
   }
+  SECTION("positive uniform scale preserves magnitude and native scalar vector bindings")
+  {
+    const auto factor = GENERATE(2.0, 0.5);
+    const auto text = replaceOnce(
+      source,
+      "normals {",
+      "elevation +2.00 offsets { row2 \"0 0 0 0 0 0 1 +2 3.00 0 0 0 0 0 0\" } "
+      "offset_normals { row2 \"0 0 0 0 0 0 4 5 6 0 0 0 0 0 0\" } normals {");
+    const auto authored = loadDisplacement(text);
+    const auto transform = vm::scaling_matrix(vm::vec3d{factor, factor, factor});
+    auto scaled = authored.uniformlyScaled(transform);
+    CHECK(scaled.distance(2, 2) == 16 * factor);
+    for (size_t i = 0; i < scaled.positions().size(); ++i)
+    {
+      CHECK(scaled.positions()[i] == transform * authored.positions()[i]);
+      CHECK(scaled.basePositions()[i] == transform * authored.basePositions()[i]);
+      CHECK(vm::is_equal(scaled.normals()[i], authored.normals()[i], 0.000001));
+    }
+    const auto saved = VmfDocument::parse(text).serialize(scaled.editsFrom(authored));
+    CHECK(saved.find("4 5 6") != std::string::npos);
+    CHECK(saved.find("0 0 1  0 0 1") != std::string::npos);
+    CHECK(
+      saved.find("elevation \"" + std::to_string(int(2 * factor)) + "\"")
+      != std::string::npos);
+    CHECK(saved.find("future { key \"opaque\" }") != std::string::npos);
+    const auto rotation = vm::rotation_matrix(vm::vec3d{1, 0, 0}, 0.37);
+    scaled = scaled.rigidlyTransformed(rotation).translated({-1, 2, 3});
+    scaled.setDistance(2, 2, 24 * factor);
+    const auto expected =
+      rotation * (transform * vm::vec3d{33, 34, 29}) + vm::vec3d{-1, 2, 3};
+    CHECK(vm::is_equal(scaled.positions()[12], expected, 0.000001));
+    const auto continued = VmfDocument::parse(text).serialize(scaled.editsFrom(authored));
+    auto newCorners = corners;
+    for (auto& corner : newCorners)
+    {
+      corner = rotation * (transform * corner) + vm::vec3d{-1, 2, 3};
+    }
+    const auto parsed = VmfDocument::parse(continued);
+    const auto reopened = SourceDisplacement::read(
+      parsed,
+      parsed.roots()[0],
+      newCorners,
+      vm::slice<3, 3>(rotation, 0, 0) * vm::vec3d{0, 0, 1},
+      bounds);
+    REQUIRE(reopened);
+    CHECK(vm::is_equal(reopened->positions()[12], expected, 0.000001));
+    CHECK(reopened->canEditDistances());
+    CHECK(reopened->editsFrom(*reopened).empty());
+  }
+  SECTION("uniform scale rejects invalid matrices and overflowing scalar outputs")
+  {
+    for (const auto factors :
+         {vm::vec3d{0, 0, 0},
+          vm::vec3d{-1, -1, -1},
+          vm::vec3d{1.0000000000001, 1, 1},
+          vm::vec3d{2, 1, 1},
+          vm::vec3d{std::numeric_limits<double>::infinity(), 2, 2}})
+    {
+      CHECK_THROWS_AS(
+        original.uniformlyScaled(vm::scaling_matrix(factors)), std::invalid_argument);
+    }
+    auto shear = vm::mat4x4d::identity();
+    shear[1][0] = 1e-14;
+    CHECK_THROWS_AS(original.uniformlyScaled(shear), std::invalid_argument);
+    const auto subnormal = loadDisplacement(replaceOnce(
+      source,
+      "normals {",
+      "offsets { row0 \"5e-324 0 0 0 0 0 0 0 0 0 0 0 0 0 0\" } normals {"));
+    CHECK_THROWS_AS(
+      subnormal.uniformlyScaled(vm::scaling_matrix(vm::vec3d{0.5, 0.5, 0.5})),
+      std::invalid_argument);
+    const auto text = replaceOnce(source, "normals {", "elevation 1e308 normals {");
+    // Finite cancelling scalar inputs must not be accepted just because their samples
+    // fit.
+    auto cancelled = text;
+    for (const auto row : {"0.00  +0  0  0 0", "0.00  +0  16  0 0"})
+    {
+      while (cancelled.find(row) != std::string::npos)
+      {
+        cancelled = replaceOnce(cancelled, row, "-1e308 -1e308 -1e308 -1e308 -1e308");
+      }
+    }
+    const auto finite = loadDisplacement(cancelled);
+    CHECK_THROWS_AS(
+      finite.uniformlyScaled(vm::scaling_matrix(vm::vec3d{2, 2, 2})),
+      std::invalid_argument);
+    CHECK_THROWS_AS(
+      finite.uniformlyScaled(
+        vm::translation_matrix(vm::vec3d{0, 0, 1})
+        * vm::scaling_matrix(vm::vec3d{0.5, 0.5, 0.5})),
+      std::invalid_argument);
+    CHECK(loadDisplacement(source) == original);
+  }
   SECTION("proper rigid rotation preserves native vector tokens and cumulative motion")
   {
     const auto text = replaceOnce(
@@ -248,12 +341,20 @@ TEST_CASE("SourceDisplacement")
         opaque.translated({16, 8, 4}).editsFrom(opaque))
       == replaceOnce(malformed, "[0 0 0]", "[16 8 4]"));
     CHECK_THROWS_AS(opaque.rigidlyTransformed(rotation), std::invalid_argument);
+    CHECK_THROWS_AS(
+      opaque.uniformlyScaled(vm::scaling_matrix(vm::vec3d{2, 2, 2})),
+      std::invalid_argument);
     const auto flat =
       loadDisplacement("side { dispinfo { power 2 startposition \"[0 0 0]\" } }");
     const auto turned = flat.rigidlyTransformed(rotation);
     CHECK(turned.editsFrom(flat).empty());
     CHECK(turned.positions()[12] == vm::vec3d{32, 0, 32});
     CHECK_FALSE(turned.canEditDistances());
+    const auto sparseScaled =
+      flat.uniformlyScaled(vm::scaling_matrix(vm::vec3d{0.5, 0.5, 0.5}));
+    CHECK(sparseScaled.editsFrom(flat).empty());
+    CHECK(sparseScaled.positions()[12] == vm::vec3d{16, 16, 0});
+    CHECK_FALSE(sparseScaled.canEditDistances());
     auto projective = rotation;
     projective[0][3] = 0.1;
     auto nonfinite = rotation;
@@ -283,6 +384,7 @@ TEST_CASE("SourceDisplacement")
       "offset_normals { row0 \"" + vector + " 0 0 0 0 0 0 0 0 0 0 0 0\" } normals {");
     const auto large = loadDisplacement(text);
     CHECK(large.positions() == original.positions());
+    CHECK_NOTHROW(large.uniformlyScaled(vm::scaling_matrix(vm::vec3d{0.5, 0.5, 0.5})));
     CHECK(VmfDocument::parse(text).serialize(large.editsFrom(large)) == text);
     const auto rotation =
       vm::rotation_matrix(vm::vec3d{0, 0, 1}, vm::constants<double>::quarter_pi());
