@@ -33,7 +33,20 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.14 candidate:** ordinary native BOTH clipping now retains Front under its
+- **A5.15 candidate:** ordinary native Group/Ungroup actions now handle supported
+  loaded/new/duplicated nested groups, plain world brushes and whole ordinary
+  entities. Native group IDs/membership are staged together; physical editor groups
+  do not change VMF lexical solid/entity ownership. Undo/redo restores exact live
+  siblings/selection; native reopen uses deterministic lexical order. Derived
+  `Group <id>` labels need no name prompt; rename and visgroup/layer/hidden/linked
+  authoring stay guarded. Ambiguous references isolate their components, not
+  independent plain brushes; opaque geometry-reference protection remains active.
+  Review-found malformed membership, duplicate added-index notifications, parked
+  replay and opened-context failures have acted regression controls. Full Model219,
+  App50 and affected UI5 pass; actual app/checker/UI callers rebuilt with no new
+  compiler warnings. Fresh focused review found no remaining blockers. Manual
+  owner/Hammer acceptance is pending; keep whole A5.14 as recovery.
+- **Retained A5.14 candidate:** ordinary native BOTH clipping now retains Front under its
   original identity and adds Back as a same-parent sibling with remapped stable
   IDs. Loaded/new/template/duplicated world and supported plain brush-entity
   routes use one staged whole-batch admission and command; no-op subjects remain
@@ -52,7 +65,9 @@ compatible merely because they also use VMF.
   saved-file metadata inspection/camera-eye navigation, native capability
   preflight, target BSP-header checks, leak/position diagnostics, and explicit
   custom-only distribution ZIPs. These are [bounded tools](SOURCE_TOOLS.md), not
-  native metadata authoring, complete dependency discovery or all-branch support.
+  arbitrary metadata authoring, complete dependency discovery or all-branch support.
+  A5.15 separately admits ordinary native groups; the saved-file inspector itself
+  remains read-only.
   The A5.1 usability follow-up removes duplicate initial Source indexing and
   quadratic enabled-folder selection. A5.2 adds bounded native new-map/brush/point
   creation, plain-object duplication/deletion and brush-entity ownership, with
@@ -220,8 +235,9 @@ deleted and placed in supported plain brush-entity ownership, without a Quake
 MAP round trip. Arbitrary topology and opaque-reference mutations remain gated.
 Existing native entities have typed FGD hints and an ordered output table;
 supported props have a static root/default-pose preview.
-Groups, visgroups, hidden state and cordons are interpreted/validated read-only,
-not scene-parent or visibility authoring. A camera action moves the eye only.
+Ordinary native groups now have bounded scene Group/Ungroup authoring (A5.15).
+The saved-file metadata inspector stays read-only; visgroups, hidden state and
+cordons are not visibility/cordon authoring. A camera action moves the eye only.
 Custom dependency discovery is incomplete and writes an explicitly reviewed
 new distribution ZIP, not a BSP pak lump. Generic Source remains configurable
 without certifying arbitrary branches. [Tool limits](SOURCE_TOOLS.md) and

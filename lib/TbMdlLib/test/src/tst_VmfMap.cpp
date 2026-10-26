@@ -4,6 +4,7 @@
  */
 
 #include "SourceDisplacementFixture.h"
+#include "base/NotifierConnection.h"
 #include "fs/TestEnvironment.h"
 #include "mdl/AddRemoveNodesCommand.h"
 #include "mdl/Brush.h"
@@ -16,6 +17,7 @@
 #include "mdl/EntityNode.h"
 #include "mdl/ExportOptions.h"
 #include "mdl/GameConfig.h"
+#include "mdl/GroupNode.h"
 #include "mdl/Hit.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
@@ -25,6 +27,7 @@
 #include "mdl/Map_CopyPaste.h"
 #include "mdl/Map_Entities.h"
 #include "mdl/Map_Geometry.h"
+#include "mdl/Map_Groups.h"
 #include "mdl/Map_NodeVisibility.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Picking.h"
@@ -33,6 +36,7 @@
 #include "mdl/NodeContents.h"
 #include "mdl/PasteType.h"
 #include "mdl/PickResult.h"
+#include "mdl/SourceEditorMetadata.h"
 #include "mdl/SwapNodeContentsCommand.h"
 #include "mdl/UndoableCommand.h"
 #include "mdl/VmfDocument.h"
@@ -100,6 +104,19 @@ std::string nativeRamp(const bool fractional, const bool globalExtension = false
     bytes += "sourcebroom_test_extension { \"opaque\" \"untouched bytes\" }\r\n";
   }
   return bytes;
+}
+
+std::string nativeGroupedRamp()
+{
+  auto source = nativeRamp(false);
+  const auto end = source.find("}\r\neditor { ");
+  REQUIRE(end != std::string::npos);
+  source.insert(end, "editor { groupid 11 color \"9 8 7\" note first note second }\r\n");
+  source.insert(
+    source.find("editor { \"color\""),
+    "group { id 10 note 007 note 0008 editor { color \"1 2 3\" } }\r\n"
+    "group { id 11 editor { groupid 10 } }\r\n");
+  return source;
 }
 
 std::string nativeDisplacementRoom()
@@ -1228,7 +1245,8 @@ TEST_CASE("VmfMap", "[vmf]")
     REQUIRE(point);
     CHECK(map.vmfScene()->nativeId(*point) == "900719925474099300000000001");
     map.undoCommand();
-    REQUIRE(map.worldNode().defaultLayer()->childCount() == 2);
+    REQUIRE(map.worldNode().defaultLayer()->childCount() == 3);
+    REQUIRE(dynamic_cast<GroupNode*>(&nativeNode(map, groupId)));
     REQUIRE(createBrush(map, nativeCubePoints()));
     auto* cube = map.selection().brushes.front();
     REQUIRE(map.vmfScene()->nativeId(*cube) == "900719925474099300000000002");
@@ -1241,7 +1259,7 @@ TEST_CASE("VmfMap", "[vmf]")
     CHECK(filePositions(map) == positions);
     auto reopenedFixture = MapFixture{};
     auto& reopened = reopenedFixture.load(saved, config);
-    CHECK(reopened.worldNode().defaultLayer()->childCount() == 3);
+    CHECK(reopened.worldNode().defaultLayer()->childCount() == 4);
     CHECK(dynamic_cast<BrushNode*>(&nativeNode(reopened, "900719925474099300000000002")));
     CHECK(readBinary(path) == original);
   }
@@ -2089,6 +2107,7 @@ TEST_CASE(
     std::string{"reference"},
     std::string{"instance"},
     std::string{"group"},
+    std::string{"opaque group"},
     std::string{"unknown root"},
     std::string{"displacement"},
     std::string{"hidden"},
@@ -2125,6 +2144,12 @@ TEST_CASE(
   {
     original.insert(
       original.find("solid {"), "group { id 100 editor { color \"1 2 3\" } } ");
+  }
+  if (kind == "opaque group")
+  {
+    original.insert(
+      original.find("solid {"),
+      "group { id 100 foreign { sides 3 } editor { color \"1 2 3\" } } ");
   }
   if (kind == "hidden")
   {
@@ -2171,12 +2196,34 @@ TEST_CASE(
   const auto count = map.modificationCount();
   const auto positions = filePositions(map);
   const auto selection = map.selection().nodes;
-  if (kind == "brush entity" || kind == "generated" || kind == "duplicate")
+  if (
+    kind == "brush entity" || kind == "generated" || kind == "duplicate"
+    || kind == "group")
   {
     REQUIRE(clip(map, {target}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
     CHECK(target->brush().bounds().max.x() == 32);
     CHECK_NOTHROW(
       VmfScene::read(map.vmfScene()->serialize(map.worldNode()), map.worldBounds()));
+    if (kind == "group")
+    {
+      CHECK(target->brush().bounds().max.x() == 32);
+      auto& empty = nativeNode(map, "100");
+      REQUIRE(dynamic_cast<GroupNode*>(&empty));
+      CHECK(empty.childCount() == 0);
+      const auto bytes = map.vmfScene()->serialize(map.worldNode());
+      CHECK(nativeFragment(bytes, "100") == nativeFragment(original, "100"));
+      const auto saved = env.dir() / "valid empty group clip.vmf";
+      REQUIRE(map.saveAs(saved).is_success());
+      auto reopenFixture = MapFixture{};
+      auto& reopened = reopenFixture.load(saved, config);
+      CHECK(nativeNode(reopened, "100").childCount() == 0);
+      CHECK(
+        reopened.worldNode().defaultLayer()->childCount()
+        == map.worldNode().defaultLayer()->childCount());
+      map.undoCommand();
+      map.redoCommand();
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+    }
     map.undoCommand();
   }
   else
@@ -2831,6 +2878,1265 @@ TEST_CASE("VmfMap Both multi-parent batch admission and ownership", "[vmf]")
     map.commandProcessor().clear();
     CHECK(map.vmfScene()->serialize(map.worldNode()) == after);
   }
+}
+
+TEST_CASE("VmfMap native group authoring loaded projection and property control", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "nested native groups.vmf";
+  auto original = nativeRamp(false);
+  const auto solidEnd = original.find("}\r\neditor { ");
+  REQUIRE(solidEnd != std::string::npos);
+  original.insert(solidEnd, "editor { \"groupid\" \"11\" }\r\n");
+  const auto worldEditor = original.find("editor { \"color\"");
+  REQUIRE(worldEditor != std::string::npos);
+  original.insert(
+    worldEditor,
+    "group { \"id\" \"10\" editor { \"color\" \"1 2 3\" } }\r\n"
+    "group { \"id\" \"11\" editor { \"groupid\" \"10\" } }\r\n");
+  writeBinary(path, original);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  const auto unchanged = env.dir() / "unchanged.vmf";
+  REQUIRE(map.saveAs(unchanged).is_success());
+  CHECK(readBinary(unchanged) == original);
+
+  // This supported unrelated edit must ACT even before group projection exists.
+  auto& marker = nativeNode(map, "9");
+  selectNodes(map, {&marker});
+  REQUIRE(setEntityProperty(map, "targetname", "acted_marker"));
+  const auto changed = env.dir() / "changed.vmf";
+  REQUIRE(map.saveAs(changed).is_success());
+  auto expected = original;
+  expected.replace(
+    expected.find("untouched_marker"),
+    std::string{"untouched_marker"}.size(),
+    "acted_marker");
+  CHECK(readBinary(changed) == expected);
+  map.undoCommand();
+  const auto undone = env.dir() / "undone.vmf";
+  REQUIRE(map.saveAs(undone).is_success());
+  CHECK(readBinary(undone) == original);
+
+  auto groups = std::vector<GroupNode*>{};
+  const auto visit = [&](auto&& self, Node& node) -> void {
+    if (auto* group = dynamic_cast<GroupNode*>(&node))
+    {
+      groups.push_back(group);
+    }
+    for (auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  visit(visit, map.worldNode());
+  REQUIRE(groups.size() == 2);
+  CHECK(map.vmfScene()->nativeId(*groups[0]) == "10");
+  CHECK(map.vmfScene()->nativeId(*groups[1]) == "11");
+  CHECK(groups[1]->parent() == groups[0]);
+  CHECK(nativeNode(map, "2").parent() == groups[1]);
+  const auto originalOrder = map.worldNode().defaultLayer()->children();
+  deselectAll(map);
+  selectNodes(map, {&marker, groups[0]});
+  REQUIRE(canGroupSelectedNodes(map));
+  auto* outer = groupSelectedNodes(map, "ignored native name");
+  REQUIRE(outer);
+  CHECK(map.vmfScene()->nativeId(*outer) == "12");
+  CHECK(outer->group().name() == "Group 12");
+  CHECK(outer->children() == std::vector<Node*>{&marker, groups[0]});
+  CHECK(map.selection().nodes == std::vector<Node*>{outer});
+  const auto grouped = env.dir() / "grouped.vmf";
+  REQUIRE(map.saveAs(grouped).is_success());
+  const auto groupedBytes = readBinary(grouped);
+  CHECK(groupedBytes != original);
+  auto reopenedFixture = MapFixture{};
+  auto& reopened = reopenedFixture.load(grouped, config);
+  CHECK(nativeNode(reopened, "10").parent() == &nativeNode(reopened, "12"));
+  CHECK(nativeNode(reopened, "9").parent() == &nativeNode(reopened, "12"));
+  CHECK(
+    nativeNode(reopened, "12").children()
+    == std::vector<Node*>{&nativeNode(reopened, "10"), &nativeNode(reopened, "9")});
+  CHECK(reopened.vmfScene()->serialize(reopened.worldNode()) == groupedBytes);
+  REQUIRE(reopened.save().is_success());
+  REQUIRE(reopened.save().is_success());
+  CHECK(readBinary(grouped) == groupedBytes);
+  map.undoCommand();
+  CHECK(map.worldNode().defaultLayer()->children() == originalOrder);
+  CHECK(map.selection().nodes == std::vector<Node*>{&marker, groups[0]});
+  const auto groupUndone = env.dir() / "group undone.vmf";
+  REQUIRE(map.saveAs(groupUndone).is_success());
+  CHECK(readBinary(groupUndone) == original);
+  map.redoCommand();
+  CHECK(map.selection().nodes == std::vector<Node*>{outer});
+  REQUIRE(canUngroupSelectedNodes(map));
+  ungroupSelectedNodes(map);
+  CHECK(groups[0]->parent() == map.worldNode().defaultLayer());
+  CHECK(groups[1]->parent() == groups[0]);
+  const auto dissolved = env.dir() / "dissolved.vmf";
+  REQUIRE(map.saveAs(dissolved).is_success());
+  CHECK(readBinary(dissolved) == original);
+  map.undoCommand();
+  const auto restored = env.dir() / "restored.vmf";
+  REQUIRE(map.saveAs(restored).is_success());
+  CHECK(readBinary(restored) == groupedBytes);
+}
+
+TEST_CASE("VmfMap native group authoring grouped ordinary actions", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "grouped action.vmf";
+  const auto original = nativeGroupedRamp();
+  writeBinary(path, original);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto* outer = dynamic_cast<GroupNode*>(&nativeNode(map, "10"));
+  auto* inner = dynamic_cast<GroupNode*>(&nativeNode(map, "11"));
+  auto* target = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
+  REQUIRE(outer);
+  REQUIRE(inner);
+  REQUIRE(target);
+  const auto saveReopen = [&]() {
+    const auto bytes = map.vmfScene()->serialize(map.worldNode());
+    const auto saved = env.dir() / "action saved.vmf";
+    REQUIRE(map.saveAs(saved).is_success());
+    CHECK(readBinary(saved) == bytes);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(saved, config);
+    CHECK(reopened.vmfScene()->serialize(reopened.worldNode()) == bytes);
+    CHECK(readBinary(path) == original);
+  };
+
+  SECTION("loaded UNGROUP removes only immediate container and replays original bytes")
+  {
+    selectNodes(map, {outer});
+    REQUIRE(canUngroupSelectedNodes(map));
+    ungroupSelectedNodes(map);
+    CHECK(inner->parent() == map.worldNode().defaultLayer());
+    CHECK(target->parent() == inner);
+    CHECK(map.selection().nodes == std::vector<Node*>{inner});
+    const auto bytes = map.vmfScene()->serialize(map.worldNode());
+    const auto parsed = VmfDocument::parse(bytes);
+    const auto metadata = SourceEditorMetadata::read(parsed);
+    CHECK(metadata.groups.size() == 1);
+    saveReopen();
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    CHECK(map.selection().nodes == std::vector<Node*>{outer});
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+  }
+  SECTION("whole group transform and duplicate remap nested identities")
+  {
+    selectNodes(map, {outer});
+    REQUIRE(
+      transformSelection(map, "Move group", vm::translation_matrix(vm::vec3d{64, 0, 0})));
+    CHECK(target->brush().bounds().min.x() == 64);
+    saveReopen();
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    map.redoCommand();
+    duplicateSelectedNodes(map);
+    REQUIRE(map.selection().groups.size() == 1);
+    auto* copy = map.selection().groups.front();
+    REQUIRE(copy != outer);
+    CHECK(map.vmfScene()->nativeId(*copy) == "12");
+    CHECK(copy->linkId() != outer->linkId());
+    REQUIRE(copy->childCount() == 1);
+    auto* nested = dynamic_cast<GroupNode*>(copy->children().front());
+    REQUIRE(nested);
+    CHECK(map.vmfScene()->nativeId(*nested) == "13");
+    CHECK(nested->linkId() != inner->linkId());
+    REQUIRE(nested->childCount() == 1);
+    CHECK(map.vmfScene()->nativeId(*nested->children().front()) == "14");
+    const auto bytes = map.vmfScene()->serialize(map.worldNode());
+    saveReopen();
+    map.undoCommand();
+    map.redoCommand();
+    CHECK(map.selection().groups.front() == copy);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+    REQUIRE(removeSelectedNodes(map));
+    CHECK(outer->parent() == map.worldNode().defaultLayer());
+    map.undoCommand();
+    CHECK(map.selection().groups.front() == copy);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+  }
+  SECTION("open close is transient and create inside group keeps lexical world owner")
+  {
+    openGroup(map, *outer);
+    openGroup(map, *inner);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    REQUIRE(createBrush(map, nativeCubePoints()));
+    auto* added = map.selection().brushes.front();
+    CHECK(added->parent() == inner);
+    const auto id = map.vmfScene()->nativeId(*added);
+    saveReopen();
+    const auto bytes = map.vmfScene()->serialize(map.worldNode());
+    CHECK(nativeFragment(bytes, id).find("groupid") != std::string::npos);
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    map.redoCommand();
+    CHECK(map.selection().brushes.front() == added);
+    closeGroup(map);
+    closeGroup(map);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+  }
+  SECTION("leaf duplicate delete and plain brush entity wrapping")
+  {
+    openGroup(map, *outer);
+    openGroup(map, *inner);
+    selectNodes(map, {target});
+    duplicateSelectedNodes(map);
+    REQUIRE(map.selection().brushes.size() == 1);
+    auto* copy = map.selection().brushes.front();
+    REQUIRE(copy != target);
+    CHECK(copy->parent() == inner);
+    saveReopen();
+    REQUIRE(removeSelectedNodes(map));
+    map.undoCommand();
+    CHECK(copy->parent() == inner);
+    const auto definition = EntityDefinition{.name = "func_detail"};
+    auto* entity = createBrushEntity(map, definition);
+    REQUIRE(entity);
+    CHECK(entity->parent() == inner);
+    CHECK(copy->parent() == entity);
+    saveReopen();
+    map.undoCommand();
+    CHECK(copy->parent() == inner);
+    saveReopen();
+  }
+  SECTION("Front Back and Both ACT under nested group")
+  {
+    const auto mode = GENERATE(0, 1, 2);
+    const auto plane =
+      mode == 1 ? std::array<vm::vec3d, 3>{{{32, 0, 0}, {32, 64, 0}, {32, 0, 64}}}
+                : std::array<vm::vec3d, 3>{{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}};
+    openGroup(map, *outer);
+    openGroup(map, *inner);
+    selectNodes(map, {target});
+    REQUIRE((mode == 2 ? clipBrushesBoth : clipBrushes)(map, {target}, plane));
+    CHECK(target->parent() == inner);
+    if (mode == 1)
+    {
+      CHECK(target->brush().bounds().min.x() == 32);
+    }
+    else
+    {
+      CHECK(target->brush().bounds().max.x() == 32);
+    }
+    CHECK(inner->childCount() == (mode == 2 ? 2 : 1));
+    const auto bytes = map.vmfScene()->serialize(map.worldNode());
+    saveReopen();
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+  }
+}
+
+TEST_CASE(
+  "VmfMap native group authoring fresh template promotion and exact order", "[vmf]")
+{
+  const auto templateMap = GENERATE(false, true);
+  auto env = fs::TestEnvironment{};
+  const auto starter = env.dir() / "starter.vmf";
+  writeBinary(
+    starter, templateMap ? nativeRamp(false) : "world { id 1 classname worldspawn }\n");
+  auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  config.gameInfo.gameConfig.fileFormats = {{"Source VMF", starter}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.create(config);
+  REQUIRE(createBrush(map, nativeCubePoints()));
+  auto* brush = map.selection().brushes.front();
+  auto* entity = createBrushEntity(map, EntityDefinition{.name = "func_detail"});
+  REQUIRE(entity);
+  REQUIRE(brush->parent() == entity);
+  const auto definition = EntityDefinition{
+    .name = "info_target",
+    .pointEntityDefinition = PointEntityDefinition{.bounds = vm::bbox3d{8}}};
+  auto* point = createPointEntity(map, definition, vm::vec3d{128, 0, 0});
+  REQUIRE(point);
+  auto* foreign = createPointEntity(map, definition, vm::vec3d{256, 0, 0});
+  REQUIRE(foreign);
+  // An unrelated sibling must not be detached merely to restore ordering.
+  const auto order = map.worldNode().defaultLayer()->children();
+  auto notifications = size_t{0};
+  const auto witness =
+    map.nodesWillBeRemovedNotifier.connect([&](const std::vector<Node*>& nodes) {
+      CHECK(std::ranges::find(nodes, foreign) == nodes.end());
+      ++notifications;
+    });
+  deselectAll(map);
+  selectNodes(map, {brush, point});
+  const auto selection = map.selection().nodes;
+  const auto before = map.vmfScene()->serialize(map.worldNode());
+  const auto count = map.modificationCount();
+  auto* group = groupSelectedNodes(map, "not native metadata");
+  REQUIRE(group);
+  CHECK(group->children() == std::vector<Node*>{entity, point});
+  CHECK(brush->parent() == entity);
+  CHECK(map.modificationCount() == count + 1);
+  const auto bytes = map.vmfScene()->serialize(map.worldNode());
+  map.undoCommand();
+  CHECK(map.modificationCount() == count);
+  CHECK(map.worldNode().defaultLayer()->children() == order);
+  CHECK(map.selection().nodes == selection);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+  map.redoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+  REQUIRE(notifications > 0);
+  const auto saved = env.dir() / "fresh grouped.vmf";
+  REQUIRE(map.saveAs(saved).is_success());
+  auto reopenedFixture = MapFixture{};
+  auto& reopened = reopenedFixture.load(saved, config);
+  auto& reopenedEntity = nativeNode(reopened, map.vmfScene()->nativeId(*entity));
+  CHECK(dynamic_cast<GroupNode*>(reopenedEntity.parent()));
+  CHECK(
+    nativeNode(reopened, map.vmfScene()->nativeId(*brush)).parent() == &reopenedEntity);
+}
+
+TEST_CASE(
+  "VmfMap native group authoring unsupported components and allocator control", "[vmf]")
+{
+  const auto kind = GENERATE(
+    std::string{"dangling"},
+    std::string{"cycle"},
+    std::string{"ambiguous"},
+    std::string{"hidden"},
+    std::string{"opaque"},
+    std::string{"entity internal"},
+    std::string{"duplicate group id"},
+    std::string{"invalid group id"},
+    std::string{"missing group id"},
+    std::string{"repeated group id"},
+    std::string{"dangling entity owner"});
+  CAPTURE(kind);
+  auto source = kind == "dangling entity owner" ? nativeRamp(false) : nativeGroupedRamp();
+  if (kind == "dangling entity owner")
+  {
+    source.insert(
+      source.find("solid {"),
+      "} entity { id 12 classname func_detail editor { groupid 99 } ");
+  }
+  if (kind == "dangling")
+  {
+    source.replace(source.find("groupid 11"), 10, "groupid 99");
+  }
+  if (kind == "cycle")
+  {
+    source.replace(source.find("color \"1 2 3\""), 13, "groupid 11");
+  }
+  if (kind == "ambiguous")
+  {
+    source.insert(source.find("groupid 11"), "groupid 10 ");
+  }
+  if (kind == "hidden")
+  {
+    source.insert(source.find("solid {"), "hidden { ");
+    source.insert(source.find("group { id 10"), "} ");
+  }
+  if (kind == "opaque")
+  {
+    source.insert(source.find("group { id 11") + 8, "foreign { sides 3 } ");
+  }
+  if (kind == "entity internal")
+  {
+    source.insert(source.find("solid {"), "} entity { id 12 classname func_detail ");
+  }
+  if (kind == "duplicate group id")
+  {
+    source.insert(source.find("group { id 11"), "group { id 10 } ");
+  }
+  if (kind == "invalid group id")
+  {
+    source.replace(source.find("id 10"), 5, "id nope");
+  }
+  if (kind == "missing group id")
+  {
+    source.erase(source.find("id 10"), 5);
+  }
+  if (kind == "repeated group id")
+  {
+    source.insert(source.find("id 10"), "id 10 ");
+  }
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "unsupported group.vmf";
+  writeBinary(path, source);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  CHECK_FALSE(map.vmfScene()->diagnostics().empty());
+  auto& target = nativeNode(map, "2");
+  auto& marker = nativeNode(map, "9");
+  selectNodes(map, {&marker, &target}); // valid earlier candidate, invalid later closure
+  const auto selection = map.selection().nodes;
+  const auto positions = filePositions(map);
+  const auto count = map.modificationCount();
+  CHECK_FALSE(canGroupSelectedNodes(map));
+  CHECK_FALSE(groupSelectedNodes(map, ""));
+  CHECK(map.selection().nodes == selection);
+  CHECK(filePositions(map) == positions);
+  CHECK(map.modificationCount() == count);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  if (kind == "dangling entity owner")
+  {
+    deselectAll(map);
+    selectNodes(map, {&target});
+    CHECK_FALSE(transformSelection(
+      map, "Refuse unsupported owner", vm::translation_matrix(vm::vec3d{16, 0, 0})));
+    auto* brush = dynamic_cast<BrushNode*>(&target);
+    REQUIRE(brush);
+    CHECK_FALSE(clipBrushes(map, {brush}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+    duplicateSelectedNodes(map);
+    CHECK(map.selection().nodes == std::vector<Node*>{&target});
+    CHECK_FALSE(removeSelectedNodes(map));
+    CHECK(map.modificationCount() == count);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  deselectAll(map);
+  selectNodes(map, {&marker});
+  REQUIRE(setEntityProperty(map, "targetname", "unrelated_acted"));
+  CHECK(map.vmfScene()->serialize(map.worldNode()) != source);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  const auto definition = EntityDefinition{
+    .name = "info_target",
+    .pointEntityDefinition = PointEntityDefinition{.bounds = vm::bbox3d{8}}};
+  auto* control = createPointEntity(map, definition, vm::vec3d{128, 0, 0});
+  REQUIRE(control);
+  CHECK(
+    map.vmfScene()->nativeId(*control)
+    == (kind == "entity internal" || kind == "dangling entity owner" ? "13" : "12"));
+}
+
+TEST_CASE(
+  "VmfMap native group authoring rename linked preview and inverse guards", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "group guards.vmf";
+  const auto source = nativeGroupedRamp();
+  writeBinary(path, source);
+  const auto preview = GENERATE(false, true);
+  const auto config = MapFixtureConfig{
+    .mapFormat = MapFormat::SourceVMF,
+    .worldBounds = vm::bbox3d{4096},
+    .readOnlyVmfPreview = preview};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto* outer = dynamic_cast<GroupNode*>(&nativeNode(map, "10"));
+  REQUIRE(outer);
+  selectNodes(map, {outer});
+  const auto count = map.modificationCount();
+  renameSelectedGroups(map, "forbidden");
+  CHECK(outer->group().name() == "Group 10");
+  CHECK_FALSE(canCreateLinkedDuplicate(map));
+  CHECK_FALSE(createLinkedDuplicate(map));
+  CHECK_FALSE(canSeparateSelectedLinkedGroups(map));
+  separateSelectedLinkedGroups(map);
+  CHECK_FALSE(canExtractLinkedGroups(map));
+  CHECK(extractLinkedGroups(map).empty());
+  mergeSelectedGroupsWithGroup(map, outer);
+  CHECK(map.modificationCount() == count);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  if (preview)
+  {
+    CHECK_FALSE(canGroupSelectedNodes(map));
+    CHECK_FALSE(canUngroupSelectedNodes(map));
+    CHECK_FALSE(groupSelectedNodes(map, ""));
+    ungroupSelectedNodes(map);
+    CHECK(map.modificationCount() == count);
+  }
+  else
+  {
+    auto* group = groupSelectedNodes(map, "");
+    REQUIRE(group);
+    const auto grouped = map.vmfScene()->serialize(map.worldNode());
+    const auto selected = map.selection().nodes;
+    const auto order = map.worldNode().defaultLayer()->children();
+    group->setVisibilityState(VisibilityState::Hidden);
+    map.undoCommand();
+    CHECK(map.selection().nodes == selected);
+    CHECK(map.worldNode().defaultLayer()->children() == order);
+    CHECK(outer->parent() == group);
+    group->setVisibilityState(VisibilityState::Inherited);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == grouped);
+  }
+}
+
+TEST_CASE(
+  "VmfMap native group authoring raw membership numeric identity and budget guards",
+  "[vmf]")
+{
+  const auto size = GENERATE(5, 90, 4097);
+  auto source = nativeGroupedRamp();
+  const auto id = size == 5 ? std::string{"00010"} : std::string(size - 1, '9') + '8';
+  source.replace(source.find("id 10"), 5, "id " + id);
+  source.replace(source.find("groupid 10"), 10, "groupid " + id);
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "numeric groups.vmf";
+  writeBinary(path, source);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto* outer = dynamic_cast<GroupNode*>(&nativeNode(map, id));
+  REQUIRE(outer);
+  CHECK(outer->group().name() == "Group " + id);
+  openGroup(map, *outer);
+  auto* inner = dynamic_cast<GroupNode*>(&nativeNode(map, "11"));
+  REQUIRE(inner);
+  openGroup(map, *inner);
+  auto& target = nativeNode(map, "2");
+  selectNodes(map, {&target});
+  const auto positions = filePositions(map);
+  const auto count = map.modificationCount();
+  if (size > 4096)
+  {
+    CHECK_FALSE(canGroupSelectedNodes(map));
+    CHECK_FALSE(groupSelectedNodes(map, ""));
+    CHECK(filePositions(map) == positions);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+    return;
+  }
+  auto* group = groupSelectedNodes(map, "");
+  REQUIRE(group);
+  const auto next = size == 5 ? std::string{"12"} : std::string(size - 1, '9') + '9';
+  CHECK(map.vmfScene()->nativeId(*group) == next);
+  auto expectedSolid = nativeFragment(source, "2");
+  expectedSolid.replace(expectedSolid.find("groupid 11"), 10, "groupid \"" + next + "\"");
+  const auto bytes = map.vmfScene()->serialize(map.worldNode());
+  CHECK(nativeFragment(bytes, "2") == expectedSolid);
+  CHECK(nativeFragment(bytes, id) == nativeFragment(source, id));
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  map.redoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+  ungroupSelectedNodes(map);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  const auto saved = env.dir() / "numeric saved.vmf";
+  REQUIRE(map.saveAs(saved).is_success());
+  CHECK(readBinary(saved) == source);
+}
+
+TEST_CASE(
+  "VmfMap native group authoring foreign siblings and live closure guards", "[vmf]")
+{
+  auto source = nativeGroupedRamp();
+  source.insert(
+    source.find("\"untouched_marker\"") + std::string{"\"untouched_marker\""}.size(),
+    " editor { groupid 999 note first note second } ");
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "foreign sibling.vmf";
+  writeBinary(path, source);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto& foreign = nativeNode(map, "9");
+  auto& outer = nativeNode(map, "10");
+  const auto order = map.worldNode().defaultLayer()->children();
+  const auto witness =
+    map.nodesWillBeRemovedNotifier.connect([&](const std::vector<Node*>& nodes) {
+      CHECK(std::ranges::find(nodes, &foreign) == nodes.end());
+    });
+  selectNodes(map, {&outer});
+  auto* created = groupSelectedNodes(map, "");
+  REQUIRE(created);
+  const auto bytes = map.vmfScene()->serialize(map.worldNode());
+  CHECK(nativeFragment(bytes, "9") == nativeFragment(source, "9"));
+  map.undoCommand();
+  CHECK(map.worldNode().defaultLayer()->children() == order);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  map.redoCommand();
+  const auto selected = map.selection().nodes;
+  const auto count = map.modificationCount();
+  const auto mode = GENERATE(0, 1, 2);
+  if (mode == 0)
+  {
+    foreign.parent()->removeChild(&foreign);
+    created->addChild(&foreign);
+  }
+  else if (mode == 1)
+  {
+    created->setLinkId("foreign-link");
+  }
+  else
+  {
+    auto* nested = dynamic_cast<GroupNode*>(&nativeNode(map, "11"));
+    REQUIRE(nested);
+    created->setLinkId(nested->linkId());
+  }
+  CHECK_FALSE(canUngroupSelectedNodes(map));
+  ungroupSelectedNodes(map);
+  CHECK(map.selection().nodes == selected);
+  CHECK(map.modificationCount() == count);
+  map.undoCommand();
+  CHECK(outer.parent() == created);
+  CHECK(map.selection().nodes == selected);
+  CHECK_THROWS_AS(map.vmfScene()->serialize(map.worldNode()), std::invalid_argument);
+  if (mode == 0)
+  {
+    created->removeChild(&foreign);
+    map.worldNode().defaultLayer()->insertChild(0, &foreign);
+  }
+}
+
+TEST_CASE(
+  "VmfMap native group authoring staged later duplicate budget refusal is atomic",
+  "[vmf]")
+{
+  auto source = nativeGroupedRamp();
+  const auto huge = std::string(4095, '9') + '8';
+  source.replace(source.find("id 10"), 5, "id " + huge);
+  source.replace(source.find("groupid 10"), 10, "groupid " + huge);
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "staged group budget.vmf";
+  writeBinary(path, source);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto& marker = nativeNode(map, "9");
+  auto& inner = nativeNode(map, "11");
+  selectNodes(map, {&marker, &inner}); // different physical parents, one whole batch
+  const auto selection = map.selection().nodes;
+  const auto positions = filePositions(map);
+  const auto count = map.modificationCount();
+  duplicateSelectedNodes(map); // first legal ID stages, a later ID grows to 4097 digits
+  CHECK(map.selection().nodes == selection);
+  CHECK(map.modificationCount() == count);
+  CHECK(filePositions(map) == positions);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  auto* target = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
+  REQUIRE(target);
+  REQUIRE(clipBrushes(map, {target}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+  const auto clipped = VmfDocument::parse(map.vmfScene()->serialize(map.worldNode()));
+  CHECK(std::ranges::any_of(clipped.entries(), [&](const auto& row) {
+    return row.value && row.parent && clipped.tokenContents(row.key) == "id"
+           && clipped.tokenContents(*row.value) == "9"
+           && clipped.tokenContents(clipped.entries()[*row.parent].key) == "side";
+  }));
+  map.undoCommand();
+  deselectAll(map);
+  selectNodes(map, {&marker});
+  REQUIRE(canGroupSelectedNodes(map));
+  auto* group = groupSelectedNodes(map, "");
+  REQUIRE(group);
+  CHECK(map.vmfScene()->nativeId(*group) == std::string(4096, '9'));
+  const auto bytes = map.vmfScene()->serialize(map.worldNode());
+  const auto saved = env.dir() / "budget control.vmf";
+  REQUIRE(map.saveAs(saved).is_success());
+  CHECK(readBinary(saved) == bytes);
+}
+
+TEST_CASE(
+  "VmfMap native group authoring admission ambiguous candidate isolation", "[vmf]")
+{
+  const auto editor = GENERATE(
+    std::string{"editor { groupid 10 groupid 10 }"},
+    std::string{"editor { groupid 10 groupid 20 }"},
+    std::string{"editor { groupid 00010 groupid 020 }"},
+    std::string{"editor { groupid 10 } editor { groupid 20 }"},
+    std::string{"editor {} editor { groupid 010 }"},
+    std::string{"editor scalar editor { groupid 010 }"});
+  const auto entityMember = GENERATE(false, true);
+  CAPTURE(editor, entityMember);
+  const auto implicates20 = editor.find("20") != std::string::npos;
+  auto source = nativeGroupedRamp();
+  const auto old =
+    std::string{"editor { groupid 11 color \"9 8 7\" note first note second }"};
+  if (!entityMember)
+  {
+    source.replace(source.find(old), old.size(), editor);
+  }
+  source.insert(source.find("group { id 11"), "group { id 20 } group { id 30 } ");
+  source += "entity { id 21 classname info_target "
+    + (entityMember ? editor : std::string{"editor { groupid 10 }"}) + " }\r\n"
+    "entity { id 22 classname info_target editor { groupid 20 } }\r\n"
+    "entity { id 23 classname info_target editor { groupid 11 } }\r\n"
+    "entity { id 24 classname info_target editor { groupid 10 } }\r\n";
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "ambiguous candidates.vmf";
+  writeBinary(path, source);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    path, {.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  auto& marker = nativeNode(map, "9");
+  selectNodes(map, {&marker});
+  REQUIRE(setEntityProperty(map, "targetname", "admission_control_acted"));
+  CHECK(map.vmfScene()->serialize(map.worldNode()) != source);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  auto ids = std::vector<std::string>{};
+  const auto visit = [&](auto&& self, const Node& node) -> void {
+    if (dynamic_cast<const GroupNode*>(&node))
+    {
+      ids.push_back(map.vmfScene()->nativeId(node));
+    }
+    for (const auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  visit(visit, map.worldNode());
+  // Do not invoke old UNGROUP/delete on an incorrectly projected empty component.
+  CHECK(ids == (implicates20 ? std::vector<std::string>{"30"}
+                            : std::vector<std::string>{"20", "30"}));
+  for (const auto& id : {"2", "21", "23", "24"})
+  {
+    deselectAll(map);
+    selectNodes(map, {&nativeNode(map, id)});
+    const auto selection = map.selection().nodes;
+    const auto positions = filePositions(map);
+    const auto count = map.modificationCount();
+    const auto undo = map.canUndoCommand();
+    const auto redo = map.canRedoCommand();
+    CHECK_FALSE(canGroupSelectedNodes(map));
+    CHECK_FALSE(groupSelectedNodes(map, ""));
+    CHECK(map.selection().nodes == selection);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.canUndoCommand() == undo);
+    CHECK(map.canRedoCommand() == redo);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  deselectAll(map);
+  selectNodes(map, {&nativeNode(map, "22")});
+  CHECK(canGroupSelectedNodes(map) == !implicates20);
+  deselectAll(map);
+  selectNodes(map, {&marker});
+  REQUIRE(canGroupSelectedNodes(map));
+  auto* control = groupSelectedNodes(map, "");
+  REQUIRE(control);
+  CHECK(map.vmfScene()->nativeId(*control) == "31");
+  CHECK(marker.parent() == control);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) != source);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+}
+
+TEST_CASE(
+  "VmfMap native group authoring admission malformed membership preflight", "[vmf]")
+{
+  const auto editor = GENERATE(
+    std::string{"editor { groupid { raw 77 } }"},
+    std::string{"editor { groupid 77 groupid { raw 77 } }"},
+    std::string{"editor { visgroupid { raw 77 } }"},
+    std::string{"editor { visgroupid 77 visgroupid { raw 77 } }"},
+    std::string{"editor { visgroupshown { raw 1 } }"},
+    std::string{"editor { visgroupshown 1 visgroupshown { raw 1 } }"},
+    std::string{"editor { visgroupautoshown { raw 1 } }"},
+    std::string{"editor { visgroupautoshown 1 visgroupautoshown { raw 1 } }"},
+    std::string{"editor { visgroupshown yes }"},
+    std::string{"editor { visgroupautoshown yes }"},
+    std::string{"editor { visgroupshown 1 visgroupshown 1 }"},
+    std::string{"editor { visgroupshown 0 }"},
+    std::string{"editor { visgroupautoshown 0 }"},
+    std::string{"editor { } editor { }"},
+    std::string{"editor scalar"});
+  CAPTURE(editor);
+  auto source = nativeRamp(false);
+  source.insert(source.find("}\r\neditor { "), editor + "\r\n");
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "block membership.vmf";
+  writeBinary(path, source);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    path, {.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  auto& marker = nativeNode(map, "9");
+  selectNodes(map, {&marker});
+  REQUIRE(setEntityProperty(map, "targetname", "shape_control_acted"));
+  CHECK(map.vmfScene()->serialize(map.worldNode()) != source);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  deselectAll(map);
+  selectNodes(map, {&nativeNode(map, "2")});
+  const auto selection = map.selection().nodes;
+  const auto positions = filePositions(map);
+  const auto count = map.modificationCount();
+  const auto undo = map.canUndoCommand();
+  const auto redo = map.canRedoCommand();
+  CHECK_FALSE(canGroupSelectedNodes(map));
+  CHECK_FALSE(groupSelectedNodes(map, ""));
+  CHECK_FALSE(map.vmfScene()->diagnostics().empty());
+  CHECK(map.selection().nodes == selection);
+  CHECK(filePositions(map) == positions);
+  CHECK(map.modificationCount() == count);
+  CHECK(map.canUndoCommand() == undo);
+  CHECK(map.canRedoCommand() == redo);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  deselectAll(map);
+  selectNodes(map, {&marker});
+  REQUIRE(canGroupSelectedNodes(map));
+  auto* control = groupSelectedNodes(map, "");
+  REQUIRE(control);
+  CHECK(map.vmfScene()->nativeId(*control) == "10");
+  CHECK(marker.parent() == control);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) != source);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+}
+
+
+TEST_CASE(
+  "VmfMap native group authoring command live notification index lifetime", "[vmf]")
+{
+  const auto nested = GENERATE(false, true);
+  const auto removeInsideContainer = GENERATE(false, true);
+  CAPTURE(nested, removeInsideContainer);
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "indexed groups.vmf";
+  auto source = nativeGroupedRamp();
+  if (nested)
+  {
+    source.insert(source.find("connections {"), "editor { groupid 11 } ");
+  }
+  writeBinary(path, source);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    path,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto* marker = &nativeNode(map, "9");
+  auto* inner = dynamic_cast<GroupNode*>(&nativeNode(map, "11"));
+  auto* outer = dynamic_cast<GroupNode*>(&nativeNode(map, "10"));
+  REQUIRE(inner);
+  REQUIRE(outer);
+  selectNodes(map, {marker});
+  REQUIRE(setEntityProperty(map, "targetname", "index_control"));
+  CHECK(map.findNodes("index_control") == std::vector<Node*>{marker});
+  map.undoCommand();
+  REQUIRE(map.vmfScene()->serialize(map.worldNode()) == source);
+  if (nested)
+  {
+    openGroup(map, *outer);
+    openGroup(map, *inner);
+  }
+  auto connection = NotifierConnection{};
+  auto detached = size_t{0};
+  auto visits = size_t{0};
+  auto notified = std::vector<Node*>{};
+  connection += map.nodesWereAddedNotifier.connect([&](const std::vector<Node*>& roots) {
+    const auto visit = [&](auto&& self, Node* node) -> void {
+      if (node == marker)
+      {
+        ++visits;
+      }
+      for (auto* child : node->children())
+      {
+        self(self, child);
+      }
+    };
+    notified.insert(notified.end(), roots.begin(), roots.end());
+    for (auto* root : roots)
+    {
+      auto* top = root;
+      while (top->parent())
+      {
+        top = top->parent();
+      }
+      if (top != &map.worldNode())
+      {
+        ++detached;
+      }
+      visit(visit, root);
+    }
+  });
+  const auto checkIndex = [&](Node* expectedRoot) {
+    CHECK(notified == std::vector<Node*>{expectedRoot});
+    notified.clear();
+    CHECK(map.findNodes("untouched_marker") == std::vector<Node*>{marker});
+    CHECK(detached == 0);
+    CHECK(visits == 1);
+    visits = 0;
+    detached = 0;
+  };
+  deselectAll(map);
+  selectNodes(map, {marker});
+  auto* created = groupSelectedNodes(map, "");
+  REQUIRE(created);
+  auto* destination = nested ? static_cast<Node*>(inner) : map.worldNode().defaultLayer();
+  CHECK(created->parent() == destination);
+  CHECK(created->children() == std::vector<Node*>{marker});
+  checkIndex(created);
+  map.undoCommand();
+  checkIndex(marker);
+  map.redoCommand();
+  checkIndex(created);
+  ungroupSelectedNodes(map);
+  REQUIRE(marker->parent() == destination);
+  checkIndex(marker);
+  map.undoCommand();
+  checkIndex(created);
+  map.redoCommand();
+  checkIndex(marker);
+  if (removeInsideContainer)
+  {
+    map.undoCommand();
+    checkIndex(created);
+    REQUIRE(marker->parent() == created);
+  }
+  selectNodes(map, {marker});
+  REQUIRE(removeSelectedNodes(map));
+  // Raw Node* queries only: no cast/dereference of a possibly stale result.
+  CHECK(map.findNodes("untouched_marker").empty());
+  map.commandProcessor().clear();
+  CHECK(map.findNodes("untouched_marker").empty());
+}
+
+TEST_CASE("VmfMap native group authoring command parked replay preflight", "[vmf]")
+{
+  const auto grouping = GENERATE(false, true);
+  const auto state = GENERATE(
+    std::string{"normal"},
+    std::string{"hidden"},
+    std::string{"link"},
+    std::string{"locked"},
+    std::string{"unlocked"});
+  CAPTURE(grouping, state);
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "parked groups.vmf";
+  const auto source = nativeGroupedRamp();
+  writeBinary(path, source);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    path,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto* marker = &nativeNode(map, "9");
+  selectNodes(map, {marker});
+  REQUIRE(setEntityProperty(map, "targetname", "park_control"));
+  CHECK(map.findNodes("park_control") == std::vector<Node*>{marker});
+  map.undoCommand();
+  REQUIRE(map.vmfScene()->serialize(map.worldNode()) == source);
+  GroupNode* parked = nullptr;
+  if (grouping)
+  {
+    parked = groupSelectedNodes(map, "");
+    REQUIRE(parked);
+    map.undoCommand();
+  }
+  else
+  {
+    parked = dynamic_cast<GroupNode*>(&nativeNode(map, "10"));
+    REQUIRE(parked);
+    deselectAll(map);
+    selectNodes(map, {parked});
+    ungroupSelectedNodes(map);
+  }
+  REQUIRE(parked->parent() == nullptr);
+  REQUIRE(parked->children().empty());
+  const auto id = map.vmfScene()->nativeId(*parked);
+  const auto link = parked->linkId();
+  if (state == "hidden")
+  {
+    parked->setVisibilityState(VisibilityState::Hidden);
+  }
+  if (state == "link")
+  {
+    parked->setLinkId("changed-parked-link");
+  }
+  if (state == "locked")
+  {
+    parked->setLockState(LockState::Locked);
+  }
+  if (state == "unlocked")
+  {
+    parked->setLockState(LockState::Unlocked);
+  }
+  const auto before = map.vmfScene()->serialize(map.worldNode());
+  const auto positions = filePositions(map);
+  const auto order = map.worldNode().defaultLayer()->children();
+  const auto selected = map.selection().nodes;
+  const auto count = map.modificationCount();
+  if (grouping)
+  {
+    map.redoCommand();
+  }
+  else
+  {
+    map.undoCommand();
+  }
+  if (state == "normal" || state == "unlocked")
+  {
+    REQUIRE(parked->parent() == map.worldNode().defaultLayer());
+    CHECK(map.vmfScene()->nativeId(*parked) == id);
+    CHECK(parked->linkId() == link);
+    CHECK(
+      parked->children()
+      == std::vector<Node*>{grouping ? marker : &nativeNode(map, "11")});
+    CHECK(map.selection().nodes == std::vector<Node*>{parked});
+    if (grouping)
+    {
+      map.undoCommand();
+    }
+    else
+    {
+      map.redoCommand();
+    }
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+    CHECK(map.selection().nodes == selected);
+    CHECK(map.worldNode().defaultLayer()->children() == order);
+  }
+  else
+  {
+    // Failed replay may destroy command-owned parked nodes. Never use the
+    // retained pointer after this point, except as a raw address comparison.
+    CHECK(map.modificationCount() == count);
+    CHECK(map.selection().nodes == selected);
+    CHECK(map.worldNode().defaultLayer()->children() == order);
+    CHECK(filePositions(map) == positions);
+    CHECK_FALSE(map.canRedoCommand());
+    // Safe old-runtime RED cleanup only via a node that is actually live.
+    for (auto* child : map.worldNode().defaultLayer()->children())
+    {
+      if (child == parked)
+      {
+        child->setVisibilityState(VisibilityState::Inherited);
+        child->setLockState(LockState::Inherited);
+        dynamic_cast<GroupNode*>(child)->setLinkId(link);
+      }
+    }
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+    deselectAll(map);
+    selectNodes(map, {marker});
+    auto* control = groupSelectedNodes(map, "");
+    REQUIRE(control);
+    CHECK(map.vmfScene()->nativeId(*control) == (grouping ? "13" : "12"));
+  }
+}
+
+TEST_CASE("VmfMap native group authoring command opened context refusal", "[vmf]")
+{
+  const auto ancestor = GENERATE(false, true);
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "opened groups.vmf";
+  const auto source = nativeGroupedRamp();
+  writeBinary(path, source);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(
+    path,
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}});
+  auto* outer = dynamic_cast<GroupNode*>(&nativeNode(map, "10"));
+  auto* inner = dynamic_cast<GroupNode*>(&nativeNode(map, "11"));
+  REQUIRE(outer);
+  REQUIRE(inner);
+  selectNodes(map, {&nativeNode(map, "9")});
+  REQUIRE(setEntityProperty(map, "targetname", "context_control"));
+  map.undoCommand();
+  REQUIRE(map.vmfScene()->serialize(map.worldNode()) == source);
+  openGroup(map, *outer);
+  openGroup(map, *inner);
+  deselectAll(map);
+  selectNodes(map, {ancestor ? outer : inner});
+  const auto positions = filePositions(map);
+  const auto selected = map.selection().nodes;
+  const auto count = map.modificationCount();
+  const auto undo = map.canUndoCommand();
+  const auto redo = map.canRedoCommand();
+  // Stop the old unsafe branch before detaching any current editing context.
+  REQUIRE_FALSE(canUngroupSelectedNodes(map));
+  ungroupSelectedNodes(map);
+  CHECK(map.editorContext().currentGroup() == inner);
+  CHECK(inner->parent() == outer);
+  CHECK(outer->parent() == map.worldNode().defaultLayer());
+  CHECK(filePositions(map) == positions);
+  CHECK(map.selection().nodes == selected);
+  CHECK(map.modificationCount() == count);
+  CHECK(map.canUndoCommand() == undo);
+  CHECK(map.canRedoCommand() == redo);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  REQUIRE(createBrush(map, nativeCubePoints()));
+  auto* brush = map.selection().brushes.front();
+  CHECK(brush->parent() == inner);
+  CHECK(map.vmfScene()->nativeId(*brush) == "12");
+  auto* group = groupSelectedNodes(map, "");
+  REQUIRE(group);
+  CHECK(group->parent() == inner);
+  CHECK(map.vmfScene()->nativeId(*group) == "13");
+  REQUIRE(canUngroupSelectedNodes(map));
+  ungroupSelectedNodes(map);
+  CHECK(brush->parent() == inner);
+  CHECK(map.editorContext().currentGroup() == inner);
+}
+TEST_CASE("VmfMap native group authoring isolation independent plain brush", "[vmf]")
+{
+  const auto opaque = GENERATE(false, true);
+  const auto operation = GENERATE(
+    std::string{"group"},
+    std::string{"transform"},
+    std::string{"front"},
+    std::string{"back"},
+    std::string{"both"});
+  CAPTURE(opaque, operation);
+  auto source = nativeRamp(false);
+  const auto foreignId = opaque ? std::string{"100"} : std::string{"10"};
+  // Keep the shared attachment fixture's opaque input unchanged; ordinary raw
+  // group recognition must not accept its unknown geometry-reference child.
+  source.insert(
+    source.find("solid {"),
+    opaque ? "group { id 100 foreign { sides 3 } editor { color \"1 2 3\" } } "
+           : "group { id 10 } ");
+  source.insert(
+    source.find("\"untouched_marker\"") + std::string{"\"untouched_marker\""}.size(),
+    " editor { groupid " + foreignId + " groupid " + foreignId + " } ");
+  source += "entity { id 3 classname info_target targetname independent_control }\r\n";
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "independent brush isolation.vmf";
+  writeBinary(path, source);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto& point = nativeNode(map, "3");
+  auto& foreign = nativeNode(map, "9");
+  auto* brush = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
+  REQUIRE(brush);
+  CHECK(brush->parent() == map.worldNode().defaultLayer());
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  selectNodes(map, {&point});
+  REQUIRE(setEntityProperty(map, "targetname", "control_acted"));
+  auto propertyBytes = source;
+  propertyBytes.replace(
+    propertyBytes.find("independent_control"),
+    std::string{"independent_control"}.size(),
+    "\"control_acted\"");
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == propertyBytes);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+
+  const auto foreignBytes = [&](const std::string& bytes) {
+    CHECK(nativeFragment(bytes, foreignId) == nativeFragment(source, foreignId));
+    CHECK(nativeFragment(bytes, "9") == nativeFragment(source, "9"));
+  };
+  deselectAll(map);
+  selectNodes(map, {&foreign});
+  const auto positions = filePositions(map);
+  const auto foreignSelection = map.selection().nodes;
+  const auto count = map.modificationCount();
+  const auto undo = map.canUndoCommand();
+  const auto redo = map.canRedoCommand();
+  CHECK_FALSE(canGroupSelectedNodes(map));
+  CHECK_FALSE(groupSelectedNodes(map, ""));
+  CHECK(filePositions(map) == positions);
+  CHECK(map.selection().nodes == foreignSelection);
+  CHECK(map.modificationCount() == count);
+  CHECK(map.canUndoCommand() == undo);
+  CHECK(map.canRedoCommand() == redo);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+
+  deselectAll(map);
+  selectNodes(map, {brush});
+  const auto brushSelection = map.selection().nodes;
+  auto* created = static_cast<GroupNode*>(nullptr);
+  auto acted = false;
+  if (operation == "group")
+  {
+    CHECK(canGroupSelectedNodes(map) == !opaque);
+    created = groupSelectedNodes(map, "");
+    acted = created != nullptr;
+  }
+  else if (operation == "transform")
+  {
+    acted = transformSelection(
+      map, "Move independent brush", vm::translation_matrix(vm::vec3d{16, 0, 0}));
+  }
+  else
+  {
+    const auto plane =
+      operation == "back"
+        ? std::array<vm::vec3d, 3>{{{32, 0, 0}, {32, 64, 0}, {32, 0, 64}}}
+        : std::array<vm::vec3d, 3>{{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}};
+    acted = (operation == "both" ? clipBrushesBoth : clipBrushes)(map, {brush}, plane);
+  }
+  if (opaque)
+  {
+    CHECK_FALSE(acted);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.selection().nodes == brushSelection);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.canUndoCommand() == undo);
+    CHECK(map.canRedoCommand() == redo);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  else
+  {
+    // RED stops safely here; never dereference a refused GROUP result.
+    REQUIRE(acted);
+    CHECK(map.modificationCount() == count + 1);
+    if (operation == "group")
+    {
+      REQUIRE(created);
+      CHECK(map.vmfScene()->nativeId(*created) == "11");
+      CHECK(brush->parent() == created);
+      CHECK(created->children() == std::vector<Node*>{brush});
+    }
+    else if (operation == "transform")
+    {
+      CHECK(brush->brush().bounds().min.x() == 16);
+      CHECK(brush->brush().bounds().max.x() == 80);
+    }
+    else if (operation == "back")
+    {
+      CHECK(brush->brush().bounds().min.x() == 32);
+    }
+    else
+    {
+      CHECK(brush->brush().bounds().max.x() == 32);
+    }
+    const auto bytes = map.vmfScene()->serialize(map.worldNode());
+    CHECK(bytes != source);
+    foreignBytes(bytes);
+    const auto saved = env.dir() / "acted isolation.vmf";
+    REQUIRE(map.saveAs(saved).is_success());
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(saved, config);
+    CHECK(reopened.vmfScene()->serialize(reopened.worldNode()) == bytes);
+    auto* reopenedBrush = dynamic_cast<BrushNode*>(&nativeNode(reopened, "2"));
+    REQUIRE(reopenedBrush);
+    CHECK(reopenedBrush->brush().bounds() == brush->brush().bounds());
+    if (operation == "group")
+    {
+      CHECK(reopenedBrush->parent() == &nativeNode(reopened, "11"));
+      CHECK(dynamic_cast<GroupNode*>(reopenedBrush->parent()));
+    }
+    if (operation == "both")
+    {
+      auto* back = dynamic_cast<BrushNode*>(&nativeNode(reopened, "11"));
+      REQUIRE(back);
+      CHECK(back->parent() == reopenedBrush->parent());
+      CHECK(back->brush().bounds().min.x() == 32);
+    }
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.modificationCount() == count);
+    CHECK(map.selection().nodes == brushSelection);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  // A legal next GROUP proves the rejected ambiguous closure consumed no ID.
+  // BOTH intentionally retains its admitted sibling ID even after undo.
+  if (opaque || operation != "group")
+  {
+    deselectAll(map);
+    selectNodes(map, {opaque ? &point : static_cast<Node*>(brush)});
+    auto* control = groupSelectedNodes(map, "");
+    REQUIRE(control);
+    CHECK(map.vmfScene()->nativeId(*control) == (opaque ? "101" : operation == "both" ? "12" : "11"));
+    foreignBytes(map.vmfScene()->serialize(map.worldNode()));
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  CHECK(readBinary(path) == source);
 }
 
 } // namespace tb::mdl

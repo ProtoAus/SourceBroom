@@ -58,6 +58,10 @@ struct SourceEditorMembership
   std::optional<std::string> nativeId;
   std::optional<std::string> groupId;
   std::optional<VmfEntryId> group;
+  /** All normalized scalar references, including repeated/ambiguous editor data.
+   * Used only to isolate unsupported components, never to resolve membership.
+   */
+  std::vector<std::string> candidateGroupIds;
   std::vector<std::string> visgroupIds;
   std::vector<VmfEntryId> visgroups;
   /** True only for an enclosing native hidden block. Visgroup visibility is not

@@ -18,6 +18,7 @@ namespace tb::mdl
 {
 class NodeContents;
 class BrushNode;
+class GroupNode;
 
 struct VmfSceneDiagnostic
 {
@@ -47,6 +48,7 @@ private:
   enum class GeneratedKind
   {
     Entity,
+    Group,
     Solid,
     Side
   };
@@ -58,6 +60,21 @@ private:
     size_t owner = 0;
   };
   std::map<size_t, GeneratedBinding> m_generated;
+  std::set<size_t> m_nativeGroups;
+  std::map<size_t, const GroupNode*> m_groupNodes;
+  std::map<size_t, std::string> m_groupLinks;
+  std::map<size_t, std::set<size_t>> m_groupStates;
+  std::set<size_t> m_unsupportedGroupObjects;
+  const Node* effectiveParent(const Node& node) const;
+  size_t parentBinding(const Node& node) const;
+  void projectGroups();
+  void validateRegisteredGroup(const GroupNode& group) const;
+  void membershipEdits(
+    VmfEntryId source,
+    const Node& node,
+    std::vector<VmfValueEdit>& values,
+    std::vector<VmfStructuralEdit>& structure,
+    std::map<VmfEntryId, std::string>& appended) const;
   // Exact operation-admitted side sets, including parked undo/redo states.
   std::map<size_t, std::vector<std::set<size_t>>> m_clipStates;
   // Counts generated initial sets and retained clip states; source baselines
@@ -124,8 +141,21 @@ public:
    * redo and repeated saves; serialization never allocates identities. */
   void validateAdditions(
     const Node& parent, const std::vector<Node*>& nodes, bool duplication) const;
-  void registerAdditions(const std::vector<Node*>& nodes, bool duplication);
+  void registerAdditions(
+    const std::vector<Node*>& nodes, bool duplication, const Node* parent = nullptr);
   void validateDuplication(const std::vector<Node*>& nodes) const;
+  void registerAdditionBatch(
+    const std::vector<std::pair<const Node*, std::vector<Node*>>>& additions,
+    bool duplication);
+  void validateGroupClosure(const std::vector<Node*>& nodes, bool creation = false) const;
+  /** Container admission only for a registered loaded/generated group with no
+   * parent. The caller must own its lifetime and validate its parked closure.
+   * Never admits binding-zero staging nodes or makes detached nodes live.
+   * Throws std::invalid_argument without mutation on invalid admission.
+   */
+  void validateRegisteredDetachedGroup(const GroupNode& group) const;
+  void registerGroupChanges(
+    Node* created, const std::vector<std::pair<Node*, Node*>>& parents);
   void validateRemoval(const std::vector<Node*>& removalClosure) const;
   void validateReparent(const Node& parent, const std::vector<Node*>& nodes) const;
   void validateContents(

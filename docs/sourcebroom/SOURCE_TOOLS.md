@@ -61,6 +61,29 @@ Other CSG/arbitrary topology, displacement and hidden/opaque/reference ambiguity
 remain refused; no stripping or MAP conversion. Use a copy, Save As and reopen in
 matching Hammer++; no owner/visual acceptance is implied by automated/static checks.
 
+## Ordinary native editor groups — A5.15
+
+Use the existing **Group/Ungroup** actions on supported ordinary objects in an
+editable VMF. Loaded, fresh and duplicated nested groups can contain world brushes
+and whole ordinary entities; solids remain inside their native entity, not moved
+lexically to a group. Open a group to edit members normally. Ungroup dissolves only
+the immediate selected containers, retaining nested identities. Close the current
+group before ungrouping it or its ancestor; predictable refusal preserves context.
+
+Names are derived as `Group <id>`; native grouping has no name prompt and rename is
+unavailable. Native group IDs are staged in the shared object namespace, separately
+from internal scene bindings/link identities. Undo/redo restores exact live nodes,
+sibling order, selection and IDs. Save/reopen retains membership/attributes with
+deterministic lexical child order: native `groupid` does not store arbitrary
+selection order. Grouping does not grant visgroup/layer/hidden/linked authoring.
+
+Malformed/ambiguous or foreign membership components are preserved and refused,
+not flattened or silently reassigned. Independent ordinary brush operations remain
+possible beside an ambiguous component; actual opaque geometry references retain
+the conservative global guard. Supported grouped create/transform/duplicate/delete,
+plain entity ownership and Front/Back/Both routes remain available. Use copies,
+Save As and matching Hammer++ for manual acceptance, still pending.
+
 ## Entity properties and ordered outputs
 
 Select an **existing** native entity and use the Entity inspector. FGD metadata
@@ -168,10 +191,12 @@ containers/flags, camera eye/look data and cordon bounds/active state. Invalid,
 duplicate, dangling or cyclic known references are reported; unknown data stays
 opaque. The display is capped, with an explicit notice if not all rows fit.
 
-These fields are **read-only**. Native group IDs are not TrenchBroom scene parent
-bindings, so group creation/reparenting and visibility/cordon authoring are not
-silently enabled. SourceBroom does not apply cordon clipping itself; unchanged
-native metadata is still passed to external tools whose behavior must be tested.
+These inspector fields remain **read-only**. A5.15 separately enables ordinary
+native grouping through the normal map actions and guarded native bindings, not
+by making this snapshot authoritative or treating group IDs as TrenchBroom parent
+bindings. Visgroup/visibility/cordon authoring is not silently enabled. SourceBroom
+does not apply cordon clipping itself; unchanged metadata is still passed to
+external tools whose behavior must be tested.
 
 **Go to camera eye** moves only the eye and preserves the current view direction;
 it does not import Hammer's whole camera state. Invalid/degenerate cameras or
@@ -283,7 +308,7 @@ animation, bodygroup or universal FGD/SDK parity.
 ## Still outside this candidate
 
 Basic plain-object authoring does not imply arbitrary topology or native
-editor-group/layer/instance/complete-displacement/overlay authoring, full Source material
+visgroup/layer/hidden/linked-instance/complete-displacement/overlay authoring, full Source material
 rendering or all-branch performance. Common unsupported operations are gated;
 some upstream actions can remain visible, but unsupported content changes must
 refuse before mutation and preserving-save remains the final backstop. Never ignore an error or assume an

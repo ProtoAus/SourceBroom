@@ -379,10 +379,12 @@ std::vector<Node*> addNodesImpl(
       {
         scene->validateAdditions(*parent, children, nativeDuplication);
       }
+      auto additions = std::vector<std::pair<const Node*, std::vector<Node*>>>{};
       for (const auto& [parent, children] : nodes)
       {
-        scene->registerAdditions(children, nativeDuplication);
+        additions.emplace_back(parent, children);
       }
+      scene->registerAdditionBatch(additions, nativeDuplication);
     }
     catch (const std::exception& e)
     {
@@ -497,8 +499,11 @@ void duplicateSelectedNodes(Map& map)
     nodesToSelect.push_back(clone);
   }
 
-  resetLinkIdsOfNonGroupedNodes(nodesToAdd);
-  copyAndSetLinkIds(nodesToAdd, map.worldNode(), map.logger());
+  if (!map.vmfScene())
+  {
+    resetLinkIdsOfNonGroupedNodes(nodesToAdd);
+    copyAndSetLinkIds(nodesToAdd, map.worldNode(), map.logger());
+  }
 
   {
     auto transaction = Transaction{map, "Duplicate Objects"};
@@ -578,6 +583,26 @@ bool reparentNodes(Map& map, const kdl::flat_map<Node*, std::vector<Node*>>& nod
     return false;
   }
 
+  if (auto* scene = map.vmfScene())
+  {
+    auto parents = std::vector<std::pair<Node*, Node*>>{};
+    for (const auto& [parent, children] : nodesToAdd)
+    {
+      for (auto* child : children)
+      {
+        parents.emplace_back(child, parent);
+      }
+    }
+    try
+    {
+      scene->registerGroupChanges(nullptr, parents);
+    }
+    catch (const std::exception& e)
+    {
+      map.logger().error() << "Native VMF membership admission refused: " << e.what();
+      return false;
+    }
+  }
   auto transaction = mdl::Transaction{map, "Reparent Objects"};
 
   // This handles two main cases:

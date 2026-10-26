@@ -22,6 +22,7 @@
 #include <QDoubleSpinBox>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
+#include <QInputDialog>
 #include <QListWidget>
 #include <QMenu>
 #include <QMimeData>
@@ -31,6 +32,7 @@
 #include <QOpenGLFunctions_2_1>
 #include <QOpenGLVersionFunctionsFactory>
 #include <QPushButton>
+#include <QSettings>
 #include <QSpinBox>
 #include <QTimer>
 
@@ -49,17 +51,22 @@
 #include "gl/TestGl.h"
 #include "gl/TestUtils.h"
 #include "gl/Texture.h"
+#include "mdl/BrushBuilder.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushFaceHandle.h"
 #include "mdl/BrushNode.h"
+#include "mdl/EditorContext.h"
 #include "mdl/EntityDefinition.h"
 #include "mdl/EntityDefinitionManager.h"
 #include "mdl/GameConfigFixture.h"
 #include "mdl/Grid.h"
+#include "mdl/GroupNode.h"
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
 #include "mdl/MapFormat.h"
 #include "mdl/Map_Assets.h"
+#include "mdl/Map_Groups.h"
+#include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
@@ -70,6 +77,7 @@
 #include "ui/MapDocument.h"
 #include "ui/MapDocumentFixture.h"
 #include "ui/MapViewBase.h"
+#include "ui/MapViewToolBox.h"
 #include "ui/MapWindow.h"
 #include "ui/MaterialCollectionEditor.h"
 
@@ -85,6 +93,242 @@
 
 namespace tb::ui
 {
+
+// Keep even default-constructed QSettings used by MapWindow inside the owned fixture.
+class NativeGroupSettingsScope
+{
+  QSettings::Format m_previous = QSettings::defaultFormat();
+
+public:
+  explicit NativeGroupSettingsScope(const std::filesystem::path& path)
+  {
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(
+      QSettings::IniFormat, QSettings::UserScope, QString::fromStdString(path.string()));
+    QSettings::setPath(
+      QSettings::IniFormat,
+      QSettings::SystemScope,
+      QString::fromStdString(path.string()));
+  }
+  ~NativeGroupSettingsScope() { QSettings::setDefaultFormat(m_previous); }
+};
+
+TEST_CASE("NativeGroup native action flow and capability safety")
+{
+  const auto preview = GENERATE(false, true);
+  const auto unsupported = GENERATE(false, true);
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  const auto source =
+    std::string{
+      "world { id 1 classname worldspawn group { id 10 } "
+      "group { id 11 editor { groupid 10 } } }\n"
+      "entity { id 20 classname info_target editor { groupid 11 } }\n"
+      "entity { id 21 classname info_target "}
+    + (unsupported ? "editor { groupid 999 }" : "") + " }\n";
+  {
+    auto stream = std::ofstream{env.dir() / "groups.vmf", std::ios::binary};
+    stream << source;
+    REQUIRE(stream);
+  }
+  auto loaded = MapDocument::loadDocument(
+    app.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192},
+    env.dir() / "groups.vmf",
+    app.taskManager(),
+    app.glManager().resourceManager(),
+    preview);
+  REQUIRE(loaded.is_success());
+  auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+  auto& map = window.document().map();
+  REQUIRE(map.isReadOnlyVmfPreview() == preview);
+  auto* layer = map.worldNode().defaultLayer();
+  REQUIRE(layer->childCount() == 2);
+  const auto groupIt = std::ranges::find_if(
+    layer->children(), [](auto* node) { return dynamic_cast<mdl::GroupNode*>(node); });
+  REQUIRE(groupIt != layer->children().end());
+  auto* outer = static_cast<mdl::GroupNode*>(*groupIt);
+  auto* inner = dynamic_cast<mdl::GroupNode*>(outer->children()[0]);
+  REQUIRE(inner);
+  auto* point = *std::ranges::find_if(
+    layer->children(), [outer](auto* node) { return node != outer; });
+  mdl::selectNodes(map, {outer, point});
+  CHECK(window.canGroupSelectedObjects() == (!preview && !unsupported));
+  QApplication::processEvents();
+  auto* groupAction = window.findAction("Menu/Edit/Group");
+  REQUIRE(groupAction);
+  CHECK(groupAction->isEnabled() == (!preview && !unsupported));
+  CHECK(!groupAction->shortcut().isEmpty());
+  auto modalObserved = false;
+  auto watchdog = QTimer{};
+  QObject::connect(&watchdog, &QTimer::timeout, [&]() {
+    if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget()))
+    {
+      modalObserved = true;
+      dialog->reject();
+    }
+  });
+  watchdog.start(1);
+  const auto count = map.modificationCount();
+  groupAction->trigger();
+  if (preview || unsupported)
+  {
+    window.groupSelectedObjects(); // The action entry point also refuses directly.
+  }
+  CHECK_FALSE(modalObserved);
+  if (preview || unsupported)
+  {
+    CHECK(map.modificationCount() == count);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  else
+  {
+    REQUIRE(map.selection().hasOnlyGroups());
+    REQUIRE(map.selection().groups.size() == 1);
+    auto* created = map.selection().groups.front();
+    REQUIRE(created != outer);
+    CHECK(created->name().starts_with("Group "));
+    CHECK(created->children() == std::vector<mdl::Node*>{outer, point});
+    CHECK(map.vmfScene()->serialize(map.worldNode()) != source);
+    CHECK(map.modificationCount() == count + 1);
+    CHECK_FALSE(window.canRenameSelectedGroups());
+    window.renameSelectedGroups();
+    CHECK_FALSE(modalObserved);
+    CHECK_FALSE(mdl::canCreateLinkedDuplicate(map));
+    CHECK_FALSE(mdl::canExtractLinkedGroups(map));
+    QApplication::processEvents();
+    for (const auto* path :
+         {"Menu/Edit/Rename Groups",
+          "Menu/Edit/Create Linked Duplicate",
+          "Menu/Edit/Separate Linked Groups",
+          "Menu/Edit/Extract Linked Groups"})
+    {
+      auto* action = window.findAction(path);
+      REQUIRE(action);
+      CHECK_FALSE(action->isEnabled());
+    }
+    auto mergeObserved = false;
+    QTimer::singleShot(0, [&]() {
+      auto* popup = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+      CHECK(popup);
+      if (popup)
+      {
+        for (auto* action : popup->actions())
+        {
+          if (action->text().startsWith("Merge Groups"))
+          {
+            mergeObserved = true;
+            CHECK_FALSE(action->isEnabled());
+          }
+        }
+        popup->close();
+      }
+    });
+    window.currentMapViewBase()->showPopupMenuLater();
+    CHECK(mergeObserved);
+    mdl::openGroup(map, *created);
+    CHECK(map.editorContext().currentGroup() == created);
+    mdl::selectNodes(map, {point});
+    CHECK(window.canGroupSelectedObjects());
+    window.toolBox().toggleRotateTool();
+    REQUIRE(window.toolBox().anyModalToolActive());
+    CHECK_FALSE(window.canGroupSelectedObjects());
+    CHECK_FALSE(window.canUngroupSelectedObjects());
+    window.toolBox().deactivateAllTools();
+    window.groupSelectedObjects();
+    REQUIRE(map.selection().hasOnlyGroups());
+    auto* nested = map.selection().groups.front();
+    REQUIRE(nested != created);
+    CHECK(nested->parent() == created);
+    CHECK(nested->children() == std::vector<mdl::Node*>{point});
+    window.ungroupSelectedObjects();
+    CHECK(point->parent() == created);
+    mdl::closeGroup(map);
+    mdl::selectNodes(map, {created});
+    REQUIRE(window.canUngroupSelectedObjects());
+    QApplication::processEvents();
+    auto* ungroupAction = window.findAction("Menu/Edit/Ungroup");
+    REQUIRE(ungroupAction);
+    REQUIRE(ungroupAction->isEnabled());
+    ungroupAction->trigger();
+    CHECK(map.selection().nodes == std::vector<mdl::Node*>{outer, point});
+    CHECK(inner->parent() == outer);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+    map.undoCommand();
+    CHECK(map.selection().groups == std::vector<mdl::GroupNode*>{created});
+    map.redoCommand();
+    CHECK(map.selection().nodes == std::vector<mdl::Node*>{outer, point});
+  }
+  mdl::deselectAll(map);
+  mdl::selectNodes(map, {outer});
+  CHECK_FALSE(window.canRenameSelectedGroups());
+  window.renameSelectedGroups();
+  CHECK_FALSE(modalObserved);
+  CHECK(window.canUngroupSelectedObjects() == !preview);
+  if (preview)
+  {
+    window.ungroupSelectedObjects();
+    CHECK(outer->parent() == layer);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  }
+  watchdog.stop();
+}
+
+TEST_CASE("NativeGroup nonnative name prompt and retained group controls")
+{
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  auto document = MapDocument::createDocument(
+                    app.environmentConfig(),
+                    mdl::QuakeGameInfo,
+                    mdl::MapFormat::Valve,
+                    vm::bbox3d{8192},
+                    app.taskManager(),
+                    app.glManager().resourceManager())
+                  | kdl::value();
+  auto window = MapWindow{app, std::move(document)};
+  auto& map = window.document().map();
+  auto builder = mdl::BrushBuilder{map.worldNode().mapFormat(), map.worldBounds()};
+  auto* brush = new mdl::BrushNode{builder.createCube(64, "test") | kdl::value()};
+  mdl::addNodes(map, {{map.worldNode().defaultLayer(), {brush}}});
+  const auto nodes = map.worldNode().defaultLayer()->children();
+  REQUIRE(!nodes.empty());
+  mdl::selectNodes(map, nodes);
+  REQUIRE(window.canGroupSelectedObjects());
+  auto prompts = 0;
+  auto watchdog = QTimer{};
+  QObject::connect(&watchdog, &QTimer::timeout, [&]() {
+    if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget()))
+    {
+      dialog->setTextValue(prompts++ == 0 ? "Control group" : "Renamed control");
+      dialog->accept();
+    }
+  });
+  watchdog.start(1);
+  window.groupSelectedObjects();
+  REQUIRE(prompts == 1);
+  REQUIRE(map.selection().hasOnlyGroups());
+  CHECK(map.selection().groups.front()->name() == "Control group");
+  REQUIRE(window.canRenameSelectedGroups());
+  window.renameSelectedGroups();
+  CHECK(prompts == 2);
+  CHECK(map.selection().groups.front()->name() == "Renamed control");
+  window.toolBox().toggleRotateTool();
+  REQUIRE(window.toolBox().anyModalToolActive());
+  CHECK_FALSE(window.canGroupSelectedObjects());
+  CHECK_FALSE(window.canUngroupSelectedObjects());
+  window.toolBox().deactivateAllTools();
+  REQUIRE(window.canUngroupSelectedObjects());
+  window.ungroupSelectedObjects();
+  CHECK(map.selection().nodes == nodes);
+  watchdog.stop();
+}
 
 // Simple resource type for testing resource processing
 struct TestResource

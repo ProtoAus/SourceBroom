@@ -21,7 +21,45 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Native ordinary clipping — A5.12–A5.14
+## Ordinary native groups — A5.15
+
+`Map_Groups` exposes pure `canGroupSelectedNodes`/`canUngroupSelectedNodes`; native
+execution uses the dedicated compound `NativeGroupCommand`, not public add-then-
+reparent transactions. Valid loaded groups project before the original snapshot.
+Physical GroupNode ancestry is distinct from native lexical ownership: effective
+parents skip only individually admitted group ancestors. Whole entities may be
+members; GroupNodes are never placed inside an EntityNode.
+
+VmfScene stages group IDs, bindings, membership deltas and limits as one closure.
+Surgical editor/groupid/group-entry edits preserve repeated/unknown raw data.
+Loaded/generated duplicate closures remap native identities atomically; internal
+link/persistent identities are separate. Exact live sibling/order/selection restore
+uses narrow indexed Node insertion with existing hooks/counts, not unrelated suffix
+detachment. Reopen ordering is deterministic lexical, not a new VMF order field.
+
+Command placement finishes before added notifications for nonoverlapping live roots,
+so descendants are not indexed twice in detached and attached containers. Registered
+parked containers use `validateRegisteredDetachedGroup` plus local `locked()` guard;
+Unlocked is not confused with Locked. Pure and execution Ungroup reject the current
+opened group/selected ancestor rather than detach the editing context. General
+history failure policies and retry certificates remain unchanged.
+
+SourceEditorMetadata retains normalized candidate group IDs for ambiguous members,
+without physically resolving them. Candidate components and malformed property
+shapes are withheld before mutation; unrelated objects are not globally locked.
+The private `membershipOnlyGroupRecord` recognizes inert known raw metadata for
+geometry-reference reasoning independently of projected authoring authority; opaque
+attachments and actual geometry-reference guards remain intact. The saved-file
+inspector remains a read-only consumer, never the authoring owner.
+
+Runtime REDs cover projection, ambiguous/malformed membership, notification/index
+lifetime, parked replay/context and independent brush isolation; original evidence
+is retained. Final full model219/App50/affectedUI5 pass with actual public callers
+rebuilt and zero new compiler warnings. Fresh focused correction reviews found no
+remaining blockers. No arbitrary observer/OOM strong atomicity, universal budget
+exhaustion, native visibility/layer/linked semantics or manual Hammer acceptance.
+
+## Retained native ordinary clipping — A5.12–A5.14
 
 Single-output `mdl::clipBrushes` uses actual BrushFace/Brush clipping and one
 in-place SwapNodeContents command. A5.14 `mdl::clipBrushesBoth` uses one native-only

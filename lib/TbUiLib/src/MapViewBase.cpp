@@ -1281,7 +1281,7 @@ void MapViewBase::showPopupMenuLater()
       this,
       &MapViewBase::addSelectedObjectsToGroup);
   }
-  if (currentGroup && map.selection().hasNodes())
+  if (!map.vmfScene() && currentGroup && map.selection().hasNodes())
   {
     menu.addAction(
       tr("Remove Objects from Group %1")
@@ -1663,7 +1663,8 @@ mdl::GroupNode* MapViewBase::findGroupToMergeGroupsInto(
 
 bool MapViewBase::canReparentNode(const mdl::Node* node, const mdl::Node* newParent) const
 {
-  return newParent != node && newParent != node->parent()
+  return (!m_document.map().vmfScene() || !dynamic_cast<const mdl::GroupNode*>(newParent))
+         && newParent != node && newParent != node->parent()
          && newParent->canAddChild(*node);
 }
 
@@ -1770,7 +1771,7 @@ bool MapViewBase::canMergeGroups() const
 {
   const auto& map = m_document.map();
   auto* mergeGroup = findGroupToMergeGroupsInto(map.selection());
-  return mergeGroup;
+  return !map.vmfScene() && mergeGroup;
 }
 
 bool MapViewBase::canMakeSelectionStructural() const

@@ -64,10 +64,23 @@ private:
     return result;
   }
 
+  std::vector<VmfEntryId> fields(const VmfEntryId entry, const std::string& name) const
+  {
+    auto result = std::vector<VmfEntryId>{};
+    for (const auto child : m_document.entries()[entry].children)
+    {
+      if (key(child) == name)
+      {
+        result.push_back(child);
+      }
+    }
+    return result;
+  }
+
   std::optional<std::string> property(
     const VmfEntryId entry, const std::string& name, const bool required = false)
   {
-    const auto matches = children(entry, name, false);
+    const auto matches = fields(entry, name);
     if (matches.empty())
     {
       if (required)
@@ -76,12 +89,23 @@ private:
       }
       return std::nullopt;
     }
+    auto valid = true;
     if (matches.size() != 1)
     {
       issue(entry, SourceMetadataIssue::DuplicateProperty, "Ambiguous repeated " + name);
-      return std::nullopt;
+      valid = false;
     }
-    return text(m_document, *m_document.entries()[matches.front()].value);
+    for (const auto match : matches)
+    {
+      if (!m_document.entries()[match].value)
+      {
+        issue(match, SourceMetadataIssue::InvalidValue, "Expected scalar " + name);
+        valid = false;
+      }
+    }
+    return valid ? std::optional{text(
+                     m_document, *m_document.entries()[matches.front()].value)}
+                 : std::nullopt;
   }
 
   std::optional<std::string> decimal(
@@ -208,23 +232,59 @@ private:
     {
       m_objectIds[*member.nativeId].push_back(entry);
     }
-    const auto editors = children(entry, "editor", true);
+    const auto editors = fields(entry, "editor");
     if (editors.size() > 1)
     {
       issue(
         entry, SourceMetadataIssue::DuplicateProperty, "Ambiguous repeated editor block");
     }
-    else if (!editors.empty())
+    for (const auto editor : editors)
     {
-      const auto editor = editors.front();
-      member.groupId = id(editor, "groupid");
-      member.visgroupShown = flag(editor, "visgroupshown");
-      member.visgroupAutoShown = flag(editor, "visgroupautoshown");
-      auto seen = std::set<std::string>{};
-      for (const auto ref : children(editor, "visgroupid", false))
+      if (!m_document.entries()[editor].isBlock())
       {
-        const auto native =
-          decimal(ref, "visgroupid", text(m_document, *m_document.entries()[ref].value));
+        issue(editor, SourceMetadataIssue::InvalidValue, "Expected editor block");
+        continue;
+      }
+      const auto groupId = id(editor, "groupid");
+      const auto references = fields(editor, "groupid");
+      if (references.size() == 1 && m_document.entries()[references.front()].value)
+      {
+        if (groupId)
+        {
+          member.candidateGroupIds.push_back(*groupId);
+        }
+      }
+      else
+      {
+        for (const auto ref : references)
+        {
+          if (const auto& value = m_document.entries()[ref].value)
+          {
+            if (const auto native = decimal(ref, "groupid", text(m_document, *value)))
+            {
+              member.candidateGroupIds.push_back(*native);
+            }
+          }
+        }
+      }
+      const auto shown = flag(editor, "visgroupshown");
+      const auto autoShown = flag(editor, "visgroupautoshown");
+      if (editors.size() == 1)
+      {
+        member.groupId = groupId;
+        member.visgroupShown = shown;
+        member.visgroupAutoShown = autoShown;
+      }
+      auto seen = std::set<std::string>{};
+      for (const auto ref : fields(editor, "visgroupid"))
+      {
+        const auto& value = m_document.entries()[ref].value;
+        if (!value)
+        {
+          issue(ref, SourceMetadataIssue::InvalidValue, "Expected scalar visgroupid");
+          continue;
+        }
+        const auto native = decimal(ref, "visgroupid", text(m_document, *value));
         if (native)
         {
           if (!seen.insert(*native).second)
@@ -234,7 +294,10 @@ private:
               SourceMetadataIssue::DuplicateProperty,
               "Repeated visgroup membership " + *native);
           }
-          member.visgroupIds.push_back(*native);
+          if (editors.size() == 1)
+          {
+            member.visgroupIds.push_back(*native);
+          }
         }
       }
     }

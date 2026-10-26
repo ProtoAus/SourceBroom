@@ -49,8 +49,10 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   A5.2 enables basic native creation/duplication/deletion/brush-entity ownership
   and gates common unsupported clipboard/CSG/clip/content changes before mutation.
   A5.14 enables ordinary Front/Back/Both clipping for loaded/fresh/template and
-  duplicated world/plain brush-entity solids. Other CSG/topology and opaque/
-  displacement/reference cases still refuse. Some upstream topology/hierarchy tools remain visible.
+  duplicated world/plain brush-entity solids. A5.15 adds ordinary native
+  Group/Ungroup capability predicates/actions, guarded loaded projection and
+  per-component membership isolation; native rename and opened-group removal stay
+  unavailable. Other CSG/topology and opaque/displacement/reference cases still refuse. Some upstream topology/hierarchy tools remain visible.
   Follow-up: complete capability-specific affordances before full A5, not merely save-time
   refusal. Falsifier: each unsupported action is unavailable or explains refusal
   before mutation; supported authoring, transforms, selection and undo still work.

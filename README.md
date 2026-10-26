@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.14 bounded native BOTH-halves clipping candidate:
+**Status:** Windows A5.15 ordinary native group/ungroup candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -38,7 +38,20 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-The A5.14 candidate adds **BOTH-halves native clipping** for visible loaded,
+A5.15 adds native **Group/Ungroup** through the existing actions for supported
+loaded, fresh and duplicated ordinary groups. Nested groups, plain world brushes
+and whole ordinary entities retain native membership/IDs without changing VMF
+lexical ownership. Undo/redo restores exact live nodes, sibling order and selection;
+reopening follows deterministic native lexical order, not arbitrary selection order.
+Native labels are derived as `Group <id>`; rename, visgroup/layer/hidden/linked
+instance authoring remain unavailable. Ambiguous components stay preserved and
+uneditable without blocking independent ordinary brushes; true opaque geometry
+references remain guarded. Full model219/App50 and affected UI5 pass, actual app/
+checker/UI builds have no new compiler warnings, and focused independent review
+found no remaining blockers. Owner/Hammer acceptance remains pending. Keep the
+whole A5.14 kit as recovery; never merge DLL sets.
+
+The retained A5.14 candidate adds **BOTH-halves native clipping** for visible loaded,
 fresh/template and duplicated plain brushes, world-owned or in supported plain
 brush entities. Front keeps the original solid; Back is a new same-parent sibling
 with stable remapped IDs. One batch admission/command preserves undo/redo, source

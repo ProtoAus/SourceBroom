@@ -213,6 +213,25 @@ is pending, not inferred from source/model/tool/runtime checks:
   ambiguity remain guarded; report exact refusals rather than bypassing native
   preservation through MAP export. Test counts/review are not this observation.
 
+## A5.15 ordinary native groups — pending owner/Hammer check
+
+Use a **copy** in the whole A5.15 kit, retaining whole A5.14 as recovery.
+
+- [ ] Group two plain brushes with the existing action: no native name prompt;
+  label derives from the group ID. Open it, edit a member, undo/redo, close and
+  ungroup.
+- [ ] Save As a new VMF and reopen in matching Hammer++: same objects, IDs and
+  membership, native entity solid ownership, and no lost repeated/unknown data.
+- [ ] If convenient, include a point entity and a nested group; Ungroup dissolves
+  only the selected immediate container. Reopen member order is native lexical
+  order, not a promised arbitrary selection-created sequence.
+- [ ] Check grouped ordinary creation/duplication and Front/Back/Both visually if
+  useful. Hidden/visgroup/layer/linked/opaque operations must not become an authoring
+  workaround; never write the original just to test a refusal.
+
+All observations above are **pending**. Runtime/model/UI checks and static review
+are separate evidence, not a human/Hammer pass or complete Source compatibility.
+
 ## A5.14 BOTH clipping / actual preview — pending owner/Hammer check
 
 - [ ] On a copied or fresh plain brush, place a plane through it and choose Both.

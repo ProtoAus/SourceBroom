@@ -188,6 +188,7 @@ public:
   }
 
   Node& addChild(Node* child);
+  Node& insertChild(size_t index, Node* child);
 
   std::vector<std::unique_ptr<Node>> replaceChildren(
     std::vector<std::unique_ptr<Node>> newChildren);

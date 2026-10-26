@@ -33,6 +33,8 @@ Node* currentGroupOrWorld(Map& map);
 void openGroup(Map& map, GroupNode& groupNode);
 void closeGroup(Map& map);
 
+bool canGroupSelectedNodes(const Map& map);
+bool canUngroupSelectedNodes(const Map& map);
 GroupNode* groupSelectedNodes(Map& map, const std::string& name);
 void ungroupSelectedNodes(Map& map);
 void mergeSelectedGroupsWithGroup(Map& map, GroupNode* group);

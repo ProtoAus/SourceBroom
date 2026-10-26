@@ -1041,7 +1041,7 @@ TEST_CASE("VmfScene", "[vmf]")
     translate(brush(opaque.world()));
     CHECK_THROWS_AS(opaque.serialize(opaque.world()), std::invalid_argument);
   }
-  SECTION("existing native groups remain read-only with conservative transform refusal")
+  SECTION("valid empty native groups project without blocking unrelated transforms")
   {
     auto source = fixture();
     const auto editor = source.find("editor { \"color\"");
@@ -1053,10 +1053,12 @@ TEST_CASE("VmfScene", "[vmf]")
     CHECK(snapshot.groups[0].nativeId == "20");
     CHECK(snapshot.diagnostics.empty());
     CHECK(scene.serialize(scene.world()) == source);
-    // Group references are not scene parent bindings. Do not invent a GroupNode
-    // projection that would bypass native hierarchy/unknown-attachment guards.
+    CHECK(scene.world().defaultLayer()->childCount() == 3);
     translate(brush(scene.world()));
-    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+    const auto changed = scene.serialize(scene.world());
+    CHECK(changed != source);
+    auto reopened = VmfScene::read(changed, bounds);
+    CHECK(reopened.serialize(reopened.world()) == changed);
   }
   SECTION("invalid plane UV and duplicate ID refuse without dropped faces")
   {
@@ -1772,6 +1774,99 @@ TEST_CASE("VmfScene Both combined ID byte budget is atomic after staged halves",
   CHECK(
     scene.serialize(scene.world()).find("\"id\" \"" + expectedId + "\"")
     != std::string::npos);
+}
+
+TEST_CASE("VmfScene native group admission registered detached container", "[vmf]")
+{
+  const auto generated = GENERATE(false, true);
+  const auto source = generated ? std::string{"world { id 1 classname worldspawn }"}
+                                : std::string{
+                                    "world { id 1 classname worldspawn group { id 10 "
+                                    "editor { color \"1 2 3\" } } }"};
+  auto scene = VmfScene::read(source, vm::bbox3d{4096});
+  auto* layer = scene.world().defaultLayer();
+  auto owner = std::unique_ptr<GroupNode>{};
+  if (generated)
+  {
+    owner = std::make_unique<GroupNode>(Group{"staged"});
+    scene.registerGroupChanges(owner.get(), {{owner.get(), layer}});
+    layer->addChild(owner.release());
+  }
+  auto* group = dynamic_cast<GroupNode*>(layer->children().front());
+  REQUIRE(group);
+  CHECK_THROWS_AS(scene.validateRegisteredDetachedGroup(*group), std::invalid_argument);
+  layer->removeChild(group);
+  owner.reset(group);
+  const auto before = scene.serialize(scene.world());
+  const auto binding = group->lineNumber();
+  const auto link = group->linkId();
+  const auto nativeId = scene.nativeId(*group);
+  REQUIRE_NOTHROW(scene.validateRegisteredDetachedGroup(*group));
+  // Detached admission must not weaken the strictly live closure API.
+  CHECK_THROWS_AS(scene.validateGroupClosure({group}), std::invalid_argument);
+  for (const auto state : {VisibilityState::Hidden, VisibilityState::Shown})
+  {
+    group->setVisibilityState(state);
+    CHECK_THROWS_AS(scene.validateRegisteredDetachedGroup(*group), std::invalid_argument);
+  }
+  group->setVisibilityState(VisibilityState::Inherited);
+  group->setLinkId("changed-parked-link");
+  CHECK_THROWS_AS(scene.validateRegisteredDetachedGroup(*group), std::invalid_argument);
+  group->setLinkId(link);
+  for (const auto wrong : {size_t{0}, binding + 1})
+  {
+    group->setFilePosition(wrong, 1);
+    CHECK_THROWS_AS(scene.validateRegisteredDetachedGroup(*group), std::invalid_argument);
+  }
+  group->setFilePosition(binding, 1);
+  auto foreign = GroupNode{Group{"foreign"}};
+  CHECK_THROWS_AS(scene.validateRegisteredDetachedGroup(foreign), std::invalid_argument);
+  foreign.setFilePosition(binding, 1);
+  foreign.setLinkId(link);
+  CHECK_THROWS_AS(scene.validateRegisteredDetachedGroup(foreign), std::invalid_argument);
+  REQUIRE_NOTHROW(scene.validateRegisteredDetachedGroup(*group));
+  CHECK(scene.nativeId(*group) == nativeId);
+  CHECK(group->lineNumber() == binding);
+  CHECK(group->parent() == nullptr);
+  CHECK(scene.serialize(scene.world()) == before);
+  CHECK(scene.document().serialize() == source);
+  auto control = std::make_unique<GroupNode>(Group{"control"});
+  scene.registerGroupChanges(control.get(), {{control.get(), layer}});
+  CHECK(scene.nativeId(*control) == (generated ? "3" : "11"));
+  auto* other = control.get();
+  const auto otherLink = other->linkId();
+  layer->addChild(control.release());
+  other->setLinkId(link);
+  CHECK_THROWS_AS(scene.validateRegisteredDetachedGroup(*group), std::invalid_argument);
+  other->setLinkId(otherLink);
+  REQUIRE_NOTHROW(scene.validateRegisteredDetachedGroup(*group));
+  layer->addChild(owner.release());
+}
+
+TEST_CASE(
+  "VmfScene native group admission unsupported and preview detached containers", "[vmf]")
+{
+  const auto source = std::string{
+    "world { id 1 classname worldspawn group { id 10 editor { visgroupshown 0 } } group "
+    "{ id 30 } }"};
+  auto scene = VmfScene::read(source, vm::bbox3d{4096});
+  const auto metadata = SourceEditorMetadata::read(scene.document());
+  REQUIRE(metadata.groups.size() == 2);
+  auto unprojected = GroupNode{Group{"foreign"}};
+  unprojected.setFilePosition(metadata.groups.front().entry + 1, 1);
+  CHECK_THROWS_AS(
+    scene.validateRegisteredDetachedGroup(unprojected), std::invalid_argument);
+  CHECK(scene.serialize(scene.world()) == source);
+  auto preview = VmfScene::readReadOnlyPreview(source, vm::bbox3d{4096});
+  auto* parent = preview.world().defaultLayer();
+  REQUIRE(parent->childCount() == 1);
+  auto* group = dynamic_cast<GroupNode*>(parent->children().front());
+  REQUIRE(group);
+  parent->removeChild(group);
+  auto owner = std::unique_ptr<GroupNode>{group};
+  CHECK_THROWS_AS(preview.validateRegisteredDetachedGroup(*group), std::invalid_argument);
+  parent->addChild(owner.release());
+  CHECK(preview.serialize(preview.world()) == source);
 }
 
 } // namespace tb::mdl

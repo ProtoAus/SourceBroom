@@ -244,7 +244,21 @@ void Node::addChildren(const std::vector<Node*>& children)
 
 Node& Node::addChild(Node* child)
 {
-  doAddChild(child);
+  return insertChild(m_children.size(), child);
+}
+
+Node& Node::insertChild(const size_t index, Node* child)
+{
+  contract_pre(index <= m_children.size());
+  contract_pre(child != nullptr);
+  contract_pre(child->parent() == nullptr);
+  contract_pre(!kdl::ranges::contains(m_children, child));
+  contract_pre(canAddChild(*child));
+  m_children.reserve(m_children.size() + 1);
+  childWillBeAdded(*child);
+  m_children.insert(m_children.begin() + static_cast<std::ptrdiff_t>(index), child);
+  child->setParent(this);
+  childWasAdded(*child);
   incDescendantCount(child->descendantCount() + 1u);
   incChildSelectionCount(child->selected() ? 1u : 0u);
   incDescendantSelectionCount(child->descendantSelectionCount());

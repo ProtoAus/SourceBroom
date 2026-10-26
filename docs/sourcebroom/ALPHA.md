@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.14 native BOTH-halves clipping candidate
+# Try the Windows SourceBroom A5.15 native grouping candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,37 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.14: keep BOTH halves of an ordinary native brush
+## A5.15: group ordinary native objects without converting the VMF
+
+In a new editable map or **copy**, select two plain brushes and use the existing
+**Group** action. The native label is derived as `Group <id>` with no name prompt.
+Open the group to edit its members normally; Group can also nest supported groups
+and include whole ordinary entities. **Ungroup** dissolves only the selected
+immediate containers, retaining nested groups and entity solid ownership. Do not
+ungroup the current opened group or its ancestor: close it first; refusal keeps the
+editing context live. Native rename is unavailable, not a hidden VMF name field.
+
+Undo/redo retains the exact live nodes, IDs, sibling positions and selection.
+Save As and reopen preserve native IDs, memberships and untouched source text;
+member order on reopen follows deterministic VMF lexical order because `groupid`
+does not encode an arbitrary selection-created sequence. Supported grouped ordinary
+creation, transformation, duplication, deletion and Front/Back/Both clipping stay
+available. Undo-parked containers are not saved or assigned fresh replay IDs.
+
+Malformed/ambiguous, hidden, opaque or foreign membership components remain
+preserved and uneditable. They do not automatically forbid an independent plain
+brush operation; genuine opaque geometry references can still require refusal.
+Visgroup/layer/hidden/linked-instance authoring and arbitrary topology are NOT
+unlocked by ordinary grouping. The saved-file metadata inspector remains read-only.
+
+**Quick owner check (pending):** on a copy, group two plain brushes, open/edit one,
+undo/redo, close and ungroup, then Save As a new VMF and reopen in matching Hammer++.
+Confirm the same objects/membership and no lost entity ownership or unknown data.
+Optionally repeat with one point entity and a nested group. Keep the **whole A5.14**
+kit as recovery; never merge its DLLs into A5.15. Automated checks are not manual
+Hammer/appearance or universal Source-branch acceptance.
+
+## Retained A5.14: keep BOTH halves of an ordinary native brush
 
 In a new editable map or **copy** of a VMF, select a visible ordinary closed brush
 and place a cutting plane through it. Choose **Both** in the normal clipping tool.

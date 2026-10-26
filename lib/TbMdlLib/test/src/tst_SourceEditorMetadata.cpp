@@ -315,4 +315,50 @@ TEST_CASE("SourceEditorMetadata", "[vmf]")
     CHECK(hasIssue(metadata, SourceMetadataIssue::DuplicateProperty));
   }
 }
+TEST_CASE("SourceEditorMetadata native group admission candidates and property shapes", "[vmf]")
+{
+  for (const auto& [editor, candidates] :
+       std::vector<std::pair<std::string, std::vector<std::string>>>{
+         {"editor { groupid 10 groupid 10 }", {"10", "10"}},
+         {"editor { groupid 00010 groupid 020 }", {"10", "20"}},
+         {"editor { groupid 10 } editor { groupid 20 }", {"10", "20"}},
+         {"editor {} editor { groupid 010 }", {"10"}},
+         {"editor scalar editor { groupid 010 }", {"10"}},
+         {"editor { groupid 010 groupid { raw 20 } }", {"10"}},
+         {"editor { groupid { raw 10 } }", {}}})
+  {
+    CAPTURE(editor);
+    const auto source =
+      "world { id 1 group { id 10 } group { id 20 } } entity { id 2 classname "
+      "info_target "
+      + editor + " }";
+    const auto document = VmfDocument::parse(source);
+    const auto metadata = SourceEditorMetadata::read(document);
+    REQUIRE(metadata.memberships.size() == 4);
+    const auto& member = metadata.memberships.back();
+    CHECK(member.candidateGroupIds == candidates);
+    CHECK_FALSE(member.groupId);
+    CHECK_FALSE(member.group);
+    CHECK_FALSE(metadata.diagnostics.empty());
+    CHECK(document.serialize() == source);
+  }
+  for (const auto* fields :
+       {"visgroupid { raw 77 }",
+        "visgroupid 77 visgroupid { raw 77 }",
+        "visgroupshown { raw 1 }",
+        "visgroupshown 1 visgroupshown { raw 1 }",
+        "visgroupautoshown { raw 1 }",
+        "visgroupautoshown 1 visgroupautoshown { raw 1 }",
+        "visgroupshown invalid",
+        "visgroupautoshown invalid"})
+  {
+    CAPTURE(fields);
+    const auto source = std::string{"world { id 1 editor { "} + fields + " } }";
+    const auto document = VmfDocument::parse(source);
+    const auto metadata = SourceEditorMetadata::read(document);
+    CHECK(hasIssue(metadata, SourceMetadataIssue::InvalidValue));
+    CHECK(document.serialize() == source);
+  }
+}
+
 } // namespace tb::mdl

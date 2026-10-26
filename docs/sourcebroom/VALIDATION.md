@@ -1,11 +1,55 @@
-# SourceBroom validation — A5.14 BOTH clipping and actual preview parity
+# SourceBroom validation — A5.15 ordinary native grouping
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.14 — native BOTH, one admission and actual preview parity
+## A5.15 — ordinary native group membership and safe replay
+
+Supported loaded/new/duplicated nested groups, world brushes and whole ordinary
+entities now act through the existing native Group/Ungroup model and UI actions.
+Surgical membership/group-entry edits preserve VMF lexical ownership, repeated and
+unknown fields, numeric spellings and unrelated bytes. Exact live undo/redo ordering
+is distinct from deterministic lexical reopen ordering; no new member-order field
+or TrenchBroom link ID becomes native authority.
+
+Executed controls and review corrections:
+
+- Runtime projection RED retained 18 acted property/edit/undo/raw controls before
+  the missing loaded-group projection failed. Native group action gates then
+  passed with stable IDs, nested membership, undo/replay and preserving saves.
+- Ambiguous repeated membership retains every normalized candidate reference for
+  component isolation. Block-form/mixed malformed group/visgroup/visibility fields
+  refuse before publication; rejected operations do not consume identities/history.
+- Added notifications cover nonoverlapping live subtree roots exactly once after
+  placement, independent of parent addresses; property-index removal/lifetime and
+  actual notification controls cover the previous duplicate-index risk.
+- Registered parked replay validates native binding/link/support/visibility plus
+  command-local lock state; Locked refuses while ordinary Inherited and explicitly
+  Unlocked controls act. Current opened-group/ancestor Ungroup refuses pre-mutation.
+- A later RED reproduced six unrelated-brush failures beside an ambiguous group
+  with 266 other assertions passing. The private raw-record recognition fix leaves
+  unsupported components withheld but permits independent GROUP, transform and
+  Front/Back/Both; true opaque geometry-reference negatives still refuse. Raw bytes,
+  allocator state, selection/count/history, undo/replay and reopen are checked.
+- Final full model **219/219**, full App **50/50**, affected UI **5/5** pass. Actual
+  app/checker/App/UI callers rebuilt with zero new compiler warnings. Fresh focused
+  follow-up review found no remaining blockers. Earlier unrelated Fs/GL evidence is
+  retained, not rerun or relabelled as a new A5.15 measurement.
+- Rebuilt production checker: document38/strict35/preview38, exactly the same three
+  strict refusals and all38 original SHA-256 hashes unchanged. Probe edits act only
+  in memory; originals are never write targets.
+
+Original runtime failures and correction handoffs remain in owned evidence. A valid
+known empty group deliberately changed from an obsolete negative expectation to an
+acted positive with its input unchanged; genuine foreign-input controls were not
+removed. Budget ceilings remain checked, not dynamically exhausted. General
+failed redo/undo/transaction policy and arbitrary observer/OOM atomicity are not
+expanded. Owner/Hammer/appearance and complete Source compatibility remain pending;
+portable boundary provenance belongs to the final candidate receipt.
+
+## Retained A5.14 — native BOTH, one admission and actual preview parity
 
 One compound command and staged scene admission split proper ordinary brushes:
 Front keeps original identity, Back is a same-parent sibling with remapped stable

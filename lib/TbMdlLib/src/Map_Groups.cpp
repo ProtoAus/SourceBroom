@@ -32,10 +32,12 @@
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/ModelUtils.h"
+#include "mdl/NativeGroupCommand.h"
 #include "mdl/SetLinkIdsCommand.h"
 #include "mdl/Transaction.h"
 #include "mdl/UpdateLinkedGroupsCommand.h"
 #include "mdl/UpdateLinkedGroupsHelper.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h" // IWYU pragma: keep
 
 #include "kd/contracts.h"
@@ -275,8 +277,96 @@ void closeGroup(Map& map)
   transaction.commit();
 }
 
+bool canGroupSelectedNodes(const Map& map)
+{
+  if (!map.selection().hasNodes())
+  {
+    return false;
+  }
+  const auto nodes = collectGroupableNodes(map.selection().nodes, map.worldNode());
+  if (nodes.empty())
+  {
+    return false;
+  }
+  if (const auto* scene = map.vmfScene())
+  {
+    for (const auto* a : nodes)
+    {
+      for (const auto* b : nodes)
+      {
+        if (a != b && a->isAncestorOf(*b))
+        {
+          return false;
+        }
+      }
+    }
+    try
+    {
+      scene->validateGroupClosure(nodes, true);
+      auto& parent = parentForNodes(map, nodes);
+      if (!dynamic_cast<LayerNode*>(&parent) && !dynamic_cast<GroupNode*>(&parent))
+      {
+        return false;
+      }
+    }
+    catch (const std::exception&)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool canUngroupSelectedNodes(const Map& map)
+{
+  if (!map.selection().hasOnlyGroups())
+  {
+    return false;
+  }
+  if (const auto* scene = map.vmfScene())
+  {
+    const auto& nodes = map.selection().nodes;
+    const auto* current = map.editorContext().currentGroup();
+    for (const auto* a : nodes)
+    {
+      if (current && (a == current || a->isAncestorOf(*current)))
+      {
+        return false;
+      }
+      for (const auto* b : nodes)
+      {
+        if (a != b && a->isAncestorOf(*b))
+        {
+          return false;
+        }
+      }
+    }
+    try
+    {
+      scene->validateGroupClosure(nodes);
+    }
+    catch (const std::exception&)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 GroupNode* groupSelectedNodes(Map& map, const std::string& name)
 {
+  if (map.vmfScene())
+  {
+    if (!canGroupSelectedNodes(map))
+    {
+      return nullptr;
+    }
+    const auto nodes = collectGroupableNodes(map.selection().nodes, map.worldNode());
+    auto command =
+      std::make_unique<NativeGroupCommand>(nodes, parentForNodes(map, nodes));
+    auto* group = command->createdGroup();
+    return map.executeAndStore(std::move(command)) ? group : nullptr;
+  }
   if (!map.selection().hasNodes())
   {
     return nullptr;
@@ -311,6 +401,14 @@ GroupNode* groupSelectedNodes(Map& map, const std::string& name)
 
 void ungroupSelectedNodes(Map& map)
 {
+  if (map.vmfScene())
+  {
+    if (canUngroupSelectedNodes(map))
+    {
+      map.executeAndStore(std::make_unique<NativeGroupCommand>(map.selection().groups));
+    }
+    return;
+  }
   if (!map.selection().hasNodes())
   {
     return;
@@ -352,6 +450,10 @@ void ungroupSelectedNodes(Map& map)
 
 void mergeSelectedGroupsWithGroup(Map& map, GroupNode* group)
 {
+  if (map.vmfScene())
+  {
+    return;
+  }
   if (!map.selection().hasNodes() || !map.selection().hasOnlyGroups())
   {
     return;
@@ -381,6 +483,10 @@ void mergeSelectedGroupsWithGroup(Map& map, GroupNode* group)
 
 void renameSelectedGroups(Map& map, const std::string& name)
 {
+  if (map.vmfScene())
+  {
+    return;
+  }
   if (map.selection().hasNodes() && map.selection().hasOnlyGroups())
   {
     const auto commandName =
@@ -404,7 +510,8 @@ void renameSelectedGroups(Map& map, const std::string& name)
 
 bool canCreateLinkedDuplicate(const Map& map)
 {
-  return map.selection().hasOnlyGroups() && map.selection().groups.size() == 1u;
+  return !map.vmfScene() && map.selection().hasOnlyGroups()
+         && map.selection().groups.size() == 1u;
 }
 
 GroupNode* createLinkedDuplicate(Map& map)
@@ -436,6 +543,10 @@ GroupNode* createLinkedDuplicate(Map& map)
 
 void separateSelectedLinkedGroups(Map& map, const bool relinkGroups)
 {
+  if (map.vmfScene())
+  {
+    return;
+  }
   const auto selectedLinkIds = kdl::vec_sort_and_remove_duplicates(
     map.selection().groups
     | std::views::transform([](const auto* groupNode) { return groupNode->linkId(); })
@@ -496,6 +607,10 @@ void separateSelectedLinkedGroups(Map& map, const bool relinkGroups)
 
 bool canSeparateSelectedLinkedGroups(const Map& map)
 {
+  if (map.vmfScene())
+  {
+    return false;
+  }
   return std::ranges::any_of(map.selection().groups, [&](const auto* groupNode) {
     const auto linkedGroups = collectNodesWithLinkId(
       {const_cast<WorldNode*>(&map.worldNode())}, groupNode->linkId());
@@ -508,6 +623,10 @@ bool canSeparateSelectedLinkedGroups(const Map& map)
 
 std::vector<GroupNode*> extractLinkedGroups(Map& map)
 {
+  if (map.vmfScene())
+  {
+    return {};
+  }
   contract_assert(canExtractLinkedGroups(map));
 
   /*
@@ -606,6 +725,10 @@ std::vector<GroupNode*> extractLinkedGroups(Map& map)
 
 bool canExtractLinkedGroups(const Map& map)
 {
+  if (map.vmfScene())
+  {
+    return false;
+  }
   if (map.selection().nodes.empty())
   {
     return false;

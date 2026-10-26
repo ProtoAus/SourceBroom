@@ -4,14 +4,17 @@
  */
 #include "mdl/VmfScene.h"
 
+#include "base/Uuid.h"
 #include "mdl/Brush.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushNode.h"
 #include "mdl/EntityNode.h"
+#include "mdl/GroupNode.h"
 #include "mdl/LayerNode.h"
 #include "mdl/MapFormat.h"
 #include "mdl/NodeContents.h"
 #include "mdl/SourceDisplacement.h"
+#include "mdl/SourceEditorMetadata.h"
 
 #include <algorithm>
 #include <cmath>
@@ -300,15 +303,6 @@ void collect(const Node& node, NodeMap& map)
     collect(*child, map);
   }
 }
-size_t parentBinding(const Node& node)
-{
-  const auto* p = node.parent();
-  while (p && dynamic_cast<const LayerNode*>(p))
-  {
-    p = p->parent();
-  }
-  return p ? p->lineNumber() : 0;
-}
 std::string planeText(const BrushFace& face)
 {
   auto out = std::string{};
@@ -437,6 +431,38 @@ std::string incrementId(std::string id)
   }
   return '1' + id;
 }
+// Raw metadata recognition grants no projection or edit authority. Unsupported
+// membership stays isolated without turning an inert record into a global
+// geometry reference. Unknown/nested attachments still fail closed.
+bool membershipOnlyGroupRecord(const VmfDocument& d, const VmfEntryId group)
+{
+  if (opaque(d, group))
+  {
+    return false;
+  }
+  for (const auto child : d.entries()[group].children)
+  {
+    if (key(d, child) == "editor")
+    {
+      if (!d.entries()[child].isBlock())
+      {
+        return false;
+      }
+      for (const auto field : d.entries()[child].children)
+      {
+        if (d.entries()[field].isBlock())
+        {
+          return false;
+        }
+      }
+    }
+    else if (d.entries()[child].isBlock())
+    {
+      return false;
+    }
+  }
+  return true;
+}
 std::optional<std::string> geometryProblem(const VmfDocument& d, const WorldNode& world)
 {
   for (const auto child : d.entries()[world.lineNumber() - 1].children)
@@ -444,7 +470,9 @@ std::optional<std::string> geometryProblem(const VmfDocument& d, const WorldNode
     if (d.entries()[child].isBlock())
     {
       const auto name = key(d, child);
-      if (name != "solid" && name != "hidden" && name != "editor")
+      if (
+        name != "solid" && name != "hidden" && name != "editor"
+        && !(name == "group" && membershipOnlyGroupRecord(d, child)))
       {
         return "unknown world attachment prevents safe brush edit/removal";
       }
@@ -491,6 +519,362 @@ std::optional<std::string> geometryProblem(const VmfDocument& d, const WorldNode
   return std::nullopt;
 }
 } // namespace
+
+const Node* VmfScene::effectiveParent(const Node& node) const
+{
+  const auto* parent = node.parent();
+  while (const auto* group = dynamic_cast<const GroupNode*>(parent))
+  {
+    const auto* root = static_cast<const Node*>(group);
+    while (root->parent())
+    {
+      root = root->parent();
+    }
+    const auto admitted = m_groupNodes.find(group->lineNumber());
+    const auto link = m_groupLinks.find(group->lineNumber());
+    if (
+      link == m_groupLinks.end() || link->second != group->linkId()
+      || !m_nativeGroups.contains(group->lineNumber())
+      || (root != m_original.get() && (admitted == m_groupNodes.end() || admitted->second != group))
+      || group->visibilityState() != VisibilityState::Inherited || !group->visible())
+    {
+      refuse(0, "unsupported native group ancestry");
+    }
+    parent = group->parent();
+  }
+  return parent;
+}
+
+size_t VmfScene::parentBinding(const Node& node) const
+{
+  const auto* parent = effectiveParent(node);
+  if (dynamic_cast<const LayerNode*>(parent))
+  {
+    parent = parent->parent();
+  }
+  return parent ? parent->lineNumber() : 0;
+}
+
+void VmfScene::projectGroups()
+{
+  const auto metadata = SourceEditorMetadata::read(m_document);
+  auto nodes = NodeMap{};
+  collect(*m_world, nodes);
+  auto bad = std::set<VmfEntryId>{};
+  auto members = std::map<VmfEntryId, const SourceEditorMembership*>{};
+  auto groupEntries = std::map<std::string, std::vector<VmfEntryId>>{};
+  for (const auto& group : metadata.groups)
+  {
+    if (group.nativeId)
+    {
+      groupEntries[*group.nativeId].push_back(group.entry);
+    }
+  }
+  for (const auto& member : metadata.memberships)
+  {
+    members.emplace(member.entry, &member);
+  }
+  for (const auto& diagnostic : metadata.diagnostics)
+  {
+    auto entry = std::optional<VmfEntryId>{diagnostic.entry};
+    while (entry && !members.contains(*entry))
+    {
+      entry = m_document.entries()[*entry].parent;
+    }
+    if (entry)
+    {
+      bad.insert(*entry);
+    }
+  }
+  for (const auto& member : metadata.memberships)
+  {
+    const auto group = key(m_document, member.entry) == "group";
+    if (!group && !member.groupId)
+    {
+      if (
+        !member.visgroupIds.empty() || member.visgroupShown == false
+        || member.visgroupAutoShown == false)
+      {
+        bad.insert(member.entry);
+      }
+      continue;
+    }
+    const auto found = nodes.find(member.entry + 1);
+    const auto lexicalParent = m_document.entries()[member.entry].parent;
+    const auto validLexical =
+      group
+        ? lexicalParent == std::optional<VmfEntryId>{m_world->lineNumber() - 1}
+        : (found != nodes.end() && found->second->parent() == m_world->defaultLayer());
+    if (!validLexical || member.hiddenByContainer
+        || member.visgroupShown == false || member.visgroupAutoShown == false
+        || !member.visgroupIds.empty()
+        || (member.groupId && !member.group)
+        || (group ? opaque(m_document, member.entry)
+                  : (found == nodes.end() || opaque(m_document, member.entry))))
+    {
+      bad.insert(member.entry);
+    }
+  }
+  // A component is indivisible: foreign/unprojected members must never be lost
+  // by dissolving an apparently empty display group.
+  auto changed = true;
+  while (changed)
+  {
+    changed = false;
+    for (const auto& member : metadata.memberships)
+    {
+      for (const auto& candidate : member.candidateGroupIds)
+      {
+        const auto found = groupEntries.find(candidate);
+        if (found == groupEntries.end())
+        {
+          continue;
+        }
+        for (const auto target : found->second)
+        {
+          if (bad.contains(member.entry) || bad.contains(target))
+          {
+            changed = bad.insert(member.entry).second || changed;
+            changed = bad.insert(target).second || changed;
+          }
+        }
+      }
+    }
+  }
+  for (const auto entry : bad)
+  {
+    m_unsupportedGroupObjects.insert(entry + 1);
+    m_diagnostics.push_back(
+      {entry, "Unsupported native editor-group component preserved without projection"});
+  }
+  auto groups = std::map<VmfEntryId, GroupNode*>{};
+  for (const auto& group : metadata.groups)
+  {
+    if (bad.contains(group.entry) || !group.nativeId)
+    {
+      continue;
+    }
+    auto node =
+      std::make_unique<GroupNode>(Group{"Group " + value(m_document, group.entry, "id")});
+    node->setFilePosition(group.entry + 1, 1);
+    groups.emplace(group.entry, node.get());
+    m_nativeGroups.insert(group.entry + 1);
+    m_groupNodes.emplace(group.entry + 1, node.get());
+    m_groupLinks.emplace(group.entry + 1, node->linkId());
+    m_world->defaultLayer()->addChild(node.release());
+  }
+  for (const auto& member : metadata.memberships)
+  {
+    if (bad.contains(member.entry) || !member.group || !groups.contains(*member.group))
+    {
+      continue;
+    }
+    auto* node = groups.contains(member.entry)
+                   ? static_cast<Node*>(groups.at(member.entry))
+                   : const_cast<Node*>(nodes.at(member.entry + 1));
+    node->parent()->removeChild(node);
+    groups.at(*member.group)->addChild(node);
+  }
+}
+
+void VmfScene::validateRegisteredGroup(const GroupNode& group) const
+{
+  const auto binding = group.lineNumber();
+  const auto admitted = m_groupNodes.find(binding);
+  const auto link = m_groupLinks.find(binding);
+  const auto states = m_groupStates.find(binding);
+  if (
+    !binding || !m_nativeGroups.contains(binding) || admitted == m_groupNodes.end()
+    || admitted->second != &group || link == m_groupLinks.end()
+    || link->second != group.linkId() || states == m_groupStates.end()
+    || states->second.empty() || m_unsupportedGroupObjects.contains(binding)
+    || group.visibilityState() != VisibilityState::Inherited || !group.visible())
+  {
+    refuse(0, "unregistered or unsupported native group container");
+  }
+}
+
+void VmfScene::validateRegisteredDetachedGroup(const GroupNode& group) const
+{
+  requireEditing();
+  requireEditableVersion(m_document);
+  if (group.parent())
+  {
+    refuse(0, "registered parked native group must be detached");
+  }
+  validateRegisteredGroup(group);
+  auto live = NodeMap{};
+  collect(*m_activeWorld, live);
+  if (std::ranges::any_of(live, [&](const auto& item) {
+        const auto* other = dynamic_cast<const GroupNode*>(item.second);
+        return other && other->linkId() == group.linkId();
+      }))
+  {
+    refuse(0, "parked native group has a live linked/foreign container");
+  }
+}
+
+void VmfScene::validateGroupClosure(
+  const std::vector<Node*>& roots, const bool creation) const
+{
+  requireEditing();
+  requireEditableVersion(m_document);
+  auto live = NodeMap{};
+  collect(*m_activeWorld, live);
+  if (creation && (m_nextBinding == std::numeric_limits<size_t>::max()
+      || m_generated.size() >= 1'000'000 || m_nextObjectId.size() > 4096
+      || m_nextObjectId.size() > 16 * 1024 * 1024 - m_generatedIdBytes))
+  {
+    refuse(0, "native group identity budget exhausted");
+  }
+  const auto check = [&](auto&& self, const Node& node) -> void {
+    if (
+      !live.contains(node.lineNumber()) || live.at(node.lineNumber()) != &node
+      || m_unsupportedGroupObjects.contains(node.lineNumber())
+      || node.visibilityState() != VisibilityState::Inherited || !node.visible())
+    {
+      refuse(0, "native group closure is not uniquely live and supported");
+    }
+    static_cast<void>(parentBinding(node));
+    if (const auto* group = dynamic_cast<const GroupNode*>(&node))
+    {
+      const auto linked = std::ranges::count_if(live, [&](const auto& item) {
+        const auto* other = dynamic_cast<const GroupNode*>(item.second);
+        return other && other->linkId() == group->linkId();
+      });
+      validateRegisteredGroup(*group);
+      if (linked != 1)
+      {
+        refuse(0, "foreign group container");
+      }
+    }
+    else if (
+      !dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node))
+    {
+      refuse(0, "unsupported native group member");
+    }
+    const auto* parentGroup = dynamic_cast<const GroupNode*>(node.parent());
+    const auto membership = parentGroup ? parentGroup->lineNumber() : 0;
+    const auto admitted = m_groupStates.find(node.lineNumber());
+    if (admitted == m_groupStates.end() || !admitted->second.contains(membership))
+    {
+      refuse(0, "unadmitted native membership in group closure");
+    }
+    const auto source = prototype(node.lineNumber());
+    if (source && opaque(m_document, *source))
+    {
+      refuse(*source, "opaque native group member");
+    }
+    if (dynamic_cast<const BrushNode*>(&node))
+    {
+      checkGeometryReferences(source.value_or(0));
+    }
+    for (const auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  for (const auto* root : roots)
+  {
+    check(check, *root);
+  }
+}
+
+void VmfScene::registerGroupChanges(
+  Node* created, const std::vector<std::pair<Node*, Node*>>& parents)
+{
+  requireEditing();
+  if (
+    created
+    && (created->lineNumber() || !dynamic_cast<GroupNode*>(created) || created->parent()))
+  {
+    refuse(0, "new native group must be a detached unbound container");
+  }
+  auto closure = std::vector<Node*>{};
+  for (const auto& [node, parent] : parents)
+  {
+    if (node != created)
+    {
+      closure.push_back(node);
+    }
+    if (
+      const auto* group = dynamic_cast<const GroupNode*>(parent);
+      group && group != created)
+    {
+      const auto admitted = m_groupNodes.find(group->lineNumber());
+      const auto link = m_groupLinks.find(group->lineNumber());
+      if (
+        admitted == m_groupNodes.end() || admitted->second != group
+        || link == m_groupLinks.end() || link->second != group->linkId()
+        || !group->visible() || group->visibilityState() != VisibilityState::Inherited)
+      {
+        refuse(0, "unsupported native membership destination");
+      }
+    }
+  }
+  validateGroupClosure(closure, created != nullptr);
+  auto generated = m_generated;
+  auto groups = m_nativeGroups;
+  auto groupNodes = m_groupNodes;
+  auto groupLinks = m_groupLinks;
+  auto states = m_groupStates;
+  const auto binding = m_nextBinding;
+  const auto id = m_nextObjectId;
+  if (
+    created
+    && (binding == std::numeric_limits<size_t>::max() || generated.size() >= 1'000'000 || id.size() > 4096 || id.size() > 16 * 1024 * 1024 - m_generatedIdBytes))
+  {
+    refuse(0, "native group identity budget exhausted");
+  }
+  auto next = incrementId(id);
+  auto display = Group{"Group " + id};
+  if (created)
+  {
+    generated.emplace(
+      binding, GeneratedBinding{GeneratedKind::Group, id, std::nullopt, 0});
+    groups.insert(binding);
+    groupNodes.emplace(binding, static_cast<GroupNode*>(created));
+    groupLinks.emplace(binding, static_cast<GroupNode*>(created)->linkId());
+  }
+  for (const auto& [node, parent] : parents)
+  {
+    if (node != created && m_unsupportedGroupObjects.contains(node->lineNumber()))
+    {
+      refuse(0, "unsupported native membership publication");
+    }
+    const auto* group = dynamic_cast<const GroupNode*>(parent);
+    const auto membership = group && group == created ? binding
+                            : group                   ? group->lineNumber()
+                                                      : 0;
+    if (group && !groups.contains(membership))
+    {
+      refuse(0, "foreign native membership target");
+    }
+    states[node == created ? binding : node->lineNumber()].insert(membership);
+  }
+  size_t count = 0;
+  for (const auto& [entry, memberships] : states)
+  {
+    if (memberships.size() > 1'000'000 - count)
+    {
+      refuse(0, "native group membership budget exhausted");
+    }
+    count += memberships.size();
+  }
+  m_generated.swap(generated);
+  m_nativeGroups.swap(groups);
+  m_groupNodes.swap(groupNodes);
+  m_groupLinks.swap(groupLinks);
+  m_groupStates.swap(states);
+  if (created)
+  {
+    m_nextBinding = binding + 1;
+    m_nextObjectId = std::move(next);
+    m_generatedIdBytes += id.size();
+    created->setFilePosition(binding, 1);
+    static_cast<GroupNode&>(*created).setGroup(std::move(display));
+  }
+}
 
 VmfScene::VmfScene(VmfDocument document)
   : m_document{std::move(document)}
@@ -565,9 +949,7 @@ VmfScene VmfScene::readImpl(
       }
       worldId = id;
     }
-    if (
-      name == "world" || name == "entity" || name == "solid" || name == "side"
-      || name == "group")
+    if (name == "world" || name == "entity" || name == "solid" || name == "side")
     {
       auto native = value(d, id, "id");
       if (native.empty() || native.find_first_not_of("0123456789") != std::string::npos)
@@ -805,6 +1187,14 @@ VmfScene VmfScene::readImpl(
       load(load, root, *scene.m_world->defaultLayer(), false);
     }
   }
+  scene.projectGroups();
+  auto projected = NodeMap{};
+  collect(*scene.m_world, projected);
+  for (const auto& [binding, node] : projected)
+  {
+    const auto* group = dynamic_cast<const GroupNode*>(node->parent());
+    scene.m_groupStates[binding].insert(group ? group->lineNumber() : 0);
+  }
   scene.m_activeWorld = scene.m_world.get();
   scene.m_original.reset(
     static_cast<WorldNode*>(scene.m_world->cloneRecursively(bounds)));
@@ -878,6 +1268,15 @@ std::string VmfScene::nativeId(const Node& node) const
 }
 void VmfScene::checkGeometryReferences(const VmfEntryId object) const
 {
+  auto entry = std::optional<VmfEntryId>{object};
+  while (entry)
+  {
+    if (m_unsupportedGroupObjects.contains(*entry + 1))
+    {
+      refuse(object, "unsupported native group component geometry owner");
+    }
+    entry = m_document.entries()[*entry].parent;
+  }
   if (m_geometryReferenceProblem)
   {
     refuse(object, *m_geometryReferenceProblem);
@@ -894,16 +1293,46 @@ void VmfScene::validateDuplication(const std::vector<Node*>& nodes) const
   collect(*m_original, original);
   const auto check = [&](auto&& self, const Node& node) -> void {
     if (
-      (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node))
+      (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node)
+       && !(
+         dynamic_cast<const GroupNode*>(&node)
+         && m_nativeGroups.contains(node.lineNumber())))
+      || m_unsupportedGroupObjects.contains(node.lineNumber())
       || node.visibilityState() != VisibilityState::Inherited)
     {
       refuse(0, "native duplication does not support groups/layers/hidden objects");
     }
     const auto source = prototype(node.lineNumber());
+    auto owner = source;
+    while (owner)
+    {
+      if (m_unsupportedGroupObjects.contains(*owner + 1))
+      {
+        refuse(*owner, "unsupported native group component duplication owner");
+      }
+      owner = m_document.entries()[*owner].parent;
+    }
     if (source && opaque(m_document, *source))
     {
       refuse(
         *source, "opaque/displacement/instance attachments prevent native duplication");
+    }
+    if (const auto* group = dynamic_cast<const GroupNode*>(&node))
+    {
+      const auto link = m_groupLinks.find(node.lineNumber());
+      if (link == m_groupLinks.end() || link->second != group->linkId())
+      {
+        refuse(0, "native linked/foreign group duplication unsupported");
+      }
+    }
+    const auto* root = &node;
+    while (root->parent())
+    {
+      root = root->parent();
+    }
+    if (root == m_activeWorld)
+    {
+      static_cast<void>(parentBinding(node));
     }
     static_cast<void>(emitNode(node, original));
     for (const auto* child : node.children())
@@ -925,6 +1354,20 @@ void VmfScene::validateAdditions(
     requireEditableVersion(m_document);
   }
   const auto* owner = &parent;
+  if (const auto* group = dynamic_cast<const GroupNode*>(owner))
+  {
+    const auto admitted = m_groupNodes.find(group->lineNumber());
+    const auto link = m_groupLinks.find(group->lineNumber());
+    if (
+      !m_nativeGroups.contains(owner->lineNumber()) || admitted == m_groupNodes.end()
+      || admitted->second != group || link == m_groupLinks.end()
+      || link->second != group->linkId() || !group->visible()
+      || group->visibilityState() != VisibilityState::Inherited)
+    {
+      refuse(0, "foreign native group parent");
+    }
+    owner = effectiveParent(*owner);
+  }
   if (const auto* layer = dynamic_cast<const LayerNode*>(owner))
   {
     const auto* world = dynamic_cast<const WorldNode*>(layer->parent());
@@ -997,9 +1440,30 @@ void VmfScene::validateAdditions(
     check(check, *node);
   }
 }
-void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool duplication)
+void VmfScene::registerAdditions(
+  const std::vector<Node*>& nodes, const bool duplication, const Node* parent)
+{
+  registerAdditionBatch({{parent, nodes}}, duplication);
+}
+
+void VmfScene::registerAdditionBatch(
+  const std::vector<std::pair<const Node*, std::vector<Node*>>>& batches,
+  const bool duplication)
 {
   requireEditing();
+  auto nodes = std::vector<Node*>{};
+  for (const auto& [parent, children] : batches)
+  {
+    if (parent)
+    {
+      validateAdditions(*parent, children, duplication);
+    }
+    nodes.insert(nodes.end(), children.begin(), children.end());
+  }
+  if (duplication)
+  {
+    validateDuplication(nodes);
+  }
   struct Assignment
   {
     Node* node;
@@ -1007,9 +1471,15 @@ void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool dup
     size_t binding;
   };
   auto additions = std::map<size_t, GeneratedBinding>{};
+  auto groups = m_nativeGroups;
+  auto groupNodes = m_groupNodes;
+  auto groupLinks = m_groupLinks;
+  auto groupStates = m_groupStates;
   auto states = m_clipStates;
   auto memberships = m_sideStateMemberships;
   auto assignments = std::vector<Assignment>{};
+  auto groupDisplays = std::vector<std::tuple<GroupNode*, Group, std::string>>{};
+  auto leafLinks = std::vector<std::pair<Node*, std::string>>{};
   auto binding = m_nextBinding;
   auto objectId = m_nextObjectId;
   auto sideId = m_nextSideId;
@@ -1031,12 +1501,29 @@ void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool dup
       id = incrementId(id);
       return allocated;
     };
-  const auto registerNode = [&](auto&& self, Node& node) -> void {
+  const auto registerNode = [&](auto&& self, Node& node, size_t groupOwner) -> void {
     const auto source = duplication ? prototype(node.lineNumber()) : std::nullopt;
-    const auto kind =
-      dynamic_cast<EntityNode*>(&node) ? GeneratedKind::Entity : GeneratedKind::Solid;
+    const auto kind = dynamic_cast<EntityNode*>(&node)  ? GeneratedKind::Entity
+                      : dynamic_cast<GroupNode*>(&node) ? GeneratedKind::Group
+                                                        : GeneratedKind::Solid;
     const auto allocated = allocate(kind, source, 0);
+    if (kind == GeneratedKind::Group)
+    {
+      groups.insert(allocated);
+      groupNodes.emplace(allocated, static_cast<GroupNode*>(&node));
+      auto linkId = generateUuid();
+      groupLinks.emplace(allocated, linkId);
+      groupDisplays.emplace_back(
+        static_cast<GroupNode*>(&node),
+        Group{"Group " + additions.at(allocated).nativeId},
+        std::move(linkId));
+    }
+    if (duplication && kind != GeneratedKind::Group)
+    {
+      leafLinks.emplace_back(&node, generateUuid());
+    }
     assignments.push_back({&node, nullptr, allocated});
+    groupStates[allocated].insert(groupOwner);
     if (const auto* brush = dynamic_cast<const BrushNode*>(&node))
     {
       if (duplication)
@@ -1069,22 +1556,58 @@ void VmfScene::registerAdditions(const std::vector<Node*>& nodes, const bool dup
     }
     for (auto* child : node.children())
     {
-      self(self, *child);
+      self(self, *child, kind == GeneratedKind::Group ? allocated : 0);
     }
   };
-  for (auto* node : nodes)
+  for (const auto& [parent, children] : batches)
   {
-    registerNode(registerNode, *node);
+    for (auto* node : children)
+    {
+      registerNode(
+        registerNode,
+        *node,
+        dynamic_cast<const GroupNode*>(parent) ? parent->lineNumber() : 0);
+    }
+  }
+  size_t groupMemberships = 0;
+  for (const auto& [entry, admittedGroups] : groupStates)
+  {
+    if (admittedGroups.size() > 1'000'000 - groupMemberships)
+    {
+      refuse(0, "native group membership budget exhausted");
+    }
+    groupMemberships += admittedGroups.size();
   }
   // All fallible validation/allocation precedes identity publication. Detached
   // command-owned nodes keep these bindings when undo/redo parks/restores them.
   m_generated.merge(additions);
+  m_groupStates.swap(groupStates);
+  m_nativeGroups.swap(groups);
+  m_groupNodes.swap(groupNodes);
+  m_groupLinks.swap(groupLinks);
   m_clipStates.swap(states);
   m_sideStateMemberships = memberships;
   m_nextBinding = binding;
   m_nextObjectId = std::move(objectId);
   m_nextSideId = std::move(sideId);
   m_generatedIdBytes = idBytes;
+  for (auto& [node, linkId] : leafLinks)
+  {
+    if (auto* entity = dynamic_cast<EntityNode*>(node))
+    {
+      entity->setLinkId(std::move(linkId));
+    }
+    else
+    {
+      static_cast<BrushNode*>(node)->setLinkId(std::move(linkId));
+    }
+  }
+  for (auto& [group, display, linkId] : groupDisplays)
+  {
+    group->setGroup(std::move(display));
+    group->setLinkId(std::move(linkId));
+    group->resetPersistentId();
+  }
   for (const auto& assignment : assignments)
   {
     if (assignment.node)
@@ -1108,9 +1631,27 @@ void VmfScene::validateRemoval(const std::vector<Node*>& removalClosure) const
     requireEditableVersion(m_document);
   }
   const auto check = [&](auto&& self, const Node& node) -> void {
-    if (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node))
+    if (
+      (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node)
+       && !(
+         dynamic_cast<const GroupNode*>(&node)
+         && m_nativeGroups.contains(node.lineNumber())))
+      || m_unsupportedGroupObjects.contains(node.lineNumber()))
     {
-      refuse(0, "native world/groups/layers cannot be removed");
+      refuse(0, "unsupported native removal closure");
+    }
+    if (node.visibilityState() != VisibilityState::Inherited || !node.visible())
+    {
+      refuse(0, "native removal requires a visible inherited-visibility closure");
+    }
+    static_cast<void>(parentBinding(node));
+    if (const auto* group = dynamic_cast<const GroupNode*>(&node))
+    {
+      const auto link = m_groupLinks.find(node.lineNumber());
+      if (link == m_groupLinks.end() || link->second != group->linkId())
+      {
+        refuse(0, "native linked/foreign group removal unsupported");
+      }
     }
     const auto source = prototype(node.lineNumber());
     if (source && opaque(m_document, *source))
@@ -1265,7 +1806,7 @@ void VmfScene::validateSideState(const BrushNode& node) const
 
 void VmfScene::validateClipOwner(const BrushNode& node, const bool clipping) const
 {
-  const Node* owner = node.parent();
+  const Node* owner = effectiveParent(node);
   const auto* entity = dynamic_cast<const EntityNode*>(owner);
   if (entity)
   {
@@ -1273,7 +1814,8 @@ void VmfScene::validateClipOwner(const BrushNode& node, const bool clipping) con
     const auto source = prototype(entity->lineNumber());
     if (
       (record != m_generated.end() && record->second.kind != GeneratedKind::Entity)
-      || (source && (key(m_document, *source) != "entity" || opaque(m_document, *source)))
+      || (source && (key(m_document, *source) != "entity" || opaque(m_document, *source)
+                     || m_unsupportedGroupObjects.contains(*source + 1)))
       || unsafeClass(entity->entity().classname())
       || entity->visibilityState() != VisibilityState::Inherited)
     {
@@ -1295,7 +1837,7 @@ void VmfScene::validateClipOwner(const BrushNode& node, const bool clipping) con
     {
       validateFreshData(*entity);
     }
-    owner = entity->parent();
+    owner = effectiveParent(*entity);
   }
   const auto* layer = dynamic_cast<const LayerNode*>(owner);
   const auto* world = layer ? dynamic_cast<const WorldNode*>(layer->parent()) : nullptr;
@@ -1508,6 +2050,7 @@ void VmfScene::registerBothClips(
     refuse(0, "invalid native Both batch");
   }
   auto generated = m_generated;
+  auto groupStates = m_groupStates;
   auto states = m_clipStates;
   auto memberships = m_sideStateMemberships;
   auto binding = m_nextBinding;
@@ -1636,6 +2179,8 @@ void VmfScene::registerBothClips(
 
     const auto solid = allocate(GeneratedKind::Solid, prototype(before->lineNumber()), 0);
     nodeAssignments.emplace_back(sibling, solid);
+    const auto* parentGroup = dynamic_cast<const GroupNode*>(before->parent());
+    groupStates[solid].insert(parentGroup ? parentGroup->lineNumber() : 0);
     auto backSides = std::set<size_t>{};
     for (const auto& face : sibling->brush().faces())
     {
@@ -1646,8 +2191,18 @@ void VmfScene::registerBothClips(
     }
     admit(solid, std::move(backSides));
   }
+  size_t groupMemberships = 0;
+  for (const auto& [entry, admittedGroups] : groupStates)
+  {
+    if (admittedGroups.size() > 1'000'000 - groupMemberships)
+    {
+      refuse(0, "native group membership budget exhausted");
+    }
+    groupMemberships += admittedGroups.size();
+  }
   // One publication for the entire selected batch, including both namespaces,
   // exact side states and detached-node provenance. No registerAdditions/Clips calls.
+  m_groupStates.swap(groupStates);
   m_generated.swap(generated);
   m_clipStates.swap(states);
   m_sideStateMemberships = memberships;
@@ -1746,6 +2301,11 @@ void VmfScene::validateContentsImpl(
 {
   requireEditing();
   requireEditableVersion(m_document);
+  if (m_unsupportedGroupObjects.contains(node.lineNumber()))
+  {
+    refuse(0, "unsupported native group component content edit");
+  }
+  static_cast<void>(parentBinding(node));
   if (
     const auto* brush = dynamic_cast<const BrushNode*>(&node);
     brush
@@ -1771,6 +2331,18 @@ void VmfScene::validateContentsImpl(
       refuse(0, "native content type changed");
     }
     static_cast<void>(target->setBrush(*brush));
+  }
+  else if (const auto* group = std::get_if<Group>(&contents.get()))
+  {
+    const auto* before = dynamic_cast<const GroupNode*>(&node);
+    const auto link = m_groupLinks.find(node.lineNumber());
+    if (
+      !before || !m_nativeGroups.contains(node.lineNumber()) || link == m_groupLinks.end()
+      || link->second != before->linkId() || group->name() != before->group().name())
+    {
+      refuse(0, "native group rename/content editing unsupported");
+    }
+    return;
   }
   else
   {
@@ -2168,6 +2740,16 @@ void VmfScene::nodeEdits(
       }
     }
   }
+  else if (const auto* group = dynamic_cast<const GroupNode*>(before))
+  {
+    const auto* target = dynamic_cast<const GroupNode*>(after);
+    if (
+      !target || !m_nativeGroups.contains(before->lineNumber())
+      || target->group().name() != group->group().name())
+    {
+      refuse(id, "native group rename unsupported");
+    }
+  }
   else
   {
     refuse(id, "unsupported scene object");
@@ -2181,6 +2763,36 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
   const auto generated = m_generated.find(node.lineNumber());
   const auto* entity = dynamic_cast<const EntityNode*>(&node);
   const auto* brush = dynamic_cast<const BrushNode*>(&node);
+  const auto* group = dynamic_cast<const GroupNode*>(&node);
+  if (group)
+  {
+    if (!m_nativeGroups.contains(node.lineNumber()))
+    {
+      refuse(0, "foreign emitted group");
+    }
+    if (!source)
+    {
+      auto result = "group\n{\n\"id\" " + quote(nativeId(node)) + "\n";
+      if (const auto* parent = dynamic_cast<const GroupNode*>(node.parent()))
+      {
+        result += "editor { \"groupid\" " + quote(nativeId(*parent)) + " }\n";
+      }
+      return result + "}\n";
+    }
+    auto values = std::vector<VmfValueEdit>{};
+    auto structure = std::vector<VmfStructuralEdit>{};
+    auto appended = std::map<VmfEntryId, std::string>{};
+    if (generated != m_generated.end())
+    {
+      values.push_back({*property(d, *source, "id"), quote(nativeId(node))});
+    }
+    membershipEdits(*source, node, values, structure, appended);
+    for (const auto& [block, entries] : appended)
+    {
+      structure.push_back({VmfStructuralEdit::Type::Append, block, entries});
+    }
+    return d.serializeEntry(*source, values, structure);
+  }
   if (!entity && !brush)
   {
     refuse(0, "unsupported emitted native node");
@@ -2250,6 +2862,10 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
         result += freshSideText(face, sideId(face));
       }
     }
+    if (const auto* parent = dynamic_cast<const GroupNode*>(node.parent()))
+    {
+      result += "editor { \"groupid\" " + quote(nativeId(*parent)) + " }\n";
+    }
     result += "}\n";
     static_cast<void>(VmfDocument::parse(result));
     return result;
@@ -2318,6 +2934,7 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
       }
     }
   }
+  membershipEdits(*source, node, values, structure, appended);
   for (const auto& [block, entries] : appended)
   {
     if (!entries.empty())
@@ -2326,6 +2943,85 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
     }
   }
   return d.serializeEntry(*source, values, structure);
+}
+
+void VmfScene::membershipEdits(
+  const VmfEntryId source,
+  const Node& node,
+  std::vector<VmfValueEdit>& values,
+  std::vector<VmfStructuralEdit>& structure,
+  std::map<VmfEntryId, std::string>& appended) const
+{
+  if (m_unsupportedGroupObjects.contains(source + 1))
+  {
+    refuse(source, "unresolved native group membership cannot be changed");
+  }
+  const auto* parent = dynamic_cast<const GroupNode*>(node.parent());
+  const auto desired = parent ? nativeId(*parent) : std::string{};
+  if (parent && !m_nativeGroups.contains(parent->lineNumber()))
+  {
+    refuse(source, "foreign native group membership");
+  }
+  auto editors = std::vector<VmfEntryId>{};
+  for (const auto child : m_document.entries()[source].children)
+  {
+    if (m_document.entries()[child].isBlock() && key(m_document, child) == "editor")
+    {
+      editors.push_back(child);
+    }
+  }
+  if (editors.size() > 1)
+  {
+    refuse(source, "ambiguous native editor membership");
+  }
+  auto fields = std::vector<VmfEntryId>{};
+  if (!editors.empty())
+  {
+    for (const auto child : m_document.entries()[editors.front()].children)
+    {
+      if (key(m_document, child) == "groupid")
+      {
+        fields.push_back(child);
+      }
+    }
+  }
+  if (fields.size() > 1)
+  {
+    refuse(source, "ambiguous native group membership");
+  }
+  if (!fields.empty())
+  {
+    const auto field = fields.front();
+    if (!m_document.entries()[field].value)
+    {
+      refuse(source, "invalid native membership");
+    }
+    const auto old = text(m_document, *m_document.entries()[field].value);
+    if (!desired.empty() && normalizedId(old) == normalizedId(desired))
+    {
+      return;
+    }
+    if (desired.empty())
+    {
+      structure.push_back({VmfStructuralEdit::Type::Remove, field, {}});
+    }
+    else
+    {
+      values.push_back({field, quote(desired)});
+    }
+  }
+  else if (!desired.empty())
+  {
+    const auto field = "\"groupid\" " + quote(desired) + "\n";
+    if (editors.empty())
+    {
+      appended[source] += "editor { " + field + "}\n";
+    }
+    else
+    {
+      appended[editors.front()] += field;
+    }
+  }
 }
 
 std::string VmfScene::serialize(const WorldNode& world) const
@@ -2345,6 +3041,24 @@ std::string VmfScene::serialize(const WorldNode& world) const
   }
   for (const auto& [binding, node] : current)
   {
+    if (const auto* container = dynamic_cast<const GroupNode*>(node))
+    {
+      const auto admitted = m_groupNodes.find(binding);
+      const auto link = m_groupLinks.find(binding);
+      if (
+        admitted == m_groupNodes.end() || admitted->second != container
+        || link == m_groupLinks.end() || link->second != container->linkId())
+      {
+        refuse(0, "foreign native group container identity");
+      }
+    }
+    const auto* group = dynamic_cast<const GroupNode*>(node->parent());
+    const auto membership = group ? group->lineNumber() : 0;
+    const auto admitted = m_groupStates.find(binding);
+    if (admitted == m_groupStates.end() || !admitted->second.contains(membership))
+    {
+      refuse(0, "unadmitted native editor membership");
+    }
     if (
       const auto* brush = dynamic_cast<const BrushNode*>(node);
       brush && (m_generated.contains(binding) || m_clipStates.contains(binding)))
@@ -2405,6 +3119,13 @@ std::string VmfScene::serialize(const WorldNode& world) const
       continue;
     }
     nodeEdits(*before, *after, edits, structural, appended, true);
+    const auto* oldGroup = dynamic_cast<const GroupNode*>(before->parent());
+    const auto* newGroup = dynamic_cast<const GroupNode*>(after->parent());
+    if (
+      (oldGroup ? oldGroup->lineNumber() : 0) != (newGroup ? newGroup->lineNumber() : 0))
+    {
+      membershipEdits(id, *after, edits, structural, appended);
+    }
   }
   auto roots = std::string{};
   for (const auto& [binding, node] : current)
@@ -2445,6 +3166,14 @@ std::string VmfScene::serialize(const WorldNode& world) const
         refuse(0, "native entities must remain at world level");
       }
       roots += text + "\n";
+    }
+    else if (dynamic_cast<const GroupNode*>(node))
+    {
+      if (!m_nativeGroups.contains(binding) || parent != world.lineNumber())
+      {
+        refuse(0, "invalid generated native group owner");
+      }
+      appended[world.lineNumber() - 1] += text + "\n";
     }
     else if (dynamic_cast<const BrushNode*>(node))
     {

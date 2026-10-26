@@ -337,6 +337,33 @@ auto makeCollectVisitedNodesVisitor(std::vector<Node*>& visited)
 
 } // namespace
 
+TEST_CASE("Node indexed child insertion")
+{
+  auto root = GroupNode{Group{"root"}};
+  auto* end = new GroupNode{Group{"end"}};
+  auto* begin = new GroupNode{Group{"begin"}};
+  auto* middle = new GroupNode{Group{"middle"}};
+  auto* nested = new GroupNode{Group{"nested"}};
+  nested->select();
+  middle->addChild(nested);
+  middle->select();
+  root.insertChild(0, end);
+  root.insertChild(0, begin);
+  root.insertChild(1, middle);
+  CHECK(root.children() == std::vector<Node*>{begin, middle, end});
+  CHECK(root.descendantCount() == 4);
+  CHECK(root.descendantSelectionCount() == 2);
+  CHECK(middle->parent() == &root);
+  CHECK(nested->parent() == middle);
+  root.removeChild(middle);
+  auto owner = std::unique_ptr<GroupNode>{middle};
+  CHECK(root.descendantCount() == 2);
+  CHECK(root.descendantSelectionCount() == 0);
+  root.insertChild(2, owner.release());
+  CHECK(root.children() == std::vector<Node*>{begin, end, middle});
+  CHECK(root.descendantSelectionCount() == 2);
+}
+
 TEST_CASE("Node")
 {
   SECTION("destructor")

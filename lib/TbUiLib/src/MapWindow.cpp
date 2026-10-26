@@ -1723,6 +1723,12 @@ void MapWindow::groupSelectedObjects()
 {
   if (canGroupSelectedObjects())
   {
+    auto& map = m_document->map();
+    if (map.vmfScene())
+    {
+      groupSelectedNodes(map, "");
+      return;
+    }
     const auto name = queryGroupName(this, "Unnamed");
     if (!name.empty())
     {
@@ -1734,7 +1740,8 @@ void MapWindow::groupSelectedObjects()
 bool MapWindow::canGroupSelectedObjects() const
 {
   auto& map = m_document->map();
-  return map.selection().hasNodes() && !m_mapView->toolBox().anyModalToolActive();
+  return (map.vmfScene() ? canGroupSelectedNodes(map) : map.selection().hasNodes())
+         && !m_mapView->toolBox().anyModalToolActive();
 }
 
 void MapWindow::ungroupSelectedObjects()
@@ -1748,7 +1755,8 @@ void MapWindow::ungroupSelectedObjects()
 bool MapWindow::canUngroupSelectedObjects() const
 {
   auto& map = m_document->map();
-  return map.selection().hasGroups() && !m_mapView->toolBox().anyModalToolActive();
+  return (map.vmfScene() ? canUngroupSelectedNodes(map) : map.selection().hasGroups())
+         && !m_mapView->toolBox().anyModalToolActive();
 }
 
 void MapWindow::renameSelectedGroups()
@@ -1770,7 +1778,7 @@ void MapWindow::renameSelectedGroups()
 bool MapWindow::canRenameSelectedGroups() const
 {
   auto& map = m_document->map();
-  return map.selection().hasOnlyGroups();
+  return !map.vmfScene() && map.selection().hasOnlyGroups();
 }
 
 void MapWindow::replaceMaterial()
