@@ -21,6 +21,7 @@
 
 #include "kd/reflection_decl.h"
 
+#include <cstdint>
 #include <filesystem>
 
 namespace tb::mdl
@@ -32,7 +33,9 @@ struct ModelSpecification
   size_t skinIndex = 0;
   size_t frameIndex = 0;
 
-  kdl_reflect_decl(ModelSpecification, path, skinIndex, frameIndex);
+  uint32_t body = 0;
+
+  kdl_reflect_decl(ModelSpecification, path, skinIndex, frameIndex, body);
 };
 
 } // namespace tb::mdl

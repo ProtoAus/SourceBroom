@@ -28,6 +28,7 @@
 #include "kd/vector_utils.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -181,10 +182,15 @@ private:
   bool m_setup = false;
 
 public:
+  class WeakRef;
+
   /**
    * Creates a new empty vertex array.
    */
   VertexArray();
+
+  /** Shares the vertex holder without extending its GPU resource lifetime. */
+  WeakRef weakRef() const;
 
   /**
    * Creates a new vertex array by copying the given vertices. After this operation, the
@@ -211,8 +217,9 @@ public:
   template <typename... Attrs>
   static VertexArray move(std::vector<GLVertex<Attrs...>>&& vertices)
   {
-    return VertexArray(std::make_shared<ByValueHolder<typename GLVertex<Attrs...>::Type>>(
-      std::move(vertices)));
+    return VertexArray(
+      std::make_shared<ByValueHolder<typename GLVertex<Attrs...>::Type>>(
+        std::move(vertices)));
   }
 
   /**
@@ -342,5 +349,20 @@ public:
 
 private:
   explicit VertexArray(std::shared_ptr<BaseHolder> holder);
+};
+
+class VertexArray::WeakRef
+{
+private:
+  std::weak_ptr<BaseHolder> m_holder;
+
+  friend class VertexArray;
+  explicit WeakRef(std::weak_ptr<BaseHolder> holder);
+
+public:
+  WeakRef() = default;
+
+  /** Locks shared vertices into a wrapper with independent prepare/setup state. */
+  std::optional<VertexArray> lock() const;
 };
 } // namespace tb::gl

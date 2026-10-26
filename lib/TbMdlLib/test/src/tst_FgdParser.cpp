@@ -142,6 +142,48 @@ TEST_CASE("FgdParser")
     CHECK(entity.properties() == before);
   }
 
+  SECTION("Source-only literal and empty studio body policy preserves explicit controls")
+  {
+    using T = std::tuple<std::string, bool, ModelSpecification>;
+    const auto [declaration, sourceMode, expected] = GENERATE(
+      values<T>({
+        {R"(studio("probe.mdl"))", true, {"probe.mdl", 1, 0, 3}},
+        {R"(studioprop("probe.mdl"))", true, {"probe.mdl", 1, 0, 3}},
+        {R"(studio())", true, {"entity.mdl", 1, 0, 3}},
+        {R"(studioprop())", true, {"entity.mdl", 1, 0, 3}},
+        {R"(studio("probe.mdl"))", false, {"probe.mdl", 0, 0, 0}},
+        {R"(studio())", false, {"entity.mdl", 1, 0, 0}},
+        {R"(model("probe.mdl"))", true, {"probe.mdl", 0, 0, 0}},
+        {R"(sprite("probe.mdl"))", true, {"probe.mdl", 0, 0, 0}},
+        {R"(studio("probe.mdl" 2 4))", true, {"probe.mdl", 2, 4, 0}},
+        {R"(studio(model))", true, {"entity.mdl", 0, 0, 0}},
+        {R"(studio({path: "probe.mdl", skin: 2, frame: 4}))",
+         true,
+         {"probe.mdl", 2, 4, 0}},
+        {R"(studio({path: "probe.mdl", skin: 2, frame: 4, body: 1}))",
+         true,
+         {"probe.mdl", 2, 4, 1}},
+        {R"(studio({path: "probe.mdl", body: body}))", false, {"probe.mdl", 0, 0, 3}},
+      }));
+    CAPTURE(declaration, sourceMode);
+    const auto source = "@PointClass " + declaration + " = probe []";
+    auto parser = FgdParser{source, RgbaF{1, 1, 1, 1}, {}, sourceMode};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 1);
+    auto entity =
+      Entity{{{"model", "entity.mdl"}, {"skin", "1"}, {"frame", "9"}, {"body", "3"}}};
+    entity.setDefinition(&definitions.front());
+    const auto properties = entity.properties();
+    CHECK(entity.modelSpecification() == expected);
+    CHECK(entity.properties() == properties);
+    if (sourceMode && declaration == R"(studio("probe.mdl"))")
+    {
+      entity.removeProperty("body");
+      CHECK(entity.modelSpecification() == ModelSpecification{"probe.mdl", 1, 0, 0});
+    }
+  }
+
   SECTION("loadEntityDefinitions transports Source normalization through includes")
   {
     auto env = fs::TestEnvironment{};
@@ -165,11 +207,12 @@ TEST_CASE("FgdParser")
       CHECK(status.countStatus(LogLevel::Error) == 0);
       for (const auto& definition : definitions)
       {
-        auto entity = Entity{{{"skin", "1"}}};
+        auto entity = Entity{{{"skin", "1"}, {"body", "3"}}};
         entity.setDefinition(&definition);
         CHECK(
           entity.modelSpecification()
-          == ModelSpecification{"models/probe.mdl", sourceMode ? 1u : 0u, 0});
+          == ModelSpecification{
+            "models/probe.mdl", sourceMode ? 1u : 0u, 0, sourceMode ? 3u : 0u});
       }
     }
     CHECK(env.loadFile("root.fgd") == rootBefore);

@@ -247,6 +247,17 @@ unsafe numeric motion remain refused. Legacy untyped offset-normal rows also
 refuse this new operation. This source change is verified, but not yet in the
 installed A5.10 kit; native appearance/Hammer acceptance remains pending.
 
+Development source also previews supported static Source model **bodygroups**.
+An entity's bounded `body` value selects each decoded bodypart's model using its
+actual base/count, independently of skin and animation-frame index. Source studio
+FGDs default to the entity's body0; explicit definitions and other games are not
+globally reinterpreted. Blank choices hide the relevant geometry. Bounds, picking,
+renderer caches and browser centering follow the same selection without copying
+all geometry for every combination. This remains static/root-pose preview, not
+animation, body controllers, game collision or complete model/shader parity.
+The source checks pass, but this is not yet in the installed A5.10 kit and no
+owner bodygroup/browser appearance acceptance is implied.
+
 ## Source model skins on fixed FGD paths
 
 In a SourceVMF map, a simple fixed nonempty `studio` or `studioprop` model path

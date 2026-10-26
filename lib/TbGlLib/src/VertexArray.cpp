@@ -31,6 +31,25 @@ VertexArray::BaseHolder::~BaseHolder() = default;
 
 VertexArray::VertexArray() = default;
 
+VertexArray::WeakRef VertexArray::weakRef() const
+{
+  return WeakRef{m_holder};
+}
+
+VertexArray::WeakRef::WeakRef(std::weak_ptr<BaseHolder> holder)
+  : m_holder{std::move(holder)}
+{
+}
+
+std::optional<VertexArray> VertexArray::WeakRef::lock() const
+{
+  if (auto holder = m_holder.lock())
+  {
+    return VertexArray{std::move(holder)};
+  }
+  return std::nullopt;
+}
+
 bool VertexArray::empty() const
 {
   return vertexCount() == 0;

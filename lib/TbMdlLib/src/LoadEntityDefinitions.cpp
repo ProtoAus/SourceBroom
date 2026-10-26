@@ -48,13 +48,13 @@ Result<std::vector<EntityDefinition>> loadEntityDefinitions(
   const std::filesystem::path& path,
   const Color& defaultColor,
   ParserStatus& status,
-  const bool normalizeSourceStudioSkin)
+  const bool normalizeSourceStudioProperties)
 {
   const auto extension = kdl::path_to_lower(path.extension());
   if (extension == ".fgd")
   {
     return loadEntityDefinitions<FgdParser>(
-      path, status, defaultColor, path, normalizeSourceStudioSkin);
+      path, status, defaultColor, path, normalizeSourceStudioProperties);
   }
   if (extension == ".def")
   {

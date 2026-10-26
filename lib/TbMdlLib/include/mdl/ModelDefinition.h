@@ -41,6 +41,7 @@ namespace ModelSpecificationKeys
 constexpr auto Path = "path";
 constexpr auto Skin = "skin";
 constexpr auto Frame = "frame";
+constexpr auto Body = "body";
 constexpr auto Scale = "scale";
 } // namespace ModelSpecificationKeys
 

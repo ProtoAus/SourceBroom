@@ -6,22 +6,31 @@
 #include "base/Logger.h"
 #include "fs/DiskFileSystem.h"
 #include "fs/TestFileSystem.h"
+#include "gl/CreateResource.h"
 #include "gl/Material.h"
 #include "gl/MaterialCollection.h"
 #include "gl/MaterialIndexRangeRenderer.h"
+#include "gl/MockGl.h"
 #include "gl/Resource.h"
+#include "gl/TestUtils.h"
 #include "gl/Texture.h"
+#include "gl/VboManager.h"
 #include "mdl/Entity.h"
 #include "mdl/EntityDefinition.h"
+#include "mdl/EntityModelManager.h"
 #include "mdl/FgdParser.h"
 #include "mdl/GameConfig.h"
+#include "mdl/GameInfo.h"
 #include "mdl/LoadEntityModel.h"
 #include "mdl/LoadMaterialCollections.h"
 #include "mdl/LoadSourceModel.h"
 #include "mdl/LoadTexture.h"
 #include "mdl/ModelSpecification.h"
 
+#include "kd/invoke.h"
 #include "kd/task_manager.h"
+
+#include "vm/ray.h"
 
 #include <algorithm>
 #include <set>
@@ -151,11 +160,231 @@ fs::TestFileSystem modelFileSystem(
         "models", {fs::DirectoryEntry{"test", std::move(materials)}}}}});
   return fs::TestFileSystem{fs::DirectoryEntry{"", std::move(entries)}, {}};
 }
+fs::TestFileSystem bodyFileSystem(const test::SyntheticBodyProp& prop)
+{
+  auto materials = std::vector<fs::Entry>{};
+  for (size_t i = 0; i < 8; ++i)
+  {
+    const auto name = "choice" + std::to_string(i);
+    auto vtf = std::string(84, '\0');
+    test::put(vtf, 0, 0x00465456);
+    test::put(vtf, 4, 7);
+    test::put(vtf, 8, 2);
+    test::put(vtf, 12, 80);
+    test::put(vtf, 16, 1, 2);
+    test::put(vtf, 18, 1, 2);
+    test::put(vtf, 24, 1, 2);
+    test::put(vtf, 52, 0);
+    test::put(vtf, 56, 1, 1);
+    test::put(vtf, 57, 0xffffffff);
+    test::put(vtf, 63, 1, 2);
+    test::put(vtf, 80, 0xff000000 | uint32_t(i + 1));
+    materials.push_back(fs::FileEntry{name + ".vtf", file(vtf)});
+    materials.push_back(
+      fs::FileEntry{
+        name + ".vmt", file("VertexLitGeneric { $basetexture " + name + " }")});
+  }
+  return fs::TestFileSystem{
+    fs::DirectoryEntry{
+      "",
+      {
+        fs::FileEntry{"prop.mdl", file(prop.mdl)},
+        fs::FileEntry{"prop.vvd", file(prop.vvd)},
+        fs::FileEntry{"prop.dx90.vtx", file(prop.vtx)},
+        fs::DirectoryEntry{"materials", std::move(materials)},
+      }},
+    {}};
+}
+
+GameInfo bodyGameInfo()
+{
+  return makeGameInfo(
+    GameConfig{
+      .name = "Test",
+      .path = {},
+      .icon = {},
+      .fileFormats = {},
+      .fileSystemConfig = {},
+      .materialConfig = MaterialConfig{"", {}, "palette.lmp", {}, "", {}},
+      .entityConfig = {},
+      .faceAttribsConfig = {},
+      .smartTags = {},
+      .softMapBounds = {},
+      .compilationTools = {},
+    });
+}
 } // namespace
 TEST_CASE("loadSourceModel")
 {
   auto prop = test::SyntheticProp{};
   auto logger = NullLogger{};
+  SECTION(
+    "bodygroups select independent static surfaces, bounds, picks and skin families")
+  {
+    auto fs = bodyFileSystem(test::SyntheticBodyProp{{{false, false}, {false, false}}});
+    auto result = loadSourceModel("prop.mdl", fs, logger);
+    REQUIRE(result.is_success());
+    const auto data = std::move(result) | kdl::value();
+    REQUIRE(data.surfaceCount() == 4);
+    CHECK(data.frameCount() == 1);
+    for (uint32_t body = 0; body < 4; ++body)
+    {
+      CAPTURE(body);
+      const auto first = size_t(body % 2);
+      const auto second = size_t(2 + (body / 2) % 2);
+      const auto* frame = data.frame(0, body);
+      REQUIRE(frame != nullptr);
+      CHECK(frame->index() == 0);
+      CHECK(
+        frame->bounds()
+        == vm::bbox3f{
+          {float(first * 10), 0, 0}, {float(100 + (second - 2) * 10 + 2), 3, 0}});
+      for (size_t surface = 0; surface < 4; ++surface)
+      {
+        const auto active = surface == first || surface == second;
+        CHECK(data.surfaceActive(surface, body) == active);
+        const auto x = float(surface < 2 ? surface * 10 : 100 + (surface - 2) * 10);
+        CHECK(
+          frame->intersect(vm::ray3f{{x + 0.5f, 0.5f, 5}, {0, 0, -1}}).has_value()
+          == active);
+        for (size_t skin = 0; skin < 2; ++skin)
+        {
+          const auto* material = data.surface(surface).skin(skin);
+          REQUIRE(material != nullptr);
+          CHECK(
+            material->name()
+            == "materials/choice" + std::to_string(surface + skin * 4) + ".vmt");
+          REQUIRE(material->texture() != nullptr);
+          CHECK(
+            material->texture()->buffersIfLoaded().front().data()[0]
+            == surface + skin * 4 + 1);
+        }
+      }
+      auto renderer = data.buildRenderer(1, 0, body);
+      REQUIRE(renderer != nullptr);
+      CHECK_FALSE(renderer->empty());
+      CHECK(data.frame(0, body + 4) == frame);
+      CHECK(data.bounds(0, body) == frame->bounds());
+    }
+    CHECK(data.frame(0) == data.frame(0, 0));
+    CHECK(data.frame("static") == data.frame(0, 0));
+    CHECK(data.frames().front().bounds() == data.bounds(0, 0));
+    CHECK(data.frame(1, 3) == nullptr);
+    CHECK(data.buildRenderer(0, 1, 3) == nullptr);
+  }
+  SECTION("body renderers share GPU geometry without extending its lifetime")
+  {
+    auto mockGl = gl::MockGl{};
+    gl::installVboSupport(mockGl);
+    auto vboManager = gl::VboManager{};
+    const auto cleanup =
+      kdl::invoke_later{[&]() { vboManager.destroyPendingVbos(mockGl); }};
+    auto fs = bodyFileSystem(test::SyntheticBodyProp{{{false, false}, {false, false}}});
+    const auto data = loadSourceModel("prop.mdl", fs, logger) | kdl::value();
+    auto renderers = std::vector<std::unique_ptr<gl::MaterialRenderer>>{};
+    for (size_t skin = 0; skin < 2; ++skin)
+    {
+      for (uint32_t body = 0; body < 4; ++body)
+      {
+        auto renderer = data.buildRenderer(skin, 0, body);
+        REQUIRE(renderer != nullptr);
+        renderer->prepare(mockGl, vboManager);
+        renderers.push_back(std::move(renderer));
+      }
+      CHECK(vboManager.currentVboCount() == 4);
+    }
+    renderers.clear();
+    vboManager.destroyPendingVbos(mockGl);
+    CHECK(vboManager.currentVboCount() == 0);
+    auto rebuilt = data.buildRenderer(0, 0, 0);
+    REQUIRE(rebuilt != nullptr);
+    rebuilt->prepare(mockGl, vboManager);
+    CHECK(vboManager.currentVboCount() == 2);
+    rebuilt.reset();
+    vboManager.destroyPendingVbos(mockGl);
+    CHECK(vboManager.currentVboCount() == 0);
+  }
+  SECTION("blank choices remove geometry without poisoning another body")
+  {
+    auto fs = bodyFileSystem(test::SyntheticBodyProp{{{false, true}, {false, true}}});
+    const auto data = loadSourceModel("prop.mdl", fs, logger) | kdl::value();
+    const auto* full = data.frame(0, 0);
+    REQUIRE(full != nullptr);
+    const auto fullBounds = full->bounds();
+    CHECK(data.bounds(0, 1) == vm::bbox3f{{100, 0, 0}, {102, 3, 0}});
+    CHECK(data.bounds(0, 2) == vm::bbox3f{{0, 0, 0}, {2, 3, 0}});
+    const auto* blank = data.frame(0, 3);
+    REQUIRE(blank != nullptr);
+    CHECK(blank->bounds() == vm::bbox3f{0.0f});
+    CHECK_FALSE(blank->intersect(vm::ray3f{{0.5f, 0.5f, 5}, {0, 0, -1}}));
+    auto renderer = data.buildRenderer(0, 0, 3);
+    REQUIRE(renderer != nullptr);
+    CHECK(renderer->empty());
+    CHECK(full->bounds() == fullBounds);
+    CHECK(full->intersect(vm::ray3f{{0.5f, 0.5f, 5}, {0, 0, -1}}));
+  }
+  SECTION("body selection honors decoded noncanonical bases rather than surface ordinals")
+  {
+    auto fs =
+      bodyFileSystem(test::SyntheticBodyProp{{{false, false}, {false, false}}, {3, 11}});
+    const auto data = loadSourceModel("prop.mdl", fs, logger) | kdl::value();
+    CHECK(data.frame(0, 0) == data.frame(0, 2));
+    CHECK(data.surfaceActive(1, 3));
+    CHECK(data.surfaceActive(2, 3));
+    CHECK(data.surfaceActive(1, 11));
+    CHECK(data.surfaceActive(3, 11));
+    CHECK(data.surfaceActive(1, 4294967295u));
+    CHECK(data.surfaceActive(2, 4294967295u));
+  }
+  SECTION(
+    "simultaneous Source entities share geometry but not selected frame or renderer "
+    "identity")
+  {
+    auto fs = bodyFileSystem(test::SyntheticBodyProp{});
+    const auto gameInfo = bodyGameInfo();
+    auto manager = EntityModelManager{
+      gameInfo,
+      fs,
+      [](auto loader) { return gl::createResourceSync(std::move(loader)); },
+      logger};
+    auto parser = FgdParser{
+      R"(@PointClass studio("prop.mdl") = probe [])", RgbaF{1, 1, 1, 1}, {}, true};
+    auto status = TestParserStatus{};
+    const auto definitions = parser.parseDefinitions(status) | kdl::value();
+    REQUIRE(definitions.size() == 1);
+    auto a = Entity{{{"body", "0"}}};
+    auto b = Entity{{{"body", "3"}, {"skin", "1"}}};
+    a.setDefinition(&definitions.front());
+    b.setDefinition(&definitions.front());
+    a.setModel(manager.model("prop.mdl"));
+    b.setModel(manager.model("prop.mdl"));
+    const auto specA = a.modelSpecification() | kdl::value();
+    const auto specB = b.modelSpecification() | kdl::value();
+    CHECK(specA == ModelSpecification{"prop.mdl", 0, 0, 0});
+    CHECK(specB == ModelSpecification{"prop.mdl", 1, 0, 3});
+    CHECK(specA != specB);
+    CHECK(
+      std::hash<ModelSpecification>{}(specA)
+      != std::hash<ModelSpecification>{}(ModelSpecification{"prop.mdl", 0, 0, 3}));
+    CHECK(a.model() == b.model());
+    CHECK(a.modelFrame() == manager.frame(specA));
+    CHECK(b.modelFrame() == manager.frame(specB));
+    CHECK(a.modelFrame() != b.modelFrame());
+    const auto* frameA = a.modelFrame();
+    const auto boundsA = frameA->bounds();
+    auto* rendererA = manager.renderer(specA);
+    auto* rendererB = manager.renderer(specB);
+    REQUIRE(rendererA != nullptr);
+    REQUIRE(rendererB != nullptr);
+    CHECK(rendererA != rendererB);
+    CHECK(manager.renderer({"prop.mdl", 0, 0, 4}) == rendererA);
+    b.addOrUpdateProperty("body", "0");
+    b.addOrUpdateProperty("skin", "0");
+    CHECK(b.modelFrame() == frameA);
+    CHECK(manager.renderer(b.modelSpecification() | kdl::value()) == rendererA);
+    CHECK(frameA->bounds() == boundsA);
+    CHECK(manager.renderer(specB) == rendererB);
+  }
   SECTION("Source fixed FGD studio entity skin selects material identity and pixels")
   {
     const auto* alias = GENERATE("studio", "studioprop");

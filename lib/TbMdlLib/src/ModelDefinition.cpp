@@ -35,6 +35,8 @@
 
 #include <cmath>
 #include <limits>
+#include <locale>
+#include <sstream>
 
 namespace tb::mdl
 {
@@ -70,6 +72,44 @@ size_t index(const el::Value& value)
   return static_cast<size_t>(static_cast<long>(number));
 }
 
+// Source body is an unsigned 32-bit packed static choice. Reject malformed,
+// fractional, negative, nonfinite and overflowing values to the default body.
+uint32_t body(const el::Value& value)
+{
+  auto number = 0.0;
+  if (value.type() == el::ValueType::Number)
+  {
+    number = value.numberValue();
+  }
+  else if (value.type() == el::ValueType::String)
+  {
+    // Unlike the legacy skin/frame conversion, body must consume the entire
+    // property, not accept a numeric prefix followed by malformed text.
+    auto stream = std::istringstream{value.stringValue()};
+    stream.imbue(std::locale::classic());
+    if (!(stream >> number))
+    {
+      return 0;
+    }
+    stream >> std::ws;
+    if (!stream.eof())
+    {
+      return 0;
+    }
+  }
+  else
+  {
+    return 0;
+  }
+  if (
+    !std::isfinite(number) || number < 0.0 || number > 4294967295.0
+    || std::trunc(number) != number)
+  {
+    return 0;
+  }
+  return static_cast<uint32_t>(number);
+}
+
 ModelSpecification convertToModel(const el::Value& value)
 {
   switch (value.type())
@@ -79,6 +119,7 @@ ModelSpecification convertToModel(const el::Value& value)
       path(value.atOrDefault(ModelSpecificationKeys::Path)),
       index(value.atOrDefault(ModelSpecificationKeys::Skin)),
       index(value.atOrDefault(ModelSpecificationKeys::Frame)),
+      body(value.atOrDefault(ModelSpecificationKeys::Body)),
     };
   case el::ValueType::String:
     return ModelSpecification{path(value), 0, 0};

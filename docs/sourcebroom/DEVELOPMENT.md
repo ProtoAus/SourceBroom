@@ -317,6 +317,30 @@ FGD/entity/model loading; a non-null renderer alone is insufficient. `kdl::overl
 is a factory function, not a braced aggregate. The integration compile and initial
 noncanonical-name oracle failures were retained and corrected before the pass.
 
+## Static Source model body selection
+
+Supported static MDL/VVD/VTX readers retain every bodypart/model, blank choice,
+base and surface membership. Check every model's VVD byte base and VTX tables;
+aggregate allocation budgets and sidecar/version/checksum/index guards remain.
+`ModelSpecification::body` is an independent bounded numeric selection, never an
+animation-frame overload. Source studio declarations read entity body0 by default;
+explicit operands and other-game/legacy forms keep their authored semantics.
+Selected surface geometry must agree across renderers, bounds, ray picking,
+entity refresh and caches. Normalize selection by actual bases/model counts,
+including noncanonical bases, without enumerating Cartesian combinations.
+
+Lazy composite frames reference immutable meshes. Their renderers share a weakly
+cached `VertexArray` holder: locks create fresh draw-state wrappers, and only live
+renderers own GPU buffers. The original VBO manager/deferred destruction lifetime
+is unchanged. Four body selections over four authored meshes previously allocated
+eight VBOs (sixteen after another skin); an acted MockGl regression now requires
+four, release with model data alive requires zero, and rebuilding body0 gives two
+then zero. This fixture count is not a whole-map VRAM/performance claim.
+Entity-browser layout must query `frame(spec.frameIndex, spec.body)`, matching its
+renderer. Fully blank Source choices are valid empty renderers/point bounds;
+ordinary empty-renderer error behavior is not globally changed. Root-pose only,
+not animation/controllers, game collision, full FGD or shader/branch parity.
+
 ## A5.3 texture progress controls
 
 Resource-manager tests prove progress past a busy prefix, cursor survival across

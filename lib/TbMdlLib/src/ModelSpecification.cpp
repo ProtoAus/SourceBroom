@@ -34,5 +34,5 @@ std::size_t std::hash<tb::mdl::ModelSpecification>::operator()(
   const tb::mdl::ModelSpecification& spec) const noexcept
 {
   return kdl::combine_hash(
-    kdl::path_hash{}(spec.path), kdl::hash(spec.skinIndex, spec.frameIndex));
+    kdl::path_hash{}(spec.path), kdl::hash(spec.skinIndex, spec.frameIndex, spec.body));
 }

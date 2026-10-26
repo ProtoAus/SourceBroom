@@ -120,6 +120,149 @@ TEST_CASE("SourceModelReader")
       CHECK(model.max == std::array<float, 3>{2, 3, 0});
     }
   }
+  SECTION("static bodyparts retain every model, blank choice and independent skin")
+  {
+    const auto geometry = SyntheticBodyProp{}.read();
+    REQUIRE(geometry.bodyParts.size() == 2);
+    CHECK(geometry.bodyParts[0].base == 1);
+    CHECK(geometry.bodyParts[1].base == 2);
+    REQUIRE(geometry.meshes.size() == 3);
+    REQUIRE(geometry.vertices.size() == 15);
+    size_t emitted = 0;
+    for (size_t b = 0; b < 2; ++b)
+    {
+      REQUIRE(geometry.bodyParts[b].models.size() == 2);
+      for (size_t m = 0; m < 2; ++m)
+      {
+        const auto& variant = geometry.bodyParts[b].models[m];
+        CHECK(variant.firstMesh == emitted);
+        if (b == 1 && m == 1)
+        {
+          CHECK(variant.vertexCount == 0);
+          CHECK(variant.meshCount == 0);
+          continue;
+        }
+        CHECK(variant.firstVertex == emitted * 5);
+        CHECK(variant.vertexCount == 5);
+        REQUIRE(variant.meshCount == 1);
+        const auto& mesh = geometry.meshes.at(variant.firstMesh);
+        CHECK(mesh.bodyPartIndex == b);
+        CHECK(mesh.modelIndex == m);
+        const auto first = uint32_t(variant.firstVertex + 1);
+        CHECK(mesh.indices == std::vector<uint32_t>{first, first + 1, first + 2});
+        CHECK(
+          mesh.materials
+          == std::vector<std::string>{
+            "choice" + std::to_string(b * 2 + m),
+            "choice" + std::to_string(b * 2 + m + 4)});
+        const auto x = float(b * 100 + m * 10);
+        CHECK(geometry.vertices.at(first).position == std::array<float, 3>{x, 0, 0});
+        CHECK(geometry.vertices.at(first + 1).position == std::array<float, 3>{x, 3, 0});
+        CHECK(
+          geometry.vertices.at(first + 2).position == std::array<float, 3>{x + 2, 0, 0});
+        for (const auto index : mesh.indices)
+          CHECK(geometry.vertices.at(index).normal == std::array<float, 3>{0, 0, 1});
+        ++emitted;
+      }
+    }
+    CHECK(geometry.min == std::array<float, 3>{0, 0, 0});
+    CHECK(geometry.max == std::array<float, 3>{102, 3, 0});
+    const auto full = SyntheticBodyProp{{{false, false}, {false, false}}}.read();
+    REQUIRE(full.meshes.size() == 4);
+    CHECK(full.max == std::array<float, 3>{112, 3, 0});
+    const auto one = prop.read();
+    REQUIRE(one.bodyParts.size() == 1);
+    CHECK(one.bodyParts[0].base == 0); // Fixed choice: never divide by this base.
+    REQUIRE(one.bodyParts[0].models.size() == 1);
+    CHECK(one.bodyParts[0].models[0].meshCount == 1);
+    CHECK(one.meshes[0].bodyPartIndex == 0);
+    CHECK(one.meshes[0].modelIndex == 0);
+    CHECK(one.vertices[0].normal == std::array<float, 3>{0, 0, 1});
+  }
+  SECTION("variant offsets address the fixup-reconstructed LOD0 stream")
+  {
+    auto body = SyntheticBodyProp{};
+    const auto fixups = body.vvd.size();
+    body.vvd.resize(fixups + 36, '\0');
+    put(body.vvd, 48, 3);
+    put(body.vvd, 52, uint32_t(fixups));
+    for (size_t i = 0; i < 3; ++i)
+    {
+      put(body.vvd, fixups + 12 * i + 4, uint32_t((2 - i) * 5));
+      put(body.vvd, fixups + 12 * i + 8, 5);
+    }
+    const auto geometry = body.read();
+    CHECK(geometry.vertices.at(geometry.meshes[0].indices[0]).position[0] == 100);
+    CHECK(geometry.vertices.at(geometry.meshes[1].indices[0]).position[0] == 10);
+    CHECK(geometry.vertices.at(geometry.meshes[2].indices[0]).position[0] == 0);
+    put(body.vvd, fixups + 12 + 4, 10);
+    CHECK_THROWS_AS(body.read(), std::runtime_error);
+  }
+  SECTION("blank first choices remain represented without hiding later geometry")
+  {
+    const auto geometry = SyntheticBodyProp{{{true, false}, {true, false}}}.read();
+    REQUIRE(geometry.meshes.size() == 2);
+    for (size_t b = 0; b < 2; ++b)
+    {
+      CHECK(geometry.bodyParts[b].models[0].vertexCount == 0);
+      CHECK(geometry.bodyParts[b].models[0].meshCount == 0);
+      CHECK(geometry.bodyParts[b].models[1].meshCount == 1);
+      CHECK(geometry.meshes[b].modelIndex == 1);
+    }
+  }
+  SECTION("malformed non-first models, bases, blank structure and overlaps refuse")
+  {
+    const auto original = SyntheticBodyProp{};
+    const auto m = original.models[0][1], blank = original.models[1][1];
+    const auto mesh = original.meshes[0][1], xm = original.xmodels[0][1];
+    const auto mutations = std::vector<std::array<size_t, 3>>{
+      {0, original.bodies[1] + 8, 0},
+      {0, original.bodies[1] + 8, 0xffffffff},
+      {0, original.bodies[1] + 4, 0},
+      {0, original.bodies[1] + 4, 4097},
+      {0, original.bodies[1] + 12, 0x7fffffff},
+      {2, original.xbodies[1], 1},
+      {2, original.xbodies[1] + 4, 0x7fffffff},
+      {0, m + 84, 1},
+      {0, m + 84, 0}, // Overlaps model zero.
+      {0, m + 84, 15 * 48},
+      {0, m + 80, 0},
+      {0, m + 76, 0xffffffff},
+      {0, mesh + 12, 5},
+      {0, mesh + 16, 1},
+      {0, blank + 80, 1},
+      {0, blank + 72, 1},
+      {2, xm, 2},
+      {2, xm + 4, 0xffffffff},
+      {1, 8, 124},
+      {2, 16, 124},
+      {1, 64 + 5 * 48 + 28, 0x7f800000}};
+    for (const auto& mutation : mutations)
+    {
+      CAPTURE(mutation);
+      auto bad = original;
+      auto& file = mutation[0] == 0 ? bad.mdl : mutation[0] == 1 ? bad.vvd : bad.vtx;
+      put(file, mutation[1], uint32_t(mutation[2]));
+      CHECK_THROWS_AS(bad.read(), std::runtime_error);
+    }
+    auto truncated = original;
+    truncated.vtx.resize(xm + 7);
+    CHECK_THROWS_AS(truncated.read(), std::runtime_error);
+    auto badFixed = prop;
+    put(badFixed.mdl, 488, 0xffffffff);
+    CHECK_THROWS_AS(badFixed.read(), std::runtime_error);
+  }
+  SECTION("aggregate alternative records and material slots remain bounded")
+  {
+    const auto blanks = std::vector<std::vector<bool>>{std::vector<bool>(4096, true)};
+    const auto excessiveRecords = SyntheticBodyProp{blanks, {1}};
+    CHECK_THROWS_AS(excessiveRecords.read(), std::runtime_error);
+    // Each nonblank model consumes one mesh, one group and one strip as well
+    // as two material slots. No per-model reset of any budget is permitted.
+    const auto choices = std::vector<std::vector<bool>>{std::vector<bool>(1100, false)};
+    const auto excessiveGeometry = SyntheticBodyProp{choices, {1}};
+    CHECK_THROWS_AS(excessiveGeometry.read(), std::runtime_error);
+  }
   SECTION("equivalent lists and strips preserve oriented faces and skip connectors")
   {
     const auto indices =

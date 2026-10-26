@@ -1,4 +1,4 @@
-# Human acceptance — SourceBroom A4/A5/A5.7 candidates
+# Human acceptance — SourceBroom alpha candidates
 
 Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
@@ -174,6 +174,22 @@ This is qualitative prior-build feedback, not A5.3 acceptance or measured timing
   still works. Scaling/shear/flip/sculpt/topology remain unsupported. Untyped
   vector metadata and unsafe numeric motion must refuse, not flatten/drop data.
   No original map is a write target; automation does not check this box.
+
+## A5.11 uniform scale / static bodygroups — pending owner check
+
+The question about when VMFs become editable did not confirm an editing or saving
+observation. Basic editable VMFs already exist; preview-only windows still refuse
+editing. These checks are for the next candidate, not retrospectively passed:
+
+- [ ] On a **copied** editable VMF, select one whole raised displacement brush,
+  scale uniformly by2, undo/redo, and Save As a new VMF. Compare terrain position,
+  height and UVs in matching Hammer++. Nonuniform/shear/flip and sculpt/topology
+  remain guarded; report a refusal rather than bypassing preservation checks.
+- [ ] With matching owned/installed content and a known bodygroup prop, change its
+  body value and skin separately. Compare visible parts, selection bounds and
+  a relevant entity-browser thumbnail with Hammer++/the game. A blank model choice
+  should hide that part. No asset/original VMF is a write target; static preview
+  does not certify animation, collision, all models or measured GPU memory.
 
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation

@@ -128,6 +128,48 @@ TEST_CASE("ModelDefinition")
     }
   }
 
+  SECTION("body is an independent bounded unsigned static choice")
+  {
+    const auto definition =
+      makeModelDefinition(R"({path: "models/probe.mdl", skin: 2, frame: 3, body: body})");
+    using T = std::tuple<el::Value, uint32_t>;
+    const auto [value, expected] = GENERATE(
+      values<T>({
+        {el::Value{0}, 0},
+        {el::Value{1}, 1},
+        {el::Value{3}, 3},
+        {el::Value{4294967295.0}, 4294967295u},
+        {el::Value{"4294967295"}, 4294967295u},
+        {el::Value{"03"}, 3},
+        {el::Value{"3.0"}, 3},
+        {el::Value{" +3 "}, 3},
+        {el::Value{"1e1"}, 10},
+        {el::Value{""}, 0},
+        {el::Value{"1e999"}, 0},
+        {el::Value{-1}, 0},
+        {el::Value{1.5}, 0},
+        {el::Value{"1.5"}, 0},
+        {el::Value{4294967296.0}, 0},
+        {el::Value{"4294967296"}, 0},
+        {el::Value{std::numeric_limits<double>::infinity()}, 0},
+        {el::Value{std::numeric_limits<double>::quiet_NaN()}, 0},
+        {el::Value{"nan"}, 0},
+        {el::Value{"inf"}, 0},
+        {el::Value{"no"}, 0},
+        {el::Value{"3junk"}, 0},
+        {el::Value{true}, 0},
+        {el::Value::Undefined, 0},
+        {el::Value::Null, 0},
+      }));
+    CAPTURE(value);
+    CHECK(
+      definition.modelSpecification(el::VariableTable{{{"body", value}}})
+      == ModelSpecification{"models/probe.mdl", 2, 3, expected});
+    CHECK(
+      definition.defaultModelSpecification()
+      == ModelSpecification{"models/probe.mdl", 2, 3, 0});
+  }
+
   SECTION("defaultModelSpecification")
   {
     using T = std::tuple<std::string, ModelSpecification>;

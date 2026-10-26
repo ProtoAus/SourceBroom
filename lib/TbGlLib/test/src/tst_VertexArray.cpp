@@ -25,6 +25,8 @@
 #include "gl/VertexArray.h"
 #include "gl/VertexType.h"
 
+#include "kd/invoke.h"
+
 #include "vm/vec.h"
 
 #include <utility>
@@ -122,6 +124,37 @@ TEST_CASE("VertexArray")
       array = VertexArray{};
       vboManager.destroyPendingVbos(gl);
     }
+  }
+
+  SECTION("weak references share buffers without keeping them alive")
+  {
+    auto mockGl = MockGl{};
+    installVboSupport(mockGl);
+    auto vboManager = VboManager{};
+    const auto cleanup =
+      kdl::invoke_later{[&]() { vboManager.destroyPendingVbos(mockGl); }};
+    const auto vertices = std::vector<VertexTypes::P3::Vertex>{
+      VertexTypes::P3::Vertex{vm::vec3f{0, 0, 0}},
+      VertexTypes::P3::Vertex{vm::vec3f{1, 0, 0}},
+    };
+    auto array = VertexArray::ref(vertices);
+    const auto weak = array.weakRef();
+    auto shared = weak.lock();
+    REQUIRE(shared);
+    CHECK(shared->vertexCount() == array.vertexCount());
+    CHECK(!shared->prepared());
+    array.prepare(mockGl, vboManager);
+    CHECK(!shared->prepared());
+    shared->prepare(mockGl, vboManager);
+    CHECK(vboManager.currentVboCount() == 1u);
+    array = VertexArray{};
+    CHECK(weak.lock().has_value());
+    shared.reset();
+    CHECK_FALSE(weak.lock().has_value());
+    vboManager.destroyPendingVbos(mockGl);
+    CHECK(vboManager.currentVboCount() == 0u);
+    CHECK_FALSE(VertexArray::WeakRef{}.lock().has_value());
+    CHECK_FALSE(VertexArray{}.weakRef().lock().has_value());
   }
 
   SECTION("setup on an empty array returns false")

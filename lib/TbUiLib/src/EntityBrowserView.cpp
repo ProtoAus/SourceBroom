@@ -150,9 +150,10 @@ void EntityBrowserView::doReloadLayout(Layout& layout)
   {
     for (const auto& group : entityDefinitionManager.groups())
     {
-      if (const auto definitions = filterAndSort(
-            group.definitions, mdl::EntityDefinitionType::Point, m_sortOrder);
-          !definitions.empty())
+      if (
+        const auto definitions =
+          filterAndSort(group.definitions, mdl::EntityDefinitionType::Point, m_sortOrder);
+        !definitions.empty())
       {
         layout.addGroup(displayName(group), static_cast<float>(fontSize) + 2.0f);
 
@@ -244,7 +245,8 @@ void EntityBrowserView::addEntityToLayout(
     const auto& entityModelManager = map.entityModelManager();
     const auto* model = entityModelManager.model(spec.path);
     const auto* modelData = model ? model->data() : nullptr;
-    const auto* modelFrame = modelData ? modelData->frame(spec.frameIndex) : nullptr;
+    const auto* modelFrame =
+      modelData ? modelData->frame(spec.frameIndex, spec.body) : nullptr;
     if (modelFrame)
     {
       modelRenderer = entityModelManager.renderer(spec);

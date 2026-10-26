@@ -350,7 +350,8 @@ const EntityModelFrame* Entity::modelFrame() const
   }
 
   return modelSpecification() | kdl::transform([&](const auto& modelSpecification) {
-           return m_model->data()->frame(modelSpecification.frameIndex);
+           return m_model->data()->frame(
+             modelSpecification.frameIndex, modelSpecification.body);
          })
          | kdl::value_or(nullptr);
 }

@@ -37,7 +37,7 @@ Result<std::vector<EntityDefinition>> loadEntityDefinitions(
   const std::filesystem::path& path,
   const Color& defaultColor,
   ParserStatus& status,
-  bool normalizeSourceStudioSkin = false);
+  bool normalizeSourceStudioProperties = false);
 
 } // namespace mdl
 } // namespace tb

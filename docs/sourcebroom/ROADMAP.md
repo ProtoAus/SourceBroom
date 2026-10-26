@@ -88,8 +88,20 @@ compatible merely because they also use VMF.
   Windows filenames whose old temporary names exceeded the path budget.
   Current source checks: model187/187, native5,257 assertions/39 cases and affected
   UI129/3; actual app/checker/UI callers rebuilt without new warnings. Fresh
-  read-only source review found no blockers. New portable delivery and independent
-  Hammer acceptance are pending; A5.10 remains the current installed candidate.
+  read-only source review found no blockers.
+  Development source also adds static Source model **bodygroup selection** across
+  multiple bodyparts/models and blank choices, with selected render geometry,
+  bounds, picking, entity refresh and canonical caches. Source studio defaults
+  honor `body`; explicit and non-Source declarations retain their semantics.
+  Review-discovered duplicate GPU uploads and body-zero browser bounds were fixed
+  and acted: four unique meshes retain four VBOs across body/skin renderers and
+  release all buffers when renderers go away. Model187/187, GL21/21, body-focused
+  2,748 assertions/6 cases, weak-holder63/1 and targeted UI129/3 pass; actual public
+  callers rebuilt without new warnings. Fresh fix review found no remaining
+  blockers in its inspected scope. Corpus remains document38/strict35/preview38
+  with all38 originals unchanged. Root-pose/preview only, not animation or full
+  shader/FGD parity. New portable delivery and independent Hammer acceptance are
+  pending; A5.10 remains the current installed candidate.
   No Source compiler, Valve content, or third-party/user map is bundled. See
   [alpha instructions](ALPHA.md) for the owner test path.
 

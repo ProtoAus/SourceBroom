@@ -154,6 +154,18 @@ TEST_CASE("EntityModelManager")
     }
   }
 
+  SECTION("non-Source models ignore body without changing frame or skin controls")
+  {
+    const auto spec = ModelSpecification{"armor.mdl", 1, 0, 0};
+    const auto bodySpec = ModelSpecification{"armor.mdl", 1, 0, 3};
+    REQUIRE(manager.frame(spec) != nullptr);
+    CHECK(manager.frame(bodySpec) == manager.frame(spec));
+    REQUIRE(manager.renderer(spec) != nullptr);
+    CHECK(manager.renderer(bodySpec) == manager.renderer(spec));
+    CHECK(manager.frame({"armor.mdl", 1, 99, 3}) == nullptr);
+    CHECK(manager.renderer({"armor.mdl", 1, 99, 3}) == nullptr);
+  }
+
   SECTION("clear allows a model to be reloaded")
   {
     const auto* modelBeforeClear = manager.model("armor.mdl");

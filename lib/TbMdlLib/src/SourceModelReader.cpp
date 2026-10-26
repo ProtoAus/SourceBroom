@@ -211,6 +211,7 @@ SourceModelGeometry readSourceModel(
     for (size_t j = 0; j < 3; ++j)
     {
       vertex.position[j] = vvd.real(p + 16 + 4 * j);
+      vertex.normal[j] = vvd.real(p + 28 + 4 * j);
     }
     for (size_t j = 0; j < 2; ++j)
     {
@@ -263,122 +264,154 @@ SourceModelGeometry readSourceModel(
     require(n <= MaxRecords - totalRecords, "nested table resource limit");
     totalRecords += n;
   };
+  auto usedVertices = std::vector<bool>(vertexCount, false);
+  work(bodyCount);
   for (size_t b = 0; b < bodyCount; ++b)
   {
     const auto body = bodies + 16 * b, xb = xbodies + 8 * b;
+    const auto modelCount = mdl.number(body + 4, MaxRecords);
     require(
-      mdl.number(body + 4) == 1 && vtx.number(xb) == 1,
-      "bodygroup alternatives are unsupported");
-    const auto model = mdl.table(body, body + 4, body + 12, 148);
-    const auto xm = vtx.table(xb, xb, xb + 4, 8);
-    require(vtx.number(xm, 8) == lods, "model LOD mismatch");
-    const auto lod = vtx.table(xm, xm, xm + 4, 12, 8);
-    const auto meshes = mdl.table(model, model + 72, model + 76, 116);
-    const auto meshCount = mdl.number(model + 72, MaxRecords);
-    require(vtx.number(lod, MaxRecords) == meshCount, "mesh sidecar mismatch");
-    const auto xmeshes = vtx.table(lod, lod, lod + 4, 9);
-    const auto modelVertices = mdl.number(model + 80, vertexCount);
-    const auto modelByteOffset = mdl.number(model + 84);
-    require(modelByteOffset % 48 == 0, "unaligned model vertex offset");
-    const auto modelFirst = modelByteOffset / 48;
-    require(
-      modelFirst <= vertexCount && modelVertices <= vertexCount - modelFirst,
-      "model vertices outside VVD");
-    work(meshCount);
-    for (size_t h = 0; h < meshCount; ++h)
+      modelCount > 0 && modelCount == vtx.number(xb, MaxRecords),
+      "model sidecar mismatch");
+    const auto base = mdl.number(body + 8, std::numeric_limits<int32_t>::max());
+    require(modelCount == 1 || base > 0, "multi-model bodypart requires positive base");
+    const auto models = mdl.table(body, body + 4, body + 12, 148);
+    const auto xmodels = vtx.table(xb, xb, xb + 4, 8);
+    work(modelCount);
+    out.bodyParts.push_back({static_cast<uint32_t>(base), {}});
+    for (size_t m = 0; m < modelCount; ++m)
     {
-      const auto mesh = meshes + 116 * h, xmesh = xmeshes + 9 * h;
-      require(vtx.u8(xmesh + 8) == 0, "unsupported teeth/eyes VTX mesh");
-      const auto material = mdl.number(mesh, refs - 1);
-      const auto meshVertices = mdl.number(mesh + 8, modelVertices);
-      const auto meshFirst = mdl.number(mesh + 12, modelVertices);
-      require(meshVertices <= modelVertices - meshFirst, "mesh vertices outside model");
-      require(mdl.number(mesh + 16) == 0, "flex mesh is unsupported");
-      require(families <= MaxRecords - totalMaterialSlots, "skin resource limit");
-      totalMaterialSlots += families;
-      auto result = SourceModelMesh{};
-      for (size_t f = 0; f < families; ++f)
+      const auto model = models + 148 * m, xm = xmodels + 8 * m;
+      require(vtx.number(xm, 8) == lods, "model LOD mismatch");
+      const auto lod = vtx.table(xm, xm, xm + 4, 12, 8);
+      const auto meshes = mdl.table(model, model + 72, model + 76, 116);
+      const auto meshCount = mdl.number(model + 72, MaxRecords);
+      require(vtx.number(lod, MaxRecords) == meshCount, "mesh sidecar mismatch");
+      const auto xmeshes = vtx.table(lod, lod, lod + 4, 9);
+      const auto modelVertices = mdl.number(model + 80, vertexCount);
+      const auto modelByteOffset = mdl.number(model + 84);
+      require(modelByteOffset % 48 == 0, "unaligned model vertex offset");
+      const auto modelFirst = modelByteOffset / 48;
+      require(
+        modelFirst <= vertexCount && modelVertices <= vertexCount - modelFirst,
+        "model vertices outside VVD");
+      require(
+        (modelVertices == 0) == (meshCount == 0),
+        "blank model must have zero vertices and meshes");
+      for (size_t i = modelFirst; i < modelFirst + modelVertices; ++i)
       {
-        result.materials.push_back(names[mdl.u16(skins + 2 * (f * refs + material))]);
+        require(!usedVertices[i], "overlapping model vertex ranges");
+        usedVertices[i] = true;
       }
-      const auto groups = vtx.table(xmesh, xmesh, xmesh + 4, 25);
-      const auto groupCount = vtx.number(xmesh, MaxRecords);
-      work(groupCount);
-      for (size_t g = 0; g < groupCount; ++g)
+      auto variant = SourceModelVariant{modelFirst, modelVertices, out.meshes.size(), 0};
+      auto usedMeshVertices = std::vector<bool>(modelVertices, false);
+      work(meshCount);
+      for (size_t h = 0; h < meshCount; ++h)
       {
-        const auto group = groups + 25 * g;
-        require((vtx.u8(group + 24) & ~2u) == 0, "unsupported VTX strip group variant");
-        const auto verts = vtx.table(group, group, group + 4, 9, MaxVertices);
-        const auto nverts = vtx.number(group, MaxVertices);
-        const auto indices = vtx.table(group, group + 8, group + 12, 2, MaxIndices);
-        const auto nindices = vtx.number(group + 8, MaxIndices);
-        const auto strips = vtx.table(group, group + 16, group + 20, 27);
-        const auto nstrips = vtx.number(group + 16, MaxRecords);
-        work(nstrips);
-        auto index = [&](size_t i, size_t firstVertex, size_t stripVertices) -> uint32_t {
-          require(i < nindices, "strip index outside group");
-          const auto local = vtx.u16(indices + 2 * i);
-          require(
-            local < nverts && local >= firstVertex && local - firstVertex < stripVertices,
-            "index outside strip vertices");
-          const auto original = vtx.u16(verts + 9 * local + 4);
-          require(original < meshVertices, "VTX vertex outside MDL mesh");
-          return static_cast<uint32_t>(modelFirst + meshFirst + original);
-        };
-        for (size_t s = 0; s < nstrips; ++s)
+        const auto mesh = meshes + 116 * h, xmesh = xmeshes + 9 * h;
+        require(vtx.u8(xmesh + 8) == 0, "unsupported teeth/eyes VTX mesh");
+        const auto material = mdl.number(mesh, refs - 1);
+        const auto meshVertices = mdl.number(mesh + 8, modelVertices);
+        const auto meshFirst = mdl.number(mesh + 12, modelVertices);
+        require(meshVertices <= modelVertices - meshFirst, "mesh vertices outside model");
+        for (size_t i = meshFirst; i < meshFirst + meshVertices; ++i)
         {
-          const auto strip = strips + 27 * s;
-          const auto count = vtx.number(strip, nindices),
-                     first = vtx.number(strip + 4, nindices);
-          require(count <= nindices - first && count >= 3, "invalid strip index range");
-          const auto nv = vtx.number(strip + 8, nverts),
-                     fv = vtx.number(strip + 12, nverts);
-          require(nv <= nverts - fv, "invalid strip vertex range");
-          const auto flags = vtx.u8(strip + 18);
-          require(flags == 1 || flags == 2, "unsupported VTX primitive flags");
-          require(flags != 1 || count % 3 == 0, "incomplete triangle list");
-          vtx.table(strip, strip + 19, strip + 23, 8);
-          const auto expanded = flags == 1 ? count : (count - 2) * 3;
-          require(expanded <= MaxIndices - totalIndices, "triangle resource limit");
-          totalIndices += expanded;
-          auto emit = [&](size_t a, size_t b, size_t c) {
-            const auto ia = index(first + a, fv, nv), ib = index(first + b, fv, nv),
-                       ic = index(first + c, fv, nv);
-            if (ia != ib && ib != ic && ia != ic)
-            {
-              result.indices.push_back(ia);
-              result.indices.push_back(ib);
-              result.indices.push_back(ic);
-            }
+          require(!usedMeshVertices[i], "overlapping mesh vertex ranges");
+          usedMeshVertices[i] = true;
+        }
+        require(mdl.number(mesh + 16) == 0, "flex mesh is unsupported");
+        require(families <= MaxRecords - totalMaterialSlots, "skin resource limit");
+        totalMaterialSlots += families;
+        auto result = SourceModelMesh{};
+        result.bodyPartIndex = b;
+        result.modelIndex = m;
+        for (size_t f = 0; f < families; ++f)
+        {
+          result.materials.push_back(names[mdl.u16(skins + 2 * (f * refs + material))]);
+        }
+        const auto groups = vtx.table(xmesh, xmesh, xmesh + 4, 25);
+        const auto groupCount = vtx.number(xmesh, MaxRecords);
+        work(groupCount);
+        for (size_t g = 0; g < groupCount; ++g)
+        {
+          const auto group = groups + 25 * g;
+          require((vtx.u8(group + 24) & ~2u) == 0, "unsupported VTX strip group variant");
+          const auto verts = vtx.table(group, group, group + 4, 9, MaxVertices);
+          const auto nverts = vtx.number(group, MaxVertices);
+          const auto indices = vtx.table(group, group + 8, group + 12, 2, MaxIndices);
+          const auto nindices = vtx.number(group + 8, MaxIndices);
+          const auto strips = vtx.table(group, group + 16, group + 20, 27);
+          const auto nstrips = vtx.number(group + 16, MaxRecords);
+          work(nstrips);
+          auto index = [&](
+                         size_t i, size_t firstVertex, size_t stripVertices) -> uint32_t {
+            require(i < nindices, "strip index outside group");
+            const auto local = vtx.u16(indices + 2 * i);
+            require(
+              local < nverts && local >= firstVertex
+                && local - firstVertex < stripVertices,
+              "index outside strip vertices");
+            const auto original = vtx.u16(verts + 9 * local + 4);
+            require(original < meshVertices, "VTX vertex outside MDL mesh");
+            return static_cast<uint32_t>(modelFirst + meshFirst + original);
           };
-          // VTX winding is already clockwise, as required by the renderer.
-          if (flags == 1)
+          for (size_t s = 0; s < nstrips; ++s)
           {
-            for (size_t i = 0; i < count; i += 3)
-            {
-              emit(i, i + 1, i + 2);
-            }
-          }
-          else
-          {
-            for (size_t i = 0; i + 2 < count; ++i)
-            {
-              if (i & 1)
+            const auto strip = strips + 27 * s;
+            const auto count = vtx.number(strip, nindices),
+                       first = vtx.number(strip + 4, nindices);
+            require(count <= nindices - first && count >= 3, "invalid strip index range");
+            const auto nv = vtx.number(strip + 8, nverts),
+                       fv = vtx.number(strip + 12, nverts);
+            require(nv <= nverts - fv, "invalid strip vertex range");
+            const auto flags = vtx.u8(strip + 18);
+            require(flags == 1 || flags == 2, "unsupported VTX primitive flags");
+            require(flags != 1 || count % 3 == 0, "incomplete triangle list");
+            vtx.table(strip, strip + 19, strip + 23, 8);
+            const auto expanded = flags == 1 ? count : (count - 2) * 3;
+            require(expanded <= MaxIndices - totalIndices, "triangle resource limit");
+            totalIndices += expanded;
+            auto emit = [&](size_t a, size_t b, size_t c) {
+              const auto ia = index(first + a, fv, nv), ib = index(first + b, fv, nv),
+                         ic = index(first + c, fv, nv);
+              if (ia != ib && ib != ic && ia != ic)
               {
-                emit(i, i + 2, i + 1);
+                result.indices.push_back(ia);
+                result.indices.push_back(ib);
+                result.indices.push_back(ic);
               }
-              else
+            };
+            // VTX winding is already clockwise, as required by the renderer.
+            if (flags == 1)
+            {
+              for (size_t i = 0; i < count; i += 3)
               {
                 emit(i, i + 1, i + 2);
               }
             }
+            else
+            {
+              for (size_t i = 0; i + 2 < count; ++i)
+              {
+                if (i & 1)
+                {
+                  emit(i, i + 2, i + 1);
+                }
+                else
+                {
+                  emit(i, i + 1, i + 2);
+                }
+              }
+            }
           }
         }
+        if (!result.indices.empty())
+        {
+          out.meshes.push_back(std::move(result));
+        }
       }
-      if (!result.indices.empty())
-      {
-        out.meshes.push_back(std::move(result));
-      }
+      variant.meshCount = out.meshes.size() - variant.firstMesh;
+      out.bodyParts.back().models.push_back(variant);
     }
   }
   require(!out.meshes.empty(), "no nondegenerate static-prop triangles");

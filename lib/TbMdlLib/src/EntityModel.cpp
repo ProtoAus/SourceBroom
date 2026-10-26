@@ -25,6 +25,7 @@
 #include "gl/MaterialIndexRangeRenderer.h"
 #include "gl/PrimType.h"
 #include "gl/Texture.h"
+#include "gl/VertexArray.h"
 
 #include "kd/const_overload.h"
 #include "kd/contracts.h"
@@ -94,6 +95,13 @@ EntityModelFrame::EntityModelFrame(
 {
 }
 
+EntityModelFrame::EntityModelFrame(
+  const vm::bbox3f& bounds, std::vector<const EntityModelFrame*> parts)
+  : EntityModelFrame{0, "static", bounds}
+{
+  m_parts = std::move(parts);
+}
+
 size_t EntityModelFrame::index() const
 {
   return m_index;
@@ -122,6 +130,11 @@ const vm::bbox3f& EntityModelFrame::bounds() const
 std::optional<float> EntityModelFrame::intersect(const vm::ray3f& ray) const
 {
   auto closestDistance = std::optional<float>{};
+
+  for (const auto* part : m_parts)
+  {
+    closestDistance = vm::safe_min(closestDistance, part->intersect(ray));
+  }
 
   const auto candidates = m_spacialTree.find_intersectors(ray);
   for (const auto triNum : candidates)
@@ -231,6 +244,9 @@ void EntityModelFrame::addToSpacialTree(
  */
 class EntityModelMesh
 {
+private:
+  mutable gl::VertexArray::WeakRef m_vertexArray;
+
 protected:
   std::vector<EntityModelVertex> m_vertices;
 
@@ -259,8 +275,13 @@ public:
   std::unique_ptr<gl::MaterialIndexRangeRenderer> buildRenderer(
     const gl::Material* skin) const
   {
-    const auto vertexArray = gl::VertexArray::ref(m_vertices);
-    return doBuildRenderer(skin, vertexArray);
+    auto vertexArray = m_vertexArray.lock();
+    if (!vertexArray)
+    {
+      vertexArray = gl::VertexArray::ref(m_vertices);
+      m_vertexArray = vertexArray->weakRef();
+    }
+    return doBuildRenderer(skin, *vertexArray);
   }
 
 private:
@@ -482,7 +503,7 @@ Orientation EntityModelData::orientation() const
 }
 
 std::unique_ptr<gl::MaterialRenderer> EntityModelData::buildRenderer(
-  const size_t skinIndex, const size_t frameIndex) const
+  const size_t skinIndex, const size_t frameIndex, const uint32_t body) const
 {
   auto renderers = std::vector<std::unique_ptr<gl::MaterialIndexRangeRenderer>>{};
   if (frameIndex >= frameCount())
@@ -490,10 +511,17 @@ std::unique_ptr<gl::MaterialRenderer> EntityModelData::buildRenderer(
     return nullptr;
   }
 
-  const auto& frame = this->frame(frameIndex);
+  const auto* frame = this->frame(frameIndex, body);
   const auto actualSkinIndex = skinIndex + frame->skinOffset();
-  for (auto& surface : m_surfaces)
+  const auto* selected =
+    m_bodyParts.empty() ? nullptr : &m_bodySelections[bodySelectionIndex(body)].surfaces;
+  for (size_t i = 0; i < m_surfaces.size(); ++i)
   {
+    if (selected && std::ranges::find(*selected, i) == selected->end())
+    {
+      continue;
+    }
+    const auto& surface = m_surfaces[i];
     // If an out of range skin is requested, use the first skin as a fallback
     const auto correctedSkinIndex =
       actualSkinIndex < surface.skinCount() ? actualSkinIndex : 0;
@@ -502,14 +530,15 @@ std::unique_ptr<gl::MaterialRenderer> EntityModelData::buildRenderer(
       renderers.push_back(std::move(renderer));
     }
   }
-  return !renderers.empty()
+  return !renderers.empty() || !m_bodyParts.empty()
            ? std::make_unique<gl::MultiMaterialIndexRangeRenderer>(std::move(renderers))
            : nullptr;
 }
 
-vm::bbox3f EntityModelData::bounds(const size_t frameIndex) const
+vm::bbox3f EntityModelData::bounds(const size_t frameIndex, const uint32_t body) const
 {
-  return frameIndex < m_frames.size() ? m_frames[frameIndex].bounds() : vm::bbox3f{8.0f};
+  const auto* selected = frame(frameIndex, body);
+  return selected ? selected->bounds() : vm::bbox3f{8.0f};
 }
 
 void EntityModelData::upload(gl::Gl& gl)
@@ -567,12 +596,104 @@ const EntityModelFrame* EntityModelData::frame(const std::string& name) const
 {
   const auto it = std::ranges::find_if(
     m_frames, [&](const auto& frame) { return frame.name() == name; });
-  return it != m_frames.end() ? &*it : nullptr;
+  return it != m_frames.end() ? frame(it->index()) : nullptr;
 }
 
-const EntityModelFrame* EntityModelData::frame(const size_t index) const
+const EntityModelFrame* EntityModelData::frame(
+  const size_t index, const uint32_t body) const
 {
-  return index < frameCount() ? &m_frames[index] : nullptr;
+  if (index >= frameCount())
+  {
+    return nullptr;
+  }
+  return m_bodyParts.empty() ? &m_frames[index]
+                             : m_bodySelections[bodySelectionIndex(body)].frame.get();
+}
+
+void EntityModelData::setBodyParts(
+  std::vector<EntityModelBodyPart> parts,
+  std::vector<std::unique_ptr<EntityModelFrame>> surfaceFrames)
+{
+  contract_assert(m_bodyParts.empty());
+  contract_assert(!parts.empty());
+  contract_assert(frameCount() == 1);
+  contract_assert(surfaceFrames.size() == surfaceCount());
+  for (const auto& part : parts)
+  {
+    contract_assert(!part.models.empty());
+    contract_assert(part.models.size() == 1 || part.base > 0);
+    for (const auto& model : part.models)
+    {
+      for (const auto surface : model)
+      {
+        contract_assert(surface < surfaceCount());
+      }
+    }
+  }
+  m_bodyParts = std::move(parts);
+  m_surfaceFrames = std::move(surfaceFrames);
+  m_bodySelectionIndices.clear();
+  m_bodySelections.clear();
+  // Keep the public default frame list consistent too; only references and
+  // bounds are copied, never the picking triangles or render geometry.
+  const auto defaultIndex = bodySelectionIndex(0);
+  auto frames = std::vector<const EntityModelFrame*>{};
+  for (const auto surface : m_bodySelections[defaultIndex].surfaces)
+  {
+    frames.push_back(m_surfaceFrames[surface].get());
+  }
+  m_frames[0] =
+    EntityModelFrame{m_bodySelections[defaultIndex].frame->bounds(), std::move(frames)};
+}
+
+bool EntityModelData::surfaceActive(const size_t surfaceIndex, const uint32_t body) const
+{
+  if (m_bodyParts.empty())
+  {
+    return surfaceIndex < surfaceCount();
+  }
+  const auto& surfaces = m_bodySelections[bodySelectionIndex(body)].surfaces;
+  return std::ranges::find(surfaces, surfaceIndex) != surfaces.end();
+}
+
+size_t EntityModelData::bodySelectionIndex(const uint32_t body) const
+{
+  if (m_bodyParts.empty())
+  {
+    return 0;
+  }
+  auto models = std::vector<size_t>{};
+  for (const auto& part : m_bodyParts)
+  {
+    models.push_back(
+      part.models.size() == 1 ? 0 : (body / part.base) % part.models.size());
+  }
+  if (
+    const auto it = m_bodySelectionIndices.find(models);
+    it != m_bodySelectionIndices.end())
+  {
+    return it->second;
+  }
+  auto surfaces = std::vector<size_t>{};
+  auto frames = std::vector<const EntityModelFrame*>{};
+  auto bounds = std::optional<vm::bbox3f>{};
+  for (size_t i = 0; i < models.size(); ++i)
+  {
+    for (const auto surface : m_bodyParts[i].models[models[i]])
+    {
+      surfaces.push_back(surface);
+      const auto* frame = m_surfaceFrames[surface].get();
+      frames.push_back(frame);
+      bounds = bounds ? vm::merge(*bounds, frame->bounds()) : frame->bounds();
+    }
+  }
+  const auto index = m_bodySelections.size();
+  m_bodySelections.push_back(
+    {std::move(surfaces),
+     std::make_unique<EntityModelFrame>(
+       bounds.value_or(vm::bbox3f{0.0f}), std::move(frames))});
+  m_bodySelectionIndices.emplace(std::move(models), index);
+  return index;
 }
 
 const EntityModelSurface& EntityModelData::surface(const size_t index) const

@@ -210,10 +210,10 @@ FgdParser::FgdParser(
   const std::string_view str,
   const Color& defaultEntityColor,
   const std::filesystem::path& path,
-  const bool normalizeSourceStudioSkin)
+  const bool normalizeSourceStudioProperties)
   : EntityDefinitionParser{defaultEntityColor}
   , m_tokenizer{FgdTokenizer{str}}
-  , m_normalizeSourceStudioSkin{normalizeSourceStudioSkin}
+  , m_normalizeSourceStudioProperties{normalizeSourceStudioProperties}
 {
   if (!path.empty() && path.is_absolute())
   {
@@ -503,11 +503,16 @@ ModelDefinition FgdParser::parseModel(
       defaultModel.elements.emplace(
         "skin", el::ExpressionNode{el::VariableExpression{"skin"}, location});
     }
+    if (sourceStudio && m_normalizeSourceStudioProperties)
+    {
+      defaultModel.elements.emplace(
+        "body", el::ExpressionNode{el::VariableExpression{"body"}, location});
+    }
     auto defaultExp = el::ExpressionNode{std::move(defaultModel), location};
     return ModelDefinition{std::move(defaultExp)};
   }
 
-  if (sourceStudio && m_normalizeSourceStudioSkin)
+  if (sourceStudio && m_normalizeSourceStudioProperties)
   {
     const auto snapshot = m_tokenizer.snapshot();
     const auto location = m_tokenizer.location();
@@ -517,7 +522,7 @@ ModelDefinition FgdParser::parseModel(
     {
       auto parsed = std::move(expression) | kdl::value();
       // Inspect the unoptimized syntax: folded expressions and legacy skin/frame
-      // operands must not acquire entity-driven skin selection.
+      // operands must not acquire entity-driven skin/body selection.
       const auto fixedPath = parsed.accept(
         kdl::overload(
           [](const el::LiteralExpression& literal) {
@@ -531,6 +536,7 @@ ModelDefinition FgdParser::parseModel(
           el::MapExpression{{
             {"path", std::move(parsed)},
             {"skin", el::ExpressionNode{el::VariableExpression{"skin"}, location}},
+            {"body", el::ExpressionNode{el::VariableExpression{"body"}, location}},
           }},
           location}};
       }

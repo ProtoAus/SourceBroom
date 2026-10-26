@@ -81,20 +81,30 @@ gl::MaterialRenderer* EntityModelManager::renderer(const ModelSpecification& spe
 {
   if (auto* entityModel = model(spec.path))
   {
-    auto it = m_renderers.find(spec);
+    const auto* data = entityModel->data();
+    if (!data)
+    {
+      return nullptr;
+    }
+    // Intern selected model membership, so equivalent packed inputs share a
+    // renderer without changing the public specification or animation frame.
+    auto cacheSpec = spec;
+    cacheSpec.body = static_cast<uint32_t>(data->bodySelectionIndex(spec.body));
+    auto it = m_renderers.find(cacheSpec);
     if (it != std::end(m_renderers))
     {
       return it->second.get();
     }
 
-    if (!m_rendererMismatches.contains(spec))
+    if (!m_rendererMismatches.contains(cacheSpec))
     {
       if (const auto* entityModelData = entityModel->data())
       {
         if (
-          auto renderer = entityModelData->buildRenderer(spec.skinIndex, spec.frameIndex))
+          auto renderer =
+            entityModelData->buildRenderer(spec.skinIndex, spec.frameIndex, spec.body))
         {
-          const auto [pos, success] = m_renderers.emplace(spec, std::move(renderer));
+          const auto [pos, success] = m_renderers.emplace(cacheSpec, std::move(renderer));
           contract_assert(success);
 
           auto* result = pos->second.get();
@@ -103,7 +113,7 @@ gl::MaterialRenderer* EntityModelManager::renderer(const ModelSpecification& spe
           return result;
         }
 
-        m_rendererMismatches.insert(spec);
+        m_rendererMismatches.insert(cacheSpec);
         m_logger.error() << "Failed to construct entity model renderer for " << spec
                          << ", check the skin and frame indices";
       }
@@ -119,7 +129,7 @@ const EntityModelFrame* EntityModelManager::frame(const ModelSpecification& spec
   {
     if (const auto* entityModelData = entityModel->data())
     {
-      return entityModelData->frame(spec.frameIndex);
+      return entityModelData->frame(spec.frameIndex, spec.body);
     }
   }
 

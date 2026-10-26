@@ -161,11 +161,23 @@ Result<EntityModelData> loadSourceModel(
       readFile(fs, vvdPath, SourceModelMaxFileSize),
       readFile(fs, vtxPath, SourceModelMaxFileSize));
     auto data = EntityModelData{PitchType::Normal, Orientation::Oriented};
-    auto& frame = data.addFrame(
-      "static",
-      vm::bbox3f{
-        vm::vec3f{geometry.min[0], geometry.min[1], geometry.min[2]},
-        vm::vec3f{geometry.max[0], geometry.max[1], geometry.max[2]}});
+    data.addFrame("static", vm::bbox3f{0.0f});
+    auto bodyParts = std::vector<EntityModelBodyPart>{};
+    for (const auto& part : geometry.bodyParts)
+    {
+      auto models = std::vector<std::vector<size_t>>{};
+      for (const auto& model : part.models)
+      {
+        auto surfaces = std::vector<size_t>{};
+        for (size_t i = 0; i < model.meshCount; ++i)
+        {
+          surfaces.push_back(model.firstMesh + i);
+        }
+        models.push_back(std::move(surfaces));
+      }
+      bodyParts.push_back({part.base, std::move(models)});
+    }
+    auto surfaceFrames = std::vector<std::unique_ptr<EntityModelFrame>>{};
     if (decodedTextureBudget < Materials::FallbackBytes)
     {
       throw std::runtime_error("Source model: texture budget cannot hold fallback");
@@ -191,11 +203,23 @@ Result<EntityModelData> loadSourceModel(
           vm::vec3f{v.position[0], v.position[1], v.position[2]},
           vm::vec2f{v.uv[0], v.uv[1]});
       }
+      auto bounds = vm::bbox3f{vm::vec3f{
+        geometry.vertices[mesh.indices.front()].position[0],
+        geometry.vertices[mesh.indices.front()].position[1],
+        geometry.vertices[mesh.indices.front()].position[2]}};
+      for (const auto index : mesh.indices)
+      {
+        const auto& p = geometry.vertices[index].position;
+        bounds = vm::merge(bounds, vm::vec3f{p[0], p[1], p[2]});
+      }
+      auto frame = std::make_unique<EntityModelFrame>(0, "static", bounds);
       surface.addMesh(
-        frame,
+        *frame,
         std::move(vertices),
         gl::IndexRangeMap{gl::PrimType::Triangles, 0, mesh.indices.size()});
+      surfaceFrames.push_back(std::move(frame));
     }
+    data.setBodyParts(std::move(bodyParts), std::move(surfaceFrames));
     return data;
   }
   catch (const std::exception& e)

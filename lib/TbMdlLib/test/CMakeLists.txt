@@ -144,6 +144,7 @@ target_link_libraries(TbMdlLibTest
     TbBaseTestUtilsLib
     TbElTestUtilsLib
     TbFsTestUtilsLib
+    TbGlTestUtilsLib
     TbMdlLib
     TbMdlTestUtilsLib
     TbVersionLib

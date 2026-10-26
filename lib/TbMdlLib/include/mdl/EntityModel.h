@@ -28,6 +28,8 @@ along with TrenchBroom. If not, see <http://www.gnu.org/licenses/>.
 
 #include "vm/bbox.h"
 
+#include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -95,6 +97,8 @@ private:
   size_t m_skinOffset = 0;
 
   // For hit testing
+  // Composite static selections reference immutable per-surface picking data.
+  std::vector<const EntityModelFrame*> m_parts;
   std::vector<vm::vec3f> m_tris;
   using TriNum = size_t;
   using SpacialTree = octree<float, TriNum>;
@@ -109,6 +113,9 @@ public:
    * @param index the index of this frame
    */
   explicit EntityModelFrame(size_t index, std::string name, const vm::bbox3f& bounds);
+
+  // Composite static frame; referenced parts must outlive this frame.
+  EntityModelFrame(const vm::bbox3f& bounds, std::vector<const EntityModelFrame*> parts);
 
   /**
    * Returns the index of this frame.
@@ -281,6 +288,14 @@ public:
     size_t skinIndex, size_t frameIndex) const;
 };
 
+struct EntityModelBodyPart
+{
+  uint32_t base;
+  // Each model lists its surfaces; an empty list is a blank choice.
+  std::vector<std::vector<size_t>> models;
+};
+
+
 /**
  * Manages all data necessary to render an entity model. Each model can have multiple
  * frames, and multiple surfaces. Each surface represents an independent mesh of
@@ -294,6 +309,15 @@ private:
   Orientation m_orientation;
   std::vector<EntityModelFrame> m_frames;
   std::vector<EntityModelSurface> m_surfaces;
+  std::vector<EntityModelBodyPart> m_bodyParts;
+  std::vector<std::unique_ptr<EntityModelFrame>> m_surfaceFrames;
+  struct BodySelection
+  {
+    std::vector<size_t> surfaces;
+    std::unique_ptr<EntityModelFrame> frame;
+  };
+  mutable std::map<std::vector<size_t>, size_t> m_bodySelectionIndices;
+  mutable std::vector<BodySelection> m_bodySelections;
 
   kdl_reflect_decl(EntityModelData, m_pitchType, m_orientation, m_frames, m_surfaces);
 
@@ -321,7 +345,16 @@ public:
    * @return the renderer
    */
   std::unique_ptr<gl::MaterialRenderer> buildRenderer(
-    size_t skinIndex, size_t frameIndex) const;
+    size_t skinIndex, size_t frameIndex, uint32_t body = 0) const;
+
+  // Configure once before publication for Source static selection; geometry is
+  // stored once per surface. Returned selection frames live with this data.
+  void setBodyParts(
+    std::vector<EntityModelBodyPart> parts,
+    std::vector<std::unique_ptr<EntityModelFrame>> surfaceFrames);
+  // Stable, lazily interned identity of the selected models (not an animation frame).
+  size_t bodySelectionIndex(uint32_t body) const;
+  bool surfaceActive(size_t surfaceIndex, uint32_t body = 0) const;
 
   /**
    * Returns the bounds of the given frame of this model.
@@ -329,7 +362,7 @@ public:
    * @param frameIndex the index of the frame
    * @return the bounds of the frame
    */
-  vm::bbox3f bounds(size_t frameIndex) const;
+  vm::bbox3f bounds(size_t frameIndex, uint32_t body = 0) const;
 
   /**
    * Prepares this model for rendering by uploading its skin materials.
@@ -408,7 +441,7 @@ public:
    * @param index the index of the frame
    * @return the frame with the given index or null if the index is out of bounds
    */
-  const EntityModelFrame* frame(size_t index) const;
+  const EntityModelFrame* frame(size_t index, uint32_t body = 0) const;
 
   /**
    * Returns the surface with the given index.
