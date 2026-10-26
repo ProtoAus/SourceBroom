@@ -21,6 +21,35 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Validated ordinary polygon-cache ownership — A5.20
+
+`polygonCacheEdits` has an explicit forced-unchanged validation mode; the default
+content no-op fastpath remains, before any canonical Brush copy. Ownership uses
+one pure complete-closure helper, exact direct-side block IDs and canonical
+original/current source-side correspondence. Generated prototype normalization
+must preserve a unique owned side bijection, not launder foreign/duplicate/stolen
+bindings. Archived original children are checked as immutable source, never
+against a later live registered-clip side state. Exact point_data/vertices_plus
+keys outside actually validated direct-side blocks refuse even under editor data.
+Default opaque/editor/parser policy and raw displacement ownership stay unchanged.
+
+Allowances compose only existing duplication/removal/addition/emission and
+NON-clipping generated-brush content/save checks, plus the existing entity-owner
+publication scan. Complete source parents retain unknown siblings/ancestors and
+references. Cached-member group current/target ancestry stays CLOSED; uncached
+native groups and registered clipping retain prior behavior. Preflight runs before
+identity allocation; invalid batches retain selection/history/count/bytes/next IDs.
+
+Desired synthetic RED210/202 controls/eight ownership failures and actual RED49/
+47 controls/two Ctrl-D/delete failures were compiled before guards. Parent review
+required destination-group ANCESTORS, lazy unchanged normalization and separation
+of raw-original/live side-state validation; all have bounded regression controls.
+Final focus91/model260/BOTH actual128 and parent product/App50 pass with zero new
+compiler warnings. Two actual variants resolve native identity rather than equal
+entry offsets, then move/clone/move/reclone/delete/repeated save/reopen/further
+ownership/history/exact restore. Corpus38/35/38 is load/metadata only. Human/Hammer
+checks remain pending; no group/clip/reparent/topology/displacement ownership claim.
+
 ## Compose polygon cache with parsed displacement — A5.19
 
 The entire production change moves existing before-face parsed displacementSides

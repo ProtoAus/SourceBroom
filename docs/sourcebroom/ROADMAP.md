@@ -33,7 +33,17 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.19 candidate:** parsed displacement meshes and validated point_data OR
+- **A5.20 candidate:** ordinary validated NON-displacement point_data/vertices_plus
+  ownership: duplicate/delete, whole/partial plain brush entities and safe entity
+  parent additions. Generated copies continue move/save/reopen/further ownership;
+  no cache/ID stripping or global opaque allowance. Exact source closure, original
+  side ownership and canonical unique generated prototypes are validated even for
+  unchanged geometry. Both actual inputs128 assertions/focus91/model260/App50 and
+  zero-new-warning product builds pass. Same corpus38/35/38/original hashes.
+  Displacement ownership, cached-member groups/target ancestors, reparenting,
+  clipping/topology and malformed/unknown payloads remain guarded. Owner/Hammer
+  retry pending; full visgroup/hidden/advanced Source authoring remains outstanding.
+- **Retained A5.19 candidate:** parsed displacement meshes and validated point_data OR
   vertices_plus now compose for typed whole-brush translation/proper rotation/
   positive uniform scale. No frame/schema/tolerance inference change: only the
   existing parsed-side allowance reaches cache staging before unchanged later

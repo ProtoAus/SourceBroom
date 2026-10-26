@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.19 coupled native terrain-motion candidate:
+**Status:** Windows A5.20 native polygon-cache ownership candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -38,7 +38,17 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.19 lets already-parsed **displacement terrain and its native polygon cache**
+A5.20 enables **duplication and deletion of ordinary non-terrain brushes with
+validated point_data or vertices_plus polygons**, including supported whole/partial
+brush entities and safe brush additions to those entities. Copies retain stable
+new native IDs and remain movable, duplicable and removable after Save As/reopen.
+Both actual map variants passed the acted ownership/history path (128 assertions);
+full model260/260, affected91 and App50 pass with zero new compiler warnings.
+Unknown/malformed caches, displacement ownership, cached-member groups, reparenting,
+clipping and topology remain guarded. Human/Hammer retry pending; keep whole A5.19
+as recovery. This is not complete Source support.
+
+Retained A5.19 lets already-parsed **displacement terrain and its native polygon cache**
 move together: typed translation, proper rotation and positive uniform scaling.
 Both actual map variants passed a production-discovered terrain-brush move/save/
 reopen/further-edit/undo/redo path. Existing exact shared-frame, base/mesh, cache,

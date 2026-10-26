@@ -213,6 +213,21 @@ is pending, not inferred from source/model/tool/runtime checks:
   ambiguity remain guarded; report exact refusals rather than bypassing native
   preservation through MAP export. Test counts/review are not this observation.
 
+## A5.20 ordinary polygon-cache ownership — pending owner retry
+
+- [ ] In the whole A5.20 kit, open a COPY of either original/Hammer++ map. Select
+  an ordinary NON-terrain brush, duplicate it and move the copy one grid step.
+  Undo/redo, Save As a NEW file and reopen. Duplicate/delete the reopened copy
+  and undo. Report exact tool/diagnostic on refusal; never strip native blocks.
+- [ ] If convenient, inspect that saved copy in matching Hammer++ for intact
+  copies/materials/geometry. This is independent editor observation, not inferred
+  from SourceBroom's native reopen or automated test counts.
+
+Pending. BOTHactual128/focus91/model260/App50 are automated evidence, NOT a human
+pass. Displacement ownership, cached-member groups/target ancestry, reparenting,
+clipping/topology and unknown/malformed payloads remain guarded. Existing A5.19
+terrain motion remains available. Keep whole A5.19 as recovery without merging DLLs.
+
 ## A5.19 native terrain movement — pending owner retry
 
 - [ ] In the whole A5.19 kit, open a COPY of either map. Select a terrain brush,

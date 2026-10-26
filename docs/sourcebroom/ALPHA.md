@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.19 native terrain-motion candidate
+# Try the Windows SourceBroom A5.20 native polygon-ownership candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,29 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.19: move native terrain and cached base polygons together
+## A5.20: duplicate and delete ordinary cached brushes
+
+Ordinary non-displacement brushes with validated Strata point_data or Hammer++
+vertices_plus can now be duplicated/deleted through the existing tools. Supported
+whole/partial plain brush entities and fresh plain additions to a cached entity
+use the same closed-owner validation. Copies receive stable independent native
+object/side IDs and remain editable after repeated saves and reopening.
+
+**Quick owner check (pending):** in the whole A5.20 kit, open a COPY of either map.
+Select an ordinary non-terrain brush, duplicate it, move the copy one grid step,
+undo/redo, Save As a new file and reopen. Duplicate/delete the reopened copy and
+undo. Report the exact tool/diagnostic if it refuses. Matching Hammer++ reopening
+is helpful but not implied by the automated native reopen.
+
+Both actual inputs passed this acted Map path, including another ownership edit
+after reopen and exact undo/source restoration. Full model260/affected91/App50
+pass; automated tests are not human visual/compiler acceptance. Unknown/mixed/
+misplaced/malformed caches, displacement ownership, cached members in current or
+destination groups, reparenting, clipping and topology remain guarded. Existing
+plain uncached groups/clipping still work. Do not strip blocks or overwrite an
+original to bypass a refusal. Keep the whole A5.19 kit as unmerged recovery.
+
+## Retained A5.19: move native terrain and cached base polygons together
 
 A known parsed displacement can now move with its validated Strata point_data or
 Hammer++ vertices_plus base polygon. Use whole-brush **Move**, **Rotate**, or a

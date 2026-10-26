@@ -306,6 +306,8 @@ TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
     const auto source = fixture(false, malformed);
     auto scene = VmfScene::read(source, bounds);
     auto& node = brush(scene.world());
+    CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
+    CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
     auto moved = node.brush();
     REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
               .is_success());
@@ -314,12 +316,12 @@ TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
       scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
     CHECK(scene.serialize(scene.world()) == source);
   }
-  SECTION("known polygon does not relax clone removal clipping or reflection")
+  SECTION("validated ownership does not relax clipping or reflection")
   {
     auto scene = VmfScene::read(fixture(false, cache), bounds);
     auto& node = brush(scene.world());
-    CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
-    CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+    CHECK_NOTHROW(scene.validateDuplication({&node}));
+    CHECK_NOTHROW(scene.validateRemoval({&node}));
     auto mirrored = node.brush();
     REQUIRE(mirrored.transform(bounds, vm::scaling_matrix(vm::vec3d{-1, 1, 1}), true)
               .is_success());
@@ -623,6 +625,8 @@ TEST_CASE("VmfScene vertices_plus strict schema and operation guards", "[vmf]")
     const auto source = fixture(false, malformed);
     auto scene = VmfScene::read(source, bounds);
     auto& node = brush(scene.world());
+    CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
+    CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
     auto moved = node.brush();
     REQUIRE(moved.transform(bounds, vm::translation_matrix(vm::vec3d{16, 8, 4}), true)
               .is_success());
@@ -665,8 +669,16 @@ TEST_CASE("VmfScene vertices_plus strict schema and operation guards", "[vmf]")
       CHECK_THROWS_AS(
         scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
     }
-    CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
-    CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+    if (attachment == 0)
+    {
+      CHECK_NOTHROW(scene.validateDuplication({&node}));
+      CHECK_NOTHROW(scene.validateRemoval({&node}));
+    }
+    else
+    {
+      CHECK_THROWS_AS(scene.validateDuplication({&node}), std::invalid_argument);
+      CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+    }
     CHECK_THROWS_AS(
       scene.validateClipContents(node, NodeContents{node.brush()}, bounds),
       std::invalid_argument);
@@ -691,6 +703,267 @@ TEST_CASE("VmfScene vertices_plus strict schema and operation guards", "[vmf]")
               .is_success());
     CHECK_THROWS_AS(
       scene.validateContents(node, NodeContents{moved}, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
+  }
+}
+
+TEST_CASE("VmfScene polygon ownership canonical provenance and allocator guards", "[vmf]")
+{
+  const auto indexed = GENERATE(false, true);
+  const auto fault = GENERATE(0, 1, 2, 3);
+  const auto polygon =
+    indexed
+      ? std::
+          string{R"(point_data { numpts 4 point "2 64.00 64 64" point "0 0.00 0 64" point "3 64 0 64" point "1 0 64 64" })"}
+      : std::string{
+          R"(vertices_plus { v "64.00 64 64" v "64 0 64" v "0.00 0 64" v "0 64 64" })"};
+  auto source = fixture(false, polygon);
+  source.insert(
+    source.find("editor {") + std::string{"editor {"}.size(),
+    " solid { id 600 } side { id 700 } ");
+  const auto bounds = vm::bbox3d{4096};
+  auto scene = VmfScene::read(source, bounds);
+  auto& original = brush(scene.world());
+  auto* parent = original.parent();
+  auto first =
+    std::unique_ptr<BrushNode>{static_cast<BrushNode*>(original.clone(bounds))};
+  auto second =
+    std::unique_ptr<BrushNode>{static_cast<BrushNode*>(original.clone(bounds))};
+  scene.registerAdditions({first.get(), second.get()}, true, parent);
+  CHECK(scene.nativeId(*first) == "601");
+  CHECK(scene.nativeId(*second) == "602");
+  CHECK(first->brush().face(0).lineNumber() != second->brush().face(0).lineNumber());
+  auto* clone = first.release();
+  auto* other = second.release();
+  parent->addChildren({clone, other});
+  const auto before = scene.serialize(scene.world());
+  const auto emitted = VmfDocument::parse(before);
+  auto firstSideIds = std::vector<std::string>{};
+  for (size_t i = 0; i < emitted.entries().size(); ++i)
+  {
+    const auto& entry = emitted.entries()[i];
+    if (entry.isBlock() && emitted.tokenContents(entry.key) == "solid")
+    {
+      auto id = std::string{};
+      for (const auto child : entry.children)
+      {
+        const auto& field = emitted.entries()[child];
+        if (field.value && emitted.tokenContents(field.key) == "id")
+        {
+          id = std::string{emitted.tokenContents(*field.value)};
+        }
+      }
+      if (id == "601")
+      {
+        for (const auto side : entry.children)
+        {
+          if (emitted.tokenContents(emitted.entries()[side].key) == "side")
+          {
+            for (const auto child : emitted.entries()[side].children)
+            {
+              const auto& field = emitted.entries()[child];
+              if (field.value && emitted.tokenContents(field.key) == "id")
+              {
+                firstSideIds.emplace_back(emitted.tokenContents(*field.value));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  REQUIRE(firstSideIds.size() == 6);
+  CHECK(firstSideIds.front() == "701");
+  auto forged = std::unique_ptr<BrushNode>{static_cast<BrushNode*>(clone->clone(bounds))};
+  const auto foreign = fault == 0   ? original.brush().face(0).lineNumber()
+                       : fault == 1 ? size_t{0}
+                       : fault == 2 ? other->brush().face(0).lineNumber()
+                                    : forged->brush().face(1).lineNumber();
+  forged->brush().face(0).setFilePosition(foreign, 1);
+  const auto forgedBinding = forged->lineNumber();
+  CHECK_THROWS_AS(scene.validateDuplication({forged.get()}), std::invalid_argument);
+  CHECK_THROWS_AS(scene.validateRemoval({forged.get()}), std::invalid_argument);
+  CHECK_THROWS_AS(
+    scene.registerAdditions({forged.get()}, true, parent), std::invalid_argument);
+  CHECK(forged->lineNumber() == forgedBinding);
+  CHECK(forged->brush().face(0).lineNumber() == foreign);
+  auto cut = clone->brush();
+  auto face = BrushFace::create(
+    {32, 0, 0},
+    {32, 0, 64},
+    {32, 64, 0},
+    "synthetic/cut",
+    UvAttributes{},
+    SurfaceAttributes{},
+    MapFormat::SourceVMF);
+  REQUIRE(face.is_success());
+  REQUIRE(cut.clip(bounds, std::move(face).value()).is_success());
+  REQUIRE(cut != clone->brush());
+  CHECK_THROWS_AS(
+    scene.validateClipContents(*clone, NodeContents{cut}, bounds), std::invalid_argument);
+  auto batch = std::vector<std::pair<Node*, NodeContents>>{{clone, NodeContents{cut}}};
+  CHECK_THROWS_AS(scene.registerClips(batch, bounds), std::invalid_argument);
+  CHECK(scene.serialize(scene.world()) == before);
+  auto valid =
+    std::unique_ptr<BrushNode>{static_cast<BrushNode*>(original.clone(bounds))};
+  scene.registerAdditions({valid.get()}, true, parent);
+  CHECK(scene.nativeId(*valid) == "603");
+  parent->addChild(valid.release());
+  const auto saved = scene.serialize(scene.world());
+  CHECK(saved.find("\"id\" \"713\"") != std::string::npos);
+  auto reopened = VmfScene::read(saved, bounds);
+  CHECK(reopened.serialize(reopened.world()) == saved);
+}
+
+TEST_CASE("VmfScene cached group ownership stays closed with plain controls", "[vmf]")
+{
+  const auto schema = GENERATE(0, 1, 2);
+  const auto member = GENERATE(false, true);
+  const auto polygon =
+    schema == 0 ? std::string{}
+    : schema == 1
+      ? std::
+          string{R"(point_data { numpts 4 point "2 64 64 64" point "0 0 0 64" point "3 64 0 64" point "1 0 64 64" })"}
+      : std::string{
+          R"(vertices_plus { v "64 64 64" v "64 0 64" v "0 0 64" v "0 64 64" })"};
+  auto source = fixture(false, polygon);
+  if (member)
+  {
+    source.insert(source.find("}\r\neditor {"), "editor { groupid 20 } ");
+  }
+  source.insert(source.find("editor { \"color\""), "group { id 20 } ");
+  const auto bounds = vm::bbox3d{4096};
+  auto scene = VmfScene::read(source, bounds);
+  const auto findBrush = [&](const auto& self, Node& node) -> BrushNode* {
+    if (auto* brush = dynamic_cast<BrushNode*>(&node))
+    {
+      return brush;
+    }
+    for (auto* child : node.children())
+    {
+      if (auto* found = self(self, *child))
+      {
+        return found;
+      }
+    }
+    return nullptr;
+  };
+  auto* subject = findBrush(findBrush, scene.world());
+  REQUIRE(subject);
+  if (member)
+  {
+    if (schema == 0)
+    {
+      CHECK_NOTHROW(scene.validateDuplication({subject}));
+      CHECK_NOTHROW(scene.validateRemoval({subject}));
+    }
+    else
+    {
+      CHECK_THROWS_AS(scene.validateDuplication({subject}), std::invalid_argument);
+      CHECK_THROWS_AS(scene.validateRemoval({subject}), std::invalid_argument);
+    }
+  }
+  else
+  {
+    auto* group = static_cast<GroupNode*>(nullptr);
+    for (auto* child : scene.world().defaultLayer()->children())
+    {
+      if (auto* candidate = dynamic_cast<GroupNode*>(child))
+      {
+        group = candidate;
+      }
+    }
+    REQUIRE(group);
+    auto clone = std::unique_ptr<Node>{subject->clone(bounds)};
+    if (schema == 0)
+    {
+      CHECK_NOTHROW(scene.validateAdditions(*group, {clone.get()}, true));
+    }
+    else
+    {
+      const auto binding = clone->lineNumber();
+      CHECK_THROWS_AS(
+        scene.validateAdditions(*group, {clone.get()}, true), std::invalid_argument);
+      CHECK_THROWS_AS(
+        scene.registerAdditions({clone.get()}, true, group), std::invalid_argument);
+      CHECK(clone->lineNumber() == binding);
+    }
+  }
+  CHECK(scene.serialize(scene.world()) == source);
+  auto hidden = VmfScene::read(fixture(false, polygon, true), bounds);
+  auto& hiddenBrush = brush(hidden.world());
+  CHECK_THROWS_AS(hidden.validateDuplication({&hiddenBrush}), std::invalid_argument);
+  CHECK_THROWS_AS(hidden.validateRemoval({&hiddenBrush}), std::invalid_argument);
+}
+
+TEST_CASE("VmfScene polygon ownership rejects grouped entity destination", "[vmf]")
+{
+  const auto schema = GENERATE(0, 1, 2);
+  const auto polygon =
+    schema == 0 ? std::string{}
+    : schema == 1
+      ? std::
+          string{R"(point_data { numpts 4 point "2 64 64 64" point "0 0 0 64" point "3 64 0 64" point "1 0 64 64" })"}
+      : std::string{
+          R"(vertices_plus { v "64 64 64" v "64 0 64" v "0 0 64" v "0 64 64" })"};
+  const auto bounds = vm::bbox3d{4096};
+  auto plain = VmfScene::read(fixture(), bounds);
+  const auto solid = VmfDocument::parse(
+    plain.document().serializeEntry(brush(plain.world()).lineNumber() - 1));
+  auto edits = std::vector<VmfValueEdit>{};
+  for (size_t i = 0; i < solid.entries().size(); ++i)
+  {
+    const auto& entry = solid.entries()[i];
+    if (entry.value && solid.tokenContents(entry.key) == "id")
+    {
+      const auto id = std::stoull(std::string{solid.tokenContents(*entry.value)});
+      edits.push_back({i, '"' + std::to_string(id == 2 ? 31 : id + 29) + '"'});
+    }
+  }
+  auto source = fixture(false, polygon);
+  source.insert(source.find("editor { \"color\""), "group { id 20 } ");
+  source += "entity { id 30 classname func_detail editor { groupid 20 } "
+            + solid.serialize(edits) + " }";
+  auto scene = VmfScene::read(source, bounds);
+  auto* target = static_cast<EntityNode*>(nullptr);
+  auto* subject = static_cast<BrushNode*>(nullptr);
+  const auto find = [&](const auto& self, Node& node) -> void {
+    if (dynamic_cast<EntityNode*>(&node) && scene.nativeId(node) == "30")
+    {
+      target = static_cast<EntityNode*>(&node);
+    }
+    if (dynamic_cast<BrushNode*>(&node) && scene.nativeId(node) == "2")
+    {
+      subject = static_cast<BrushNode*>(&node);
+    }
+    for (auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  find(find, scene.world());
+  REQUIRE(subject);
+  REQUIRE(target);
+  REQUIRE(dynamic_cast<GroupNode*>(target->parent()));
+  auto clone = std::unique_ptr<Node>{subject->clone(bounds)};
+  const auto binding = clone->lineNumber();
+  if (schema == 0)
+  {
+    REQUIRE_NOTHROW(scene.validateAdditions(*target, {clone.get()}, true));
+    REQUIRE_NOTHROW(scene.registerAdditions({clone.get()}, true, target));
+    target->addChild(clone.release());
+    const auto saved = scene.serialize(scene.world());
+    REQUIRE(saved != source);
+    auto reopened = VmfScene::read(saved, bounds);
+    CHECK(reopened.serialize(reopened.world()) == saved);
+  }
+  else
+  {
+    CHECK_THROWS_AS(
+      scene.validateAdditions(*target, {clone.get()}, true), std::invalid_argument);
+    CHECK_THROWS_AS(
+      scene.registerAdditions({clone.get()}, true, target), std::invalid_argument);
+    CHECK(clone->lineNumber() == binding);
     CHECK(scene.serialize(scene.world()) == source);
   }
 }

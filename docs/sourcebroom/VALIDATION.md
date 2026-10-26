@@ -1,11 +1,49 @@
-# SourceBroom validation — A5.19 coupled native terrain motion
+# SourceBroom validation — A5.20 ordinary polygon-cache ownership
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.19 — parsed terrain and validated polygon-cache composition
+## A5.20 — closed ordinary polygon-cache ownership
+
+Ordinary NON-displacement point_data/vertices_plus duplication/removal and safe
+whole/partial brush-entity/addition paths use forced unchanged cache validation,
+canonical source-owned side prototypes and exact operation-local block allowances.
+Generated content/save and the entity-parent publication scan consume the SAME
+closed-owner allowance; clipping=true retains default opacity. No global whitelist,
+header, parser/schema/tolerance, displacement ownership or ID-policy change.
+
+- Desired compiled synthetic RED210/202 controls/eight ownership failures and
+  BOTH actual RED49/47 controls/two ownership refusals retained before wiring.
+- Final focus **91/91**, ONE fullmodel **260/260**, final BOTH actual **128
+  assertions** pass: production native-ID binding, acted move/clone/move/reclone/
+  delete/repeated save/reopen/further ownership/undo/redo/exact source restore.
+  Both original hashes unchanged; writes owned, no installed-original edits.
+- Synthetic both-schema/no-cache and already-edited controls cover full/partial
+  two-brush entities, child removal/owner clone/delete, fresh entity-parent adds,
+  actual save/reopen/second edit/removal/history/cache counts and stable IDs.
+  Invalid later batch retains nodes/selection/history/count/dirty/bytes; nextID12
+  and reserved unprojected IDs600/700 -> objects601..603/sides701..713 are checked.
+- Unchanged malformed/mixed/misplaced/unknown caches; foreign/stolen/missing/
+  duplicate generated side provenance; reference/root policy; hidden native-ID
+  routes; current/destination group ancestry; displacement and actual clipping/
+  registerClips remain refused. Plain uncached group/registered-clip controls ACT.
+- Parent independently read the whole final production/test diff and matched all
+  three frozen hashes. Intermediate findings (destination-group ancestors, no-op
+  before Brush copy, all current prototypes covered/no live state on archived
+  originals) are resolved with regressions; no focused blockers remain.
+- Actual app/checker/App build0/zero new compiler warnings, App **50/50**. Rebuilt
+  production corpus document38/strict35/preview38 retains EXACT three strict
+  refusals/all38 original hashes. This is load/metadata, not arbitrary ownership
+  or complete-map acceptance. No UI-source changes or fresh full-UI claim.
+
+LSP has modernization hints and inherited later-test warnings, not a blanket clean
+claim; actual compiler is the zero-new-warning gate. Human editor/Hammer/compiler
+acceptance remains pending. Cached group/reparent/clip/topology and displacement
+ownership remain guarded. Final receipt records installed provenance separately.
+
+## Retained A5.19 — parsed terrain and validated polygon-cache composition
 
 Production change is ONLY relocating existing immutable-before parsed displacement
 side collection before the polygon preguard and passing that same set instead of

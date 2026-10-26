@@ -221,16 +221,17 @@ bool supportedConnections(
   return true;
 }
 
-// Native face polygon caches are geometry, not inert metadata. Only content edits
-// may admit them, after matching the immutable polygon to the brush's actual ring.
+// Native face polygon caches are geometry, not inert metadata. Content edits and
+// closed ownership gates use the same immutable-to-current polygon validation.
 std::set<VmfEntryId> polygonCacheEdits(
   const VmfDocument& d,
   const Brush& before,
   const Brush& after,
-  std::vector<VmfValueEdit>& edits)
+  std::vector<VmfValueEdit>& edits,
+  const bool validateUnchanged = false)
 {
   auto admitted = std::set<VmfEntryId>{};
-  if (before == after)
+  if (!validateUnchanged && before == after)
   {
     return admitted;
   }
@@ -565,6 +566,150 @@ void collect(const Node& node, NodeMap& map)
     collect(*child, map);
   }
 }
+// Generated identities are not document indices. Geometry correspondence uses
+// immutable source-side identities; publication still uses the registered IDs.
+template <typename Resolve>
+Brush canonicalPolygonBrush(
+  const VmfDocument& d, const Brush& brush, const VmfEntryId solid, Resolve resolve)
+{
+  if (!d.entries()[solid].isBlock() || key(d, solid) != "solid")
+  {
+    refuse(solid, "polygon cache source is not a native solid");
+  }
+  auto result = brush;
+  auto sides = std::set<VmfEntryId>{};
+  for (size_t i = 0; i < result.faceCount(); ++i)
+  {
+    auto& face = result.face(i);
+    if (const auto side = resolve(face.lineNumber()))
+    {
+      if (
+        !d.entries()[*side].isBlock() || key(d, *side) != "side"
+        || d.entries()[*side].parent != solid || !sides.insert(*side).second)
+      {
+        refuse(solid, "foreign or duplicate polygon cache side prototype");
+      }
+      face.setFilePosition(*side + 1, 1);
+    }
+  }
+  return result;
+}
+
+// Ownership validates even unchanged caches. The full raw source subtree is
+// still checked by opaque; no child approval exempts an unknown sibling.
+template <typename Resolve, typename Validate>
+std::set<VmfEntryId> ownershipPolygonBlocks(
+  const VmfDocument& d,
+  const NodeMap& original,
+  const Node& root,
+  Resolve resolve,
+  Validate validate)
+{
+  auto result = std::set<VmfEntryId>{};
+  auto covered = std::set<size_t>{};
+  const auto checkLayout = [&](
+                             const auto& self,
+                             const VmfEntryId entry,
+                             const std::set<VmfEntryId>& blocks) -> void {
+    const auto name = key(d, entry);
+    if ((name == "point_data" || name == "vertices_plus") && !blocks.contains(entry))
+    {
+      refuse(entry, "misplaced or unvalidated polygon cache prevents ownership");
+    }
+    for (const auto child : d.entries()[entry].children)
+    {
+      self(self, child, blocks);
+    }
+  };
+  const auto checkBrush = [&](const BrushNode& node, const bool live) {
+    if (live)
+    {
+      validate(node);
+    }
+    const auto source = resolve(node.lineNumber());
+    if (!source)
+    {
+      return;
+    }
+    const auto found = original.find(*source + 1);
+    const auto* before =
+      found == original.end() ? nullptr : dynamic_cast<const BrushNode*>(found->second);
+    if (!before)
+    {
+      refuse(*source, "polygon cache ownership source is not a projected solid");
+    }
+    auto edits = std::vector<VmfValueEdit>{};
+    const auto normalized = canonicalPolygonBrush(d, node.brush(), *source, resolve);
+    const auto blocks = polygonCacheEdits(d, before->brush(), normalized, edits, true);
+    checkLayout(checkLayout, *source, blocks);
+    covered.insert(*source + 1);
+    if (blocks.empty())
+    {
+      return;
+    }
+    for (const auto* subject : {before, &node})
+    {
+      for (const auto& face : subject->brush().faces())
+      {
+        if (face.sourceDisplacement())
+        {
+          refuse(*source, "polygon cache displacement ownership unsupported");
+        }
+      }
+      for (const Node* ancestor = subject->parent(); ancestor;
+           ancestor = ancestor->parent())
+      {
+        if (dynamic_cast<const GroupNode*>(ancestor))
+        {
+          refuse(*source, "polygon cache native group ownership unsupported");
+        }
+      }
+    }
+    result.insert(blocks.begin(), blocks.end());
+  };
+  const auto current = [&](const auto& self, const Node& node) -> void {
+    if (const auto* brush = dynamic_cast<const BrushNode*>(&node))
+    {
+      checkBrush(*brush, true);
+    }
+    for (const auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  current(current, root);
+  // An entity source retains raw solids already removed from its live closure.
+  // Validate those exact projected originals too, rather than whitelist them.
+  if (dynamic_cast<const EntityNode*>(&root))
+  {
+    if (const auto source = resolve(root.lineNumber()))
+    {
+      const auto found = original.find(*source + 1);
+      if (found == original.end() || !dynamic_cast<const EntityNode*>(found->second))
+      {
+        refuse(*source, "polygon cache owner is not a projected entity");
+      }
+      const auto raw = [&](const auto& self, const Node& node) -> void {
+        if (
+          const auto* brush = dynamic_cast<const BrushNode*>(&node);
+          brush && !covered.contains(brush->lineNumber()))
+        {
+          // Archived originals retain pre-edit side IDs, not live side-state
+          // certificates. Their raw cache geometry and layout still validate.
+          checkBrush(*brush, false);
+        }
+        for (const auto* child : node.children())
+        {
+          self(self, *child);
+        }
+      };
+      raw(raw, *found->second);
+      checkLayout(checkLayout, *source, result);
+    }
+  }
+  return result;
+}
+
 std::string planeText(const BrushFace& face)
 {
   auto out = std::string{};
@@ -1711,7 +1856,9 @@ void VmfScene::validateDuplication(const std::vector<Node*>& nodes) const
   }
   auto original = NodeMap{};
   collect(*m_original, original);
-  const auto check = [&](auto&& self, const Node& node) -> void {
+  const auto check =
+    [&](
+      auto&& self, const Node& node, const std::set<VmfEntryId>& polygonBlocks) -> void {
     if (
       (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node)
        && !(
@@ -1732,7 +1879,7 @@ void VmfScene::validateDuplication(const std::vector<Node*>& nodes) const
       }
       owner = m_document.entries()[*owner].parent;
     }
-    if (source && opaque(m_document, *source))
+    if (source && opaque(m_document, *source, nullptr, &polygonBlocks))
     {
       refuse(
         *source, "opaque/displacement/instance attachments prevent native duplication");
@@ -1757,12 +1904,18 @@ void VmfScene::validateDuplication(const std::vector<Node*>& nodes) const
     static_cast<void>(emitNode(node, original));
     for (const auto* child : node.children())
     {
-      self(self, *child);
+      self(self, *child, polygonBlocks);
     }
   };
   for (const auto* node : nodes)
   {
-    check(check, *node);
+    const auto polygonBlocks = ownershipPolygonBlocks(
+      m_document,
+      original,
+      *node,
+      [&](const size_t binding) { return prototype(binding); },
+      [&](const BrushNode& brush) { validateSideState(brush); });
+    check(check, *node, polygonBlocks);
   }
 }
 void VmfScene::validateAdditions(
@@ -1804,8 +1957,16 @@ void VmfScene::validateAdditions(
   const auto source = prototype(owner->lineNumber());
   if (dynamic_cast<const EntityNode*>(owner))
   {
+    auto original = NodeMap{};
+    collect(*m_original, original);
+    const auto polygonBlocks = ownershipPolygonBlocks(
+      m_document,
+      original,
+      *owner,
+      [&](const size_t binding) { return prototype(binding); },
+      [&](const BrushNode& brush) { validateSideState(brush); });
     if (
-      (source && opaque(m_document, *source))
+      (source && opaque(m_document, *source, nullptr, &polygonBlocks))
       || (!m_generated.contains(owner->lineNumber()) && owner->childCount() == 0))
     {
       refuse(0, "opaque or point entity cannot acquire native brush ownership");
@@ -1825,6 +1986,29 @@ void VmfScene::validateAdditions(
   if (duplication)
   {
     validateDuplication(nodes);
+    auto groupedDestination = false;
+    for (const Node* ancestor = &parent; ancestor; ancestor = ancestor->parent())
+    {
+      groupedDestination = groupedDestination || dynamic_cast<const GroupNode*>(ancestor);
+    }
+    if (groupedDestination)
+    {
+      auto original = NodeMap{};
+      collect(*m_original, original);
+      for (const auto* node : nodes)
+      {
+        if (!ownershipPolygonBlocks(
+               m_document,
+               original,
+               *node,
+               [&](const size_t binding) { return prototype(binding); },
+               [&](const BrushNode& brush) { validateSideState(brush); })
+               .empty())
+        {
+          refuse(0, "polygon cache native group additions unsupported");
+        }
+      }
+    }
     return;
   }
   const auto check = [&](auto&& self, const Node& node) -> void {
@@ -2050,7 +2234,11 @@ void VmfScene::validateRemoval(const std::vector<Node*>& removalClosure) const
   {
     requireEditableVersion(m_document);
   }
-  const auto check = [&](auto&& self, const Node& node) -> void {
+  auto original = NodeMap{};
+  collect(*m_original, original);
+  const auto check =
+    [&](
+      auto&& self, const Node& node, const std::set<VmfEntryId>& polygonBlocks) -> void {
     if (
       (!dynamic_cast<const EntityNode*>(&node) && !dynamic_cast<const BrushNode*>(&node)
        && !(
@@ -2074,7 +2262,7 @@ void VmfScene::validateRemoval(const std::vector<Node*>& removalClosure) const
       }
     }
     const auto source = prototype(node.lineNumber());
-    if (source && opaque(m_document, *source))
+    if (source && opaque(m_document, *source, nullptr, &polygonBlocks))
     {
       refuse(*source, "opaque/displacement/instance attachments prevent native removal");
     }
@@ -2084,12 +2272,18 @@ void VmfScene::validateRemoval(const std::vector<Node*>& removalClosure) const
     }
     for (const auto* child : node.children())
     {
-      self(self, *child);
+      self(self, *child, polygonBlocks);
     }
   };
   for (const auto* node : removalClosure)
   {
-    check(check, *node);
+    const auto polygonBlocks = ownershipPolygonBlocks(
+      m_document,
+      original,
+      *node,
+      [&](const size_t binding) { return prototype(binding); },
+      [&](const BrushNode& brush) { validateSideState(brush); });
+    check(check, *node, polygonBlocks);
   }
 }
 void VmfScene::validateReparent(const Node& parent, const std::vector<Node*>& nodes) const
@@ -2228,13 +2422,25 @@ void VmfScene::validateClipOwner(const BrushNode& node, const bool clipping) con
 {
   const Node* owner = effectiveParent(node);
   const auto* entity = dynamic_cast<const EntityNode*>(owner);
+  auto polygonBlocks = std::set<VmfEntryId>{};
+  if (!clipping)
+  {
+    auto original = NodeMap{};
+    collect(*m_original, original);
+    polygonBlocks = ownershipPolygonBlocks(
+      m_document,
+      original,
+      entity ? static_cast<const Node&>(*entity) : static_cast<const Node&>(node),
+      [&](const size_t binding) { return prototype(binding); },
+      [&](const BrushNode& brush) { validateSideState(brush); });
+  }
   if (entity)
   {
     const auto record = m_generated.find(entity->lineNumber());
     const auto source = prototype(entity->lineNumber());
     if (
       (record != m_generated.end() && record->second.kind != GeneratedKind::Entity)
-      || (source && (key(m_document, *source) != "entity" || opaque(m_document, *source)
+      || (source && (key(m_document, *source) != "entity" || opaque(m_document, *source, nullptr, &polygonBlocks)
                      || m_unsupportedGroupObjects.contains(*source + 1)))
       || unsafeClass(entity->entity().classname())
       || entity->visibilityState() != VisibilityState::Inherited)
@@ -2276,7 +2482,9 @@ void VmfScene::validateClipOwner(const BrushNode& node, const bool clipping) con
     refuse(0, "native clip target is not a unique live solid");
   }
   const auto source = prototype(node.lineNumber());
-  if (source && (key(m_document, *source) != "solid" || opaque(m_document, *source)))
+  if (
+    source
+    && (key(m_document, *source) != "solid" || opaque(m_document, *source, nullptr, &polygonBlocks)))
   {
     refuse(*source, "opaque/displacement source prevents native clipping");
   }
@@ -2285,7 +2493,9 @@ void VmfScene::validateClipOwner(const BrushNode& node, const bool clipping) con
     for (auto parent = m_document.entries()[*source].parent; parent;
          parent = m_document.entries()[*parent].parent)
     {
-      if (key(m_document, *parent) == "entity" && opaque(m_document, *parent))
+      if (
+        key(m_document, *parent) == "entity"
+        && opaque(m_document, *parent, nullptr, &polygonBlocks))
       {
         refuse(*parent, "opaque source owner prevents native clipping");
       }
@@ -2997,7 +3207,13 @@ void VmfScene::nodeEdits(
       }
     }
     const auto polygonEditStart = edits.size();
-    const auto polygonBlocks = polygonCacheEdits(d, b, a, edits);
+    auto polygonBlocks = std::set<VmfEntryId>{};
+    if (b != a)
+    {
+      const auto polygonBrush = canonicalPolygonBrush(
+        d, a, id, [&](const size_t binding) { return prototype(binding); });
+      polygonBlocks = polygonCacheEdits(d, b, polygonBrush, edits);
+    }
     if (edits.size() != polygonEditStart)
     {
       if (opaque(d, id, &displacementSides, &polygonBlocks))
@@ -3303,7 +3519,13 @@ std::string VmfScene::emitNode(const Node& node, const NodeMap& original) const
     static_cast<void>(VmfDocument::parse(result));
     return result;
   }
-  if (opaque(d, *source))
+  const auto polygonBlocks = ownershipPolygonBlocks(
+    m_document,
+    original,
+    node,
+    [&](const size_t binding) { return prototype(binding); },
+    [&](const BrushNode& brush) { validateSideState(brush); });
+  if (opaque(d, *source, nullptr, &polygonBlocks))
   {
     refuse(*source, "opaque native source template cannot be duplicated/detached");
   }
@@ -3616,9 +3838,18 @@ std::string VmfScene::serialize(const WorldNode& world) const
       {
         refuse(0, "unsupported native brush owner");
       }
-      if (dynamic_cast<const EntityNode*>(owner) && opaque(d, parent - 1))
+      if (dynamic_cast<const EntityNode*>(owner))
       {
-        refuse(parent - 1, "opaque brush-entity attachment prevents addition");
+        const auto polygonBlocks = ownershipPolygonBlocks(
+          d,
+          original,
+          *owner,
+          [&](const size_t binding) { return prototype(binding); },
+          [&](const BrushNode& brush) { validateSideState(brush); });
+        if (opaque(d, parent - 1, nullptr, &polygonBlocks))
+        {
+          refuse(parent - 1, "opaque brush-entity attachment prevents addition");
+        }
       }
       appended[parent - 1] += text + "\n";
     }

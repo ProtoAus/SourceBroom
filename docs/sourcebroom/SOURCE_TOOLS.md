@@ -61,6 +61,24 @@ Other CSG/arbitrary topology, displacement and hidden/opaque/reference ambiguity
 remain refused; no stripping or MAP conversion. Use a copy, Save As and reopen in
 matching Hammer++; no owner/visual acceptance is implied by automated/static checks.
 
+## Ordinary polygon-cache ownership — A5.20
+
+Existing Duplicate/Delete actions now admit ordinary NON-displacement brushes with
+validated point_data or vertices_plus, including supported whole/partial plain
+brush entities and safe plain-brush additions to cached entities. Stable new
+object/side IDs are allocated only after pure preflight; repeated save/reopen and
+further movement/duplication/removal preserve those identities and native caches.
+Original/current side ownership, unique canonical generated prototypes and the
+complete owner/source closure are checked even when geometry is unchanged.
+
+Malformed/mixed/misplaced caches, unknown siblings/ancestors and removal references
+still refuse. Cached-member current/destination GROUP ancestry remains closed,
+as do displacement ownership, reparenting, clipping and topology. This overrides
+only the historical clone/delete limitation below; it does not make a known cache
+universally safe. Both actual input variants passed 128 acted assertions and full
+model260/App50 pass; owner/Hammer/compiler acceptance is separate and pending.
+Use copies, Save As and keep the whole previous kit as recovery.
+
 ## Coupled terrain and native polygon motion — A5.19
 
 Already-parsed displacement meshes can compose with separately validated indexed
