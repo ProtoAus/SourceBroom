@@ -1939,6 +1939,24 @@ TEST_CASE("VmfMap in-place ordinary clip history and admission", "[vmf]")
   const auto selection = map.selection().nodes;
   const auto plane = std::array<vm::vec3d, 3>{{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}};
 
+  SECTION("cut material and UV attributes match the nearest-face preview")
+  {
+    const auto source = std::ranges::find_if(node.brush().faces(), [](const auto& face) {
+      return face.boundary().normal == vm::vec3d{1, 0, 0};
+    });
+    REQUIRE(source != node.brush().faces().end());
+    const auto material = source->materialName();
+    const auto uv = source->uvAttributes();
+    REQUIRE(clipBrushes(map, {&node}, plane));
+    CHECK(node.brush().bounds().max.x() == 32);
+    const auto cut = std::ranges::find_if(node.brush().faces(), [&](const auto& face) {
+      return face.lineNumber() > map.vmfScene()->document().entries().size();
+    });
+    REQUIRE(cut != node.brush().faces().end());
+    CHECK(cut->materialName() == material);
+    CHECK(cut->uvAttributes() == uv);
+  }
+
   SECTION("repeated clips save reopen move undo and redo deterministically")
   {
     REQUIRE(clipBrushes(map, {&node}, plane));

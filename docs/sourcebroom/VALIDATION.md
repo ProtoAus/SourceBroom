@@ -26,6 +26,14 @@ new warnings. The private38-file corpus remains document38/strict35/preview38,
 same3 strict refusals and all38 original SHA256 unchanged. Existing graphics/body
 shader evidence is retained, not a new clip visual or performance measurement.
 
+Before the next candidate, a parent regression also reproduced **two** intended
+preview/commit material and UV mismatches after an actual changed-bounds clip.
+Copying the same nearest-normal attributes before clipping makes that control and
+real ClipTool Front/Back attribute checks pass. Full model191/App49 and actual
+app/checker rebuild remain green with zero new warnings; identity/guard logic did
+not change. Compiler const-result/incomplete-face-header failures were preserved
+and corrected; this is not a claim that LSP diagnostics alone proved compilation.
+
 This is verified development source, not an installed A5.11 feature, all-UI-green
 claim or owner/Hammer acceptance. The known untouched full-UI preference failure
 remains unfixed. The small copied-plain-brush human check remains pending in lextest.

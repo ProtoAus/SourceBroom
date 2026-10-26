@@ -59,6 +59,7 @@
 #include "kd/task_manager.h"
 #include "kd/vector_utils.h"
 
+#include <algorithm>
 #include <ranges>
 
 namespace tb::mdl
@@ -96,8 +97,20 @@ bool clipBrushes(
     {
       return false;
     }
+    const auto& sourceFaces = node->brush().faces();
+    if (sourceFaces.empty())
+    {
+      return false;
+    }
+    auto cut = std::move(face).value();
+    // Match ClipTool's nearest-normal preview, including first-match ties.
+    const auto closest = std::ranges::min_element(
+      sourceFaces, {}, [&](const auto& source) {
+        return vm::squared_length(source.boundary().normal - cut.boundary().normal);
+      });
+    cut.copyAttributes(*closest);
     auto brush = node->brush();
-    if (!brush.clip(map.worldBounds(), std::move(face).value()).is_success())
+    if (!brush.clip(map.worldBounds(), std::move(cut)).is_success())
     {
       return false;
     }

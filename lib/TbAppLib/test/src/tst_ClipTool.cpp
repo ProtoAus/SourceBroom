@@ -22,6 +22,7 @@
 #include "gl/Camera.h"
 #include "gl/PerspectiveCamera.h"
 #include "mdl/BrushBuilder.h"
+#include "mdl/BrushFace.h"
 #include "mdl/BrushFaceHandle.h"
 #include "mdl/BrushNode.h"
 #include "mdl/CatchConfig.h"
@@ -403,6 +404,11 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
     CHECK(map.worldNode().defaultLayer()->childCount() == 1);
     CHECK(map.selection().nodes == std::vector<mdl::Node*>{node});
     CHECK(node->brush().bounds().min.x() == 32);
+    for (const auto& face : node->brush().faces())
+    {
+      CHECK(face.materialName() == "synthetic/grid");
+      CHECK(face.uvAttributes().scale == vm::vec2f{0.25f, 0.25f});
+    }
     const auto back = map.vmfScene()->serialize(map.worldNode());
     map.undoCommand();
     CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
@@ -413,6 +419,11 @@ TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
     REQUIRE(tool.canClip());
     tool.performClip();
     CHECK(node->brush().bounds().max.x() == 32);
+    for (const auto& face : node->brush().faces())
+    {
+      CHECK(face.materialName() == "synthetic/grid");
+      CHECK(face.uvAttributes().scale == vm::vec2f{0.25f, 0.25f});
+    }
     CHECK(map.vmfScene()->nativeId(*node) == "2");
   }
 }

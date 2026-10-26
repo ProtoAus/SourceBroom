@@ -38,6 +38,15 @@ sets support repeated clips and undo/redo; generic content swaps must keep their
 current complete side set. Generated cut sides must belong to that solid; other
 solids' or alias/zero bindings cannot become an arbitrary topology bypass.
 
+The native model commit must copy the same nearest-normal face material/UV
+attributes as ClipTool's preview, with first-match tie behavior. A parent acted
+control clipped to changed x bounds but committed __TB_empty/default UVs instead
+of the preview's authored material/.25 scale; both checks failed before the fix.
+Extract an owned face from the moved result before copying attributes: lvalue
+Result::value exposes a const reference. App tests inspecting actual face values
+need BrushFace.h, not only its forward declaration. Compiler diagnostics caught
+both seams despite clean recorded clangd diagnostics; do not call LSP build proof.
+
 Tests exercise real Map/ClipTool actions and unchanged-refusal controls. The App
 fixture must forward readOnlyVmfPreview and tests require actual preview state
 before claiming a preview refusal. TestEnvironment needs the PRIVATE
