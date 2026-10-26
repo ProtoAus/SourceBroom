@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,8 @@ private:
     size_t sideCount = 0;
   };
   std::map<size_t, GeneratedBinding> m_generated;
+  // Exact operation-admitted side sets, including parked undo/redo states.
+  std::map<size_t, std::vector<std::set<size_t>>> m_clipStates;
   size_t m_nextBinding = 0;
   size_t m_generatedIdBytes = 0;
   std::optional<std::string> m_geometryReferenceProblem;
@@ -119,6 +122,13 @@ public:
   void validateRemoval(const std::vector<Node*>& removalClosure) const;
   void validateReparent(const Node& parent, const std::vector<Node*>& nodes) const;
   void validateContents(
+    const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const;
+
+  /** Command-owned ordinary, one-output clips only. Validates the complete batch
+   * before assigning any cut-side identity. Never called by serialization. */
+  void registerClips(
+    std::vector<std::pair<Node*, NodeContents>>& nodes, const vm::bbox3d& worldBounds);
+  void validateClipContents(
     const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const;
 
   /** Immutable-source delta. Plain native additions/deletions and brush-entity

@@ -12,6 +12,7 @@
 #include "mdl/LayerNode.h"
 #include "mdl/Map.h"
 #include "mdl/MapFixture.h"
+#include "mdl/MapFormat.h"
 #include "mdl/Map_Geometry.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
@@ -1069,4 +1070,127 @@ TEST_CASE("VmfScene", "[vmf]")
     }
   }
 }
+TEST_CASE("VmfScene ordinary clip admission and surgical side deltas", "[vmf]")
+{
+  const auto bounds = vm::bbox3d{4096};
+  auto original = fixture(
+    false,
+    "// retained side metadata\r\n"
+    "\"lightmapscale\" \"00032\" \"smoothing_groups\" \"0017\" "
+    "\"smoothing_groups\" \"4\" editor { \"color\" \"2 4 6\" } ");
+  const auto rotation = original.rfind("\"rotation\" \"0\"");
+  REQUIRE(rotation != std::string::npos);
+  original.replace(
+    rotation, std::string{"\"rotation\" \"0\""}.size(), "\"rotation\" \"12.500\"");
+  auto scene = VmfScene::read(original, bounds);
+  auto& node = brush(scene.world());
+  const auto solidBinding = node.lineNumber();
+  auto candidate = node.brush();
+  auto cut = BrushFace::create(
+    {32, 0, 0},
+    {32, 0, 64},
+    {32, 64, 0},
+    "synthetic/cut",
+    UvAttributes{},
+    SurfaceAttributes{},
+    MapFormat::SourceVMF);
+  REQUIRE(cut.is_success());
+  REQUIRE(candidate.clip(bounds, std::move(cut).value()).is_success());
+  auto nodes =
+    std::vector<std::pair<Node*, NodeContents>>{{&node, NodeContents{candidate}}};
+
+  SECTION("registered survivors retain exact native subtrees and stable cut identity")
+  {
+    CHECK_THROWS_AS(
+      scene.validateContents(node, nodes.front().second, bounds), std::invalid_argument);
+    const auto before = node.brush();
+    scene.registerClips(nodes, bounds);
+    node.setBrush(std::get<Brush>(nodes.front().second.get()));
+    CHECK(node.lineNumber() == solidBinding);
+    CHECK(scene.nativeId(node) == "2");
+    CHECK(node.brush().bounds().max.x() == 32);
+    const auto saved = scene.serialize(scene.world());
+    CHECK(saved == scene.serialize(scene.world()));
+    CHECK(saved.find("\"id\" \"4\"") == std::string::npos);
+    CHECK(saved.find("side\n{\n\"id\" \"9\"") != std::string::npos);
+    for (const auto& face : node.brush().faces())
+    {
+      if (face.lineNumber() <= scene.document().entries().size())
+      {
+        CHECK(
+          saved.find(scene.document().serializeEntry(face.lineNumber() - 1))
+          != std::string::npos);
+      }
+    }
+    CHECK_NOTHROW(VmfScene::read(saved, bounds));
+    node.setBrush(before);
+    CHECK(scene.serialize(scene.world()) == original);
+    node.setBrush(std::get<Brush>(nodes.front().second.get()));
+    CHECK(scene.serialize(scene.world()) == saved);
+    auto aliased = node.brush();
+    aliased.faces()[1].setFilePosition(aliased.faces()[0].lineNumber(), 1);
+    node.setBrush(std::move(aliased));
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+  }
+
+  SECTION("later invalid candidate is atomic including the side allocator")
+  {
+    // Repeating an owner in the same batch must fail after staging the first.
+    nodes.push_back(nodes.front());
+    CHECK_THROWS_AS(scene.registerClips(nodes, bounds), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == original);
+    CHECK(
+      std::ranges::any_of(
+        std::get<Brush>(nodes.front().second.get()).faces(),
+        [](const auto& face) { return face.lineNumber() == 0; }));
+    nodes.pop_back();
+    scene.registerClips(nodes, bounds);
+    node.setBrush(std::get<Brush>(nodes.front().second.get()));
+    CHECK(
+      scene.serialize(scene.world()).find("side\n{\n\"id\" \"9\"") != std::string::npos);
+  }
+
+  SECTION("unregistered direct-save topology refuses")
+  {
+    node.setBrush(candidate);
+    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+  }
+}
+
+TEST_CASE("VmfScene clip keeps arbitrary length reserved side namespace", "[vmf]")
+{
+  auto source = fixture();
+  const auto huge = std::string(80, '9');
+  source += "opaque { side { \"id\" \"000" + huge + "\" } }\n";
+  // An unknown root intentionally prevents topology, but still reserves IDs.
+  auto refused = VmfScene::read(source, vm::bbox3d{4096});
+  auto& node = brush(refused.world());
+  auto candidate = node.brush();
+  auto cut = BrushFace::create(
+    {32, 0, 0},
+    {32, 0, 64},
+    {32, 64, 0},
+    "synthetic/cut",
+    UvAttributes{},
+    SurfaceAttributes{},
+    MapFormat::SourceVMF);
+  REQUIRE(cut.is_success());
+  REQUIRE(candidate.clip(vm::bbox3d{4096}, std::move(cut).value()).is_success());
+  auto nodes =
+    std::vector<std::pair<Node*, NodeContents>>{{&node, NodeContents{candidate}}};
+  CHECK_THROWS_AS(refused.registerClips(nodes, vm::bbox3d{4096}), std::invalid_argument);
+  CHECK(refused.serialize(refused.world()) == source);
+
+  // Recognized editor metadata is preserved and its opaque IDs reserve maxima.
+  source = fixture(false, "editor { side { \"id\" \"000" + huge + "\" } }");
+  auto scene = VmfScene::read(source, vm::bbox3d{4096});
+  auto& ordinary = brush(scene.world());
+  nodes = {{&ordinary, NodeContents{candidate}}};
+  scene.registerClips(nodes, vm::bbox3d{4096});
+  ordinary.setBrush(std::get<Brush>(nodes.front().second.get()));
+  const auto saved = scene.serialize(scene.world());
+  CHECK(saved.find("\"id\" \"1" + std::string(80, '0') + "\"") != std::string::npos);
+  CHECK(scene.nativeId(ordinary) == "2");
+}
+
 } // namespace tb::mdl

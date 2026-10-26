@@ -191,6 +191,18 @@ editing. These checks are for the new candidate, not retrospectively passed:
   should hide that part. No asset/original VMF is a write target; static preview
   does not certify animation, collision, all models or measured GPU memory.
 
+## Next native ordinary clip — pending owner/Hammer check
+
+This is development source after A5.11, not available in the installed A5.11 kit.
+When the next candidate is delivered:
+
+- [ ] On a **copy** of an editable VMF, select one loaded ordinary world brush
+  (no displacement). Clip with Front or Back, undo/redo and Save As a new VMF.
+  Compare the shape, cut material/UVs and remaining brush faces in matching
+  Hammer++. No original map is a write target. BOTH, generated/duplicated solids,
+  brush entities and opaque/reference cases remain guarded in this first slice;
+  report a refusal rather than bypassing it through MAP export.
+
 Pending is not failed, but neither is it complete acceptance. Once confirmed,
 record only what was observed; do not infer measured performance, preservation
 or support for other Source branches from a visual check.

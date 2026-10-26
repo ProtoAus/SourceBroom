@@ -28,12 +28,20 @@
 #include "vm/util.h"
 #include "vm/vec.h"
 
+#include <array>
 #include <string>
 #include <vector>
 
 namespace tb::mdl
 {
 class Map;
+class BrushNode;
+
+/** In-place, one-output native clipping. Other map formats use their existing tools. */
+bool clipBrushes(
+  Map& map,
+  const std::vector<BrushNode*>& brushes,
+  const std::array<vm::vec3d, 3>& points);
 
 bool transformSelection(
   Map& map, const std::string& commandName, const vm::mat4x4d& transformation);

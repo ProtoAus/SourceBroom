@@ -21,7 +21,9 @@
 
 #include "base/Logger.h"
 #include "base/Notifier.h"
+#include "mdl/EditorContext.h"
 #include "mdl/GameInfo.h"
+#include "mdl/LayerNode.h"
 #include "mdl/Map.h"
 #include "mdl/Map_Assets.h"
 #include "mdl/Map_World.h"
@@ -32,6 +34,7 @@
 #include "kd/ranges/to.h"
 
 #include <ranges>
+#include <stdexcept>
 
 namespace tb::mdl
 {
@@ -126,9 +129,12 @@ void doSwapNodeContents(
 } // namespace
 
 SwapNodeContentsCommand::SwapNodeContentsCommand(
-  std::string name, std::vector<std::pair<Node*, NodeContents>> nodes)
+  std::string name,
+  std::vector<std::pair<Node*, NodeContents>> nodes,
+  const bool nativeClip)
   : UpdateLinkedGroupsCommandBase{std::move(name), true}
   , m_nodes{std::move(nodes)}
+  , m_nativeClip{nativeClip}
 {
 }
 
@@ -140,9 +146,37 @@ bool SwapNodeContentsCommand::doPerformDo(Map& map)
   {
     try
     {
-      for (const auto& [node, contents] : m_nodes)
+      if (m_nativeClip)
       {
-        scene->validateContents(*node, contents, map.worldBounds());
+        for (const auto& [node, contents] : m_nodes)
+        {
+          if (
+            !node || node->parent() != map.worldNode().defaultLayer()
+            || !map.editorContext().visible(*node))
+          {
+            throw std::invalid_argument{
+              "native clip target is not a visible world brush"};
+          }
+        }
+      }
+      if (m_nativeClip && !m_clipRegistered)
+      {
+        scene->registerClips(m_nodes, map.worldBounds());
+        m_clipRegistered = true;
+      }
+      else
+      {
+        for (const auto& [node, contents] : m_nodes)
+        {
+          if (m_nativeClip)
+          {
+            scene->validateClipContents(*node, contents, map.worldBounds());
+          }
+          else
+          {
+            scene->validateContents(*node, contents, map.worldBounds());
+          }
+        }
       }
     }
     catch (const std::exception& e)
@@ -163,8 +197,16 @@ bool SwapNodeContentsCommand::doPerformUndo(Map& map)
 
 bool SwapNodeContentsCommand::doCollateWith(UndoableCommand& command)
 {
+  if (m_nativeClip)
+  {
+    return false;
+  }
   if (auto* other = dynamic_cast<SwapNodeContentsCommand*>(&command))
   {
+    if (other->m_nativeClip)
+    {
+      return false;
+    }
     auto myNodes = m_nodes | std::views::keys | kdl::ranges::to<std::vector>();
     auto theirNodes = other->m_nodes | std::views::keys | kdl::ranges::to<std::vector>();
 

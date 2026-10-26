@@ -44,6 +44,7 @@ target_link_libraries(TbAppLibTest
     TbAppLib
     TbAppTestUtilsLib
     TbBaseTestUtilsLib
+    TbFsTestUtilsLib
     TbGlTestUtilsLib
     TbMdlTestUtilsLib
 )

@@ -21,6 +21,33 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Native ordinary one-output clipping — development after A5.11
+
+`mdl::clipBrushes` uses actual BrushFace/Brush clipping and one in-place
+SwapNodeContents command; native ClipTool must not use the upstream delete/add
+replacement path. Only loaded, visible, direct world-owned plain brushes admit
+this first slice. Generated/template solids, brush entities, BOTH halves,
+displacements, hidden and opaque/reference ambiguity remain refused.
+
+Explicit clip admission stages an entire batch's identities, counters/budgets and
+exact allowed side sets before publication. Reproduce Brush::clip to validate
+survivor provenance/data, never match floating planes or allocate during saving.
+Unchanged surviving source side subtrees remain authoritative, removed sides are
+surgical removals and each new cut side is explicitly authored. Retained admitted
+sets support repeated clips and undo/redo; generic content swaps must keep their
+current complete side set. Generated cut sides must belong to that solid; other
+solids' or alias/zero bindings cannot become an arbitrary topology bypass.
+
+Tests exercise real Map/ClipTool actions and unchanged-refusal controls. The App
+fixture must forward readOnlyVmfPreview and tests require actual preview state
+before claiming a preview refusal. TestEnvironment needs the PRIVATE
+TbFsTestUtilsLib dependency for both its header and out-of-line implementation.
+Resolve native integration targets by their authoritative IDs: reference/instance
+controls append siblings and invalidate a helper's two-display-child assumption.
+Do not weaken the helper/production guard to hide that oracle error. Native clip
+model4/App3 focuses, fullModel191/App49 and actual app/checker/UI rebuild pass;
+known untouched preference failure and manual/Hammer checks remain separate.
+
 ## Build
 
 Use the existing [BUILD.md](../../BUILD.md), CMake dependency declarations, and

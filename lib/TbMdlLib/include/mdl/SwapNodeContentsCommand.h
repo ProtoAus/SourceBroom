@@ -34,10 +34,14 @@ class SwapNodeContentsCommand : public UpdateLinkedGroupsCommandBase
 {
 protected:
   std::vector<std::pair<Node*, NodeContents>> m_nodes;
+  bool m_nativeClip = false;
+  bool m_clipRegistered = false;
 
 public:
   SwapNodeContentsCommand(
-    std::string name, std::vector<std::pair<Node*, NodeContents>> nodes);
+    std::string name,
+    std::vector<std::pair<Node*, NodeContents>> nodes,
+    bool nativeClip = false);
   ~SwapNodeContentsCommand() override;
 
   bool doPerformDo(Map& map) override;

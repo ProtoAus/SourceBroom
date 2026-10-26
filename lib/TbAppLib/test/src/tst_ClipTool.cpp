@@ -18,6 +18,7 @@
  along with TrenchBroom. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "fs/TestEnvironment.h"
 #include "gl/Camera.h"
 #include "gl/PerspectiveCamera.h"
 #include "mdl/BrushBuilder.h"
@@ -34,6 +35,7 @@
 #include "mdl/PasteType.h"
 #include "mdl/PickResult.h"
 #include "mdl/TestUtils.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 #include "ui/ClipTool.h"
 #include "ui/ClipToolController.h"
@@ -42,7 +44,12 @@
 
 #include "kd/result.h"
 
+#include <array>
+#include <fstream>
+#include <string>
+
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 namespace tb::ui
 {
@@ -330,6 +337,83 @@ TEST_CASE("ClipTool")
 
     auto toolWithEntitySelected = ClipTool{document};
     CHECK(!toolWithEntitySelected.activate());
+  }
+}
+
+TEST_CASE("ClipTool native ordinary one-output clip", "[vmf]")
+{
+  const auto preview = GENERATE(false, true);
+  auto bytes = std::string{
+    "versioninfo { formatversion 100 } world { id 1 classname worldspawn solid { id 2 "};
+  const auto planes = std::array<std::string, 6>{
+    "(0 0 0) (0 64 0) (0 0 64)",
+    "(64 0 0) (64 0 64) (64 64 0)",
+    "(0 0 0) (0 0 64) (64 0 0)",
+    "(0 64 0) (64 64 0) (0 64 64)",
+    "(0 0 0) (64 0 0) (0 64 0)",
+    "(0 0 64) (0 64 64) (64 0 64)"};
+  for (size_t i = 0; i < planes.size(); ++i)
+  {
+    bytes += "side { id " + std::to_string(i + 3) + " plane \"" + planes[i]
+      + "\" material synthetic/grid uaxis \"[1 0 0 0] 0.25\" vaxis \"[0 -1 0 0] 0.25\" rotation 0 } ";
+  }
+  bytes += "} }";
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "native clip tool.vmf";
+  {
+    auto stream = std::ofstream{path, std::ios::binary};
+    stream << bytes;
+  }
+  auto fixture = MapDocumentFixture{};
+  auto& document = fixture.load(
+    path,
+    mdl::MapFixtureConfig{
+      .mapFormat = mdl::MapFormat::SourceVMF,
+      .worldBounds = vm::bbox3d{4096},
+      .readOnlyVmfPreview = preview});
+  auto& map = document.map();
+  REQUIRE(map.isReadOnlyVmfPreview() == preview);
+  auto* node =
+    dynamic_cast<mdl::BrushNode*>(map.worldNode().defaultLayer()->children().front());
+  REQUIRE(node);
+  mdl::selectNodes(map, {node});
+  const auto count = map.modificationCount();
+  auto tool = ClipTool{document};
+  REQUIRE(tool.activate());
+  tool.addPoint({32, 0, 0}, {});
+  tool.addPoint({32, 0, 64}, {});
+  tool.addPoint({32, 64, 0}, {});
+  if (preview)
+  {
+    CHECK_FALSE(tool.canClip());
+    tool.performClip();
+    CHECK(map.modificationCount() == count);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+  }
+  else
+  {
+    REQUIRE(tool.canClip());
+    tool.toggleSide(); // Both remains refused, and can still be toggled away.
+    CHECK_FALSE(tool.canClip());
+    tool.performClip();
+    CHECK(map.modificationCount() == count);
+    tool.toggleSide(); // Back
+    REQUIRE(tool.canClip());
+    tool.performClip();
+    CHECK(map.worldNode().defaultLayer()->childCount() == 1);
+    CHECK(map.selection().nodes == std::vector<mdl::Node*>{node});
+    CHECK(node->brush().bounds().min.x() == 32);
+    const auto back = map.vmfScene()->serialize(map.worldNode());
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == back);
+    map.undoCommand();
+    tool.toggleSide(); // Front
+    REQUIRE(tool.canClip());
+    tool.performClip();
+    CHECK(node->brush().bounds().max.x() == 32);
+    CHECK(map.vmfScene()->nativeId(*node) == "2");
   }
 }
 

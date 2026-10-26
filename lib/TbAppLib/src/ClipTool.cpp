@@ -27,11 +27,13 @@
 #include "mdl/Hit.h"
 #include "mdl/HitFilter.h"
 #include "mdl/Map.h"
+#include "mdl/Map_Geometry.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/PickResult.h"
 #include "mdl/SelectionChange.h"
 #include "mdl/Transaction.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 #include "prefs/Preferences.h"
 #include "render/BrushRenderer.h"
@@ -516,7 +518,9 @@ const mdl::Grid& ClipTool::grid() const
 
 void ClipTool::toggleSide()
 {
-  if (canClip())
+  // BOTH is deliberately not executable for native brushes, but must remain
+  // traversable so the user can choose the back half.
+  if (m_strategy && m_strategy->canClip())
   {
     switch (m_clipSide)
     {
@@ -610,7 +614,9 @@ bool ClipTool::hasBrushes() const
 
 bool ClipTool::canClip() const
 {
-  return !m_document.map().vmfScene() && m_strategy && m_strategy->canClip();
+  const auto* scene = m_document.map().vmfScene();
+  return m_strategy && m_strategy->canClip()
+         && (!scene || (!scene->isReadOnlyPreview() && m_clipSide != ClipSide::Both));
 }
 
 void ClipTool::performClip()
@@ -620,6 +626,20 @@ void ClipTool::performClip()
     const auto ignoreNotifications = kdl::set_temp{m_ignoreNotifications};
 
     auto& map = m_document.map();
+    if (map.vmfScene())
+    {
+      const auto points = m_strategy->getPoints();
+      if (keepFrontBrushes())
+      {
+        mdl::clipBrushes(map, map.selection().brushes, {points[0], points[1], points[2]});
+      }
+      else
+      {
+        mdl::clipBrushes(map, map.selection().brushes, {points[0], points[2], points[1]});
+      }
+      update();
+      return;
+    }
     auto transaction = mdl::Transaction{map, "Clip Brushes"};
 
     // need to make a copies here so that we are not affected by the deselection
@@ -848,7 +868,10 @@ void ClipTool::updateBrushes()
         mdl::SurfaceAttributes{},
         map.worldNode().mapFormat())
         | kdl::and_then([&](mdl::BrushFace&& clipFace) {
-            setFaceAttributes(brush.faces(), clipFace);
+            if (!map.vmfScene())
+            {
+              setFaceAttributes(brush.faces(), clipFace);
+            }
             return brush.clip(worldBounds, std::move(clipFace));
           })
         | kdl::transform([&]() {

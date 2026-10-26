@@ -38,6 +38,13 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
+Development source after A5.11 adds **one-output native brush clipping** for
+loaded, visible, ordinary world brushes. Front/Back clips retain the solid ID,
+surviving native side bytes and undo/save history, allocating only the new cut
+side. Generated/duplicated solids, brush entities, BOTH halves, displacements and
+opaque/reference-ambiguous cases remain guarded. This source change is verified,
+not yet in the installed A5.11 kit or independently accepted in Hammer++.
+
 The A5.11 candidate adds **positive uniform displacement scaling**, static Source
 model **bodygroup selection**, and short safe-save transaction names for valid
 Windows filenames near the path budget. Native movement/rotation, UV locks,

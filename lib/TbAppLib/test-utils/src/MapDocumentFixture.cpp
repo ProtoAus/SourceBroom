@@ -68,7 +68,8 @@ Result<std::unique_ptr<MapDocument>> loadFixtureDocument(
            vm::bbox3d{8192.0},
            path,
            taskManager,
-           resourceManager)
+           resourceManager,
+           config.readOnlyVmfPreview)
          | kdl::transform([&](auto document) {
              document->map().setIsCommandCollationEnabled(false);
 

@@ -48,8 +48,10 @@ These are observed limitations/follow-ups, not a claim that all have a product f
 - **Alpha operation affordances — `ui/MapWindow.cpp`, `mdl/VmfScene.cpp`.**
   A5.2 enables basic native creation/duplication/deletion/brush-entity ownership
   and gates common unsupported clipboard/CSG/clip/content changes before mutation.
-  Some upstream topology/hierarchy tools can remain visible. Follow-up: complete
-  capability-specific affordances before the full A5 exit, not merely save-time
+  Development source after A5.11 enables one-output loaded-world plain brush
+  clipping in place; generated/entity/two-half and opaque/displacement/reference
+  cases still refuse. Some upstream topology/hierarchy tools can remain visible.
+  Follow-up: complete capability-specific affordances before full A5, not merely save-time
   refusal. Falsifier: each unsupported action is unavailable or explains refusal
   before mutation; supported authoring, transforms, selection and undo still work.
 - **Windows preference regression check — `test/src/tst_QPreferenceStore.cpp`,

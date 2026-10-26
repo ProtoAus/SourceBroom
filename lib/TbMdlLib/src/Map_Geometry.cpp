@@ -46,6 +46,7 @@
 #include "mdl/SetLinkIdsCommand.h"
 #include "mdl/SwapNodeContentsCommand.h"
 #include "mdl/Transaction.h"
+#include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 
 #include "kd/flat_map.h"
@@ -64,6 +65,48 @@ namespace tb::mdl
 {
 
 kdl_reflect_impl(TransformVerticesResult);
+
+bool clipBrushes(
+  Map& map,
+  const std::vector<BrushNode*>& brushes,
+  const std::array<vm::vec3d, 3>& points)
+{
+  if (!map.vmfScene() || brushes.empty())
+  {
+    return false;
+  }
+  auto candidates = std::vector<std::pair<Node*, NodeContents>>{};
+  for (auto* node : brushes)
+  {
+    if (
+      !node || node->parent() != map.worldNode().defaultLayer()
+      || !map.editorContext().visible(*node))
+    {
+      return false;
+    }
+    auto face = BrushFace::create(
+      points[0],
+      points[1],
+      points[2],
+      map.currentMaterialName(),
+      UvAttributes{},
+      SurfaceAttributes{},
+      map.worldNode().mapFormat());
+    if (!face.is_success())
+    {
+      return false;
+    }
+    auto brush = node->brush();
+    if (!brush.clip(map.worldBounds(), std::move(face).value()).is_success())
+    {
+      return false;
+    }
+    candidates.emplace_back(node, NodeContents{std::move(brush)});
+  }
+  return map.executeAndStore(
+    std::make_unique<SwapNodeContentsCommand>(
+      "Clip Brushes", std::move(candidates), true));
+}
 
 static bool transformSelectionWithSourcePolicy(
   Map& map,

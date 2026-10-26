@@ -1923,4 +1923,237 @@ TEST_CASE("VmfMap", "[vmf]")
     CHECK(map.modified());
   }
 }
+TEST_CASE("VmfMap in-place ordinary clip history and admission", "[vmf]")
+{
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "ordinary clip.vmf";
+  const auto original = nativeRamp(false);
+  writeBinary(path, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  auto& node = ramp(map);
+  selectNodes(map, {&node});
+  const auto binding = node.lineNumber();
+  const auto selection = map.selection().nodes;
+  const auto plane = std::array<vm::vec3d, 3>{{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}};
+
+  SECTION("repeated clips save reopen move undo and redo deterministically")
+  {
+    REQUIRE(clipBrushes(map, {&node}, plane));
+    CHECK(node.lineNumber() == binding);
+    CHECK(map.selection().nodes == selection);
+    CHECK(node.brush().bounds().max.x() == 32);
+    const auto first = map.vmfScene()->serialize(map.worldNode());
+    REQUIRE(clipBrushes(map, {&node}, {{{0, 32, 0}, {64, 32, 0}, {0, 32, 64}}}));
+    CHECK(node.brush().bounds().max.y() == 32);
+    const auto second = map.vmfScene()->serialize(map.worldNode());
+    CHECK(first != second);
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == first);
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    map.redoCommand();
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == second);
+    const auto saved = env.dir() / "clipped.vmf";
+    REQUIRE(map.saveAs(saved).is_success());
+    CHECK(readBinary(saved) == second);
+    REQUIRE(map.save().is_success());
+    CHECK(readBinary(saved) == second);
+    auto recovered = MapFixture{};
+    auto& reopened = recovered.load(saved, config);
+    CHECK(ramp(reopened).brush().bounds() == node.brush().bounds());
+    REQUIRE(translateSelection(map, {8, 0, 0}));
+    auto painted = node.brush();
+    for (auto& face : painted.faces())
+    {
+      face.setMaterialName("synthetic/after_clip");
+    }
+    REQUIRE(map.executeAndStore(
+      std::make_unique<SwapNodeContentsCommand>(
+        "Paint clipped brush",
+        std::vector<std::pair<Node*, NodeContents>>{
+          {&node, NodeContents{std::move(painted)}}})));
+    REQUIRE(map.save().is_success());
+    CHECK(readBinary(saved).find("synthetic/after_clip") != std::string::npos);
+    CHECK_NOTHROW(
+      VmfScene::read(map.vmfScene()->serialize(map.worldNode()), map.worldBounds()));
+    CHECK(readBinary(path) == original);
+  }
+
+  SECTION(
+    "outside tangent degenerate and later-invalid batches consume no IDs or history")
+  {
+    const auto count = map.modificationCount();
+    const auto positions = filePositions(map);
+    const auto undo = map.canUndoCommand();
+    const auto redo = map.canRedoCommand();
+    CHECK_FALSE(clipBrushes(map, {&node}, {{{128, 0, 0}, {128, 0, 64}, {128, 64, 0}}}));
+    CHECK_FALSE(clipBrushes(map, {&node}, {{{64, 0, 0}, {64, 0, 64}, {64, 64, 0}}}));
+    CHECK_FALSE(clipBrushes(map, {&node}, {{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}}}));
+    CHECK_FALSE(clipBrushes(map, {&node, &node}, plane));
+    CHECK(map.modificationCount() == count);
+    CHECK(map.canUndoCommand() == undo);
+    CHECK(map.canRedoCommand() == redo);
+    CHECK(map.selection().nodes == selection);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    REQUIRE(clipBrushes(map, {&node}, plane));
+    CHECK(
+      map.vmfScene()->serialize(map.worldNode()).find("side\n{\n\"id\" \"9\"")
+      != std::string::npos);
+  }
+
+  SECTION("a later unsupported generated solid refuses the entire command batch")
+  {
+    duplicateSelectedNodes(map);
+    auto* duplicate = map.selection().brushes.front();
+    REQUIRE(duplicate != &node);
+    const auto before = map.vmfScene()->serialize(map.worldNode());
+    const auto count = map.modificationCount();
+    const auto positions = filePositions(map);
+    const auto selected = map.selection().nodes;
+    const auto undo = map.canUndoCommand();
+    const auto redo = map.canRedoCommand();
+    CHECK_FALSE(clipBrushes(map, {&node, duplicate}, plane));
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+    CHECK(map.modificationCount() == count);
+    CHECK(filePositions(map) == positions);
+    CHECK(map.selection().nodes == selected);
+    CHECK(map.canUndoCommand() == undo);
+    CHECK(map.canRedoCommand() == redo);
+    REQUIRE(clipBrushes(map, {&node}, plane));
+    CHECK(
+      map.vmfScene()->serialize(map.worldNode()).find("side\n{\n\"id\" \"15\"")
+      != std::string::npos);
+  }
+
+  SECTION("generic content swap cannot acquire a new cut side")
+  {
+    auto candidate = node.brush();
+    auto face = BrushFace::create(
+      plane[0],
+      plane[1],
+      plane[2],
+      "cut",
+      UvAttributes{},
+      SurfaceAttributes{},
+      MapFormat::SourceVMF);
+    REQUIRE(face.is_success());
+    REQUIRE(candidate.clip(map.worldBounds(), std::move(face).value()).is_success());
+    const auto count = map.modificationCount();
+    CHECK_FALSE(map.executeAndStore(
+      std::make_unique<SwapNodeContentsCommand>(
+        "Unregistered clip",
+        std::vector<std::pair<Node*, NodeContents>>{
+          {&node, NodeContents{std::move(candidate)}}})));
+    CHECK(map.modificationCount() == count);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    REQUIRE(clipBrushes(map, {&node}, plane));
+  }
+}
+
+TEST_CASE("VmfMap ordinary clip unsupported attachments refuse atomically", "[vmf]")
+{
+  const auto kind = GENERATE(
+    std::string{"opaque side"},
+    std::string{"opaque solid"},
+    std::string{"reference"},
+    std::string{"instance"},
+    std::string{"group"},
+    std::string{"unknown root"},
+    std::string{"displacement"},
+    std::string{"hidden"},
+    std::string{"brush entity"},
+    std::string{"generated"},
+    std::string{"duplicate"});
+  CAPTURE(kind);
+  auto original = kind == "displacement" ? nativeDisplacementRoom() : nativeRamp(false);
+  if (kind == "opaque side")
+  {
+    original.insert(original.find("\"smoothing_groups\""), "foreign { key value } ");
+  }
+  if (kind == "opaque solid")
+  {
+    original.insert(original.find("solid {") + 7, "foreign { key value } ");
+  }
+  if (kind == "reference")
+  {
+    original +=
+      "entity { \"id\" \"100\" \"classname\" \"info_overlay\" \"sides\" \"3\" }";
+  }
+  if (kind == "instance")
+  {
+    original += "entity { id 100 classname func_instance file synthetic.vmf }";
+  }
+  if (kind == "unknown root")
+  {
+    original += "future_geometry_reference { sides 3 }";
+  }
+  if (kind == "group")
+  {
+    original.insert(
+      original.find("solid {"), "group { id 100 editor { color \"1 2 3\" } } ");
+  }
+  if (kind == "hidden")
+  {
+    original.insert(original.find("solid {"), "hidden { ");
+    original.insert(original.find("editor { \"color\""), "} ");
+  }
+  if (kind == "brush entity")
+  {
+    original.insert(
+      original.find("solid {"),
+      "} entity { \"id\" \"100\" \"classname\" \"func_detail\" ");
+  }
+  auto env = fs::TestEnvironment{};
+  const auto path = env.dir() / "clip refusal.vmf";
+  writeBinary(path, original);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(path, config);
+  // Reference/instance arms add siblings; resolve the authoritative solid ID.
+  auto* target = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
+  REQUIRE(target);
+  selectNodes(map, {target});
+  if (kind == "duplicate")
+  {
+    duplicateSelectedNodes(map);
+    target = map.selection().brushes.front();
+  }
+  if (kind == "generated")
+  {
+    REQUIRE(createBrush(
+      map,
+      {{0, 0, 0},
+       {64, 0, 0},
+       {0, 64, 0},
+       {64, 64, 0},
+       {0, 0, 64},
+       {64, 0, 64},
+       {0, 64, 64},
+       {64, 64, 64}}));
+    target = map.selection().brushes.front();
+  }
+  const auto before = map.vmfScene()->serialize(map.worldNode());
+  const auto count = map.modificationCount();
+  const auto positions = filePositions(map);
+  const auto selection = map.selection().nodes;
+  CHECK_FALSE(clipBrushes(map, {target}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+  CHECK(map.modificationCount() == count);
+  CHECK(filePositions(map) == positions);
+  CHECK(map.selection().nodes == selection);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+  const auto controlPath = env.dir() / "plain clip control.vmf";
+  writeBinary(controlPath, nativeRamp(false));
+  auto controlFixture = MapFixture{};
+  auto& control = controlFixture.load(controlPath, config);
+  REQUIRE(
+    clipBrushes(control, {&ramp(control)}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+  CHECK(ramp(control).brush().bounds().max.x() == 32);
+}
+
 } // namespace tb::mdl

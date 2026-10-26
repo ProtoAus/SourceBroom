@@ -5,6 +5,31 @@ paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
+## Development after A5.11 — native ordinary one-output clip
+
+Loaded visible ordinary world brushes use the real Map/ClipTool Front/Back path
+in place, not delete/add replacements. Surviving native side bytes/IDs, original
+solid ID, exact cut-side allocation, surgical removal/append, repeated clipping,
+undo/redo, saving and reopen have acted geometry/serialization controls. Whole-
+batch later-invalid/no-op/identity guards, opaque/global references, displacement,
+wrong ownership and generic-swap/direct-save bypass controls remain enforced.
+BOTH, generated/duplicated solids and brush entities remain deferred, not supported.
+
+Independent static review found preview setup omitted a load argument and the new
+App test lacked its filesystem test-utility link. Both seams were corrected before
+parent compilation. Real model/App targets then built0 with zero new warnings;
+first focused run exposed two test-helper child-count failures in reference/instance
+arms. Native-ID target resolution corrected only that oracle, not production guards.
+Corrected native model focus **4/4**, retained/native App ClipTool **3/3**, full model
+**191/191**, full App **49/49** pass. Actual app/checker/UI callers rebuilt0 without
+new warnings. The private38-file corpus remains document38/strict35/preview38,
+same3 strict refusals and all38 original SHA256 unchanged. Existing graphics/body
+shader evidence is retained, not a new clip visual or performance measurement.
+
+This is verified development source, not an installed A5.11 feature, all-UI-green
+claim or owner/Hammer acceptance. The known untouched full-UI preference failure
+remains unfixed. The small copied-plain-brush human check remains pending in lextest.
+
 ## A5.11 uniform scale / bodygroups / transaction-path controls
 
 Typed command intent admits only positive uniform native terrain scale through
