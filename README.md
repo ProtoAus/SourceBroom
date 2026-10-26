@@ -5,12 +5,12 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.15 ordinary native group/ungroup candidate:
+**Status:** Windows A5.16 live native cordon candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
 FGD-backed properties and ordered Source outputs, preserving saves, external
-compile/play, capability preflight, read-only native metadata and an explicit
+compile/play, capability preflight, read-only saved metadata, live native cordons and an explicit
 custom-content distribution ZIP. CSS and Momentum are the first tested profiles,
 not the only configurable games. Independent Hammer++ and detailed authoring
 acceptance remain pending; full A5, advanced native authoring and a general
@@ -38,7 +38,18 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.15 adds native **Group/Ungroup** through the existing actions for supported
+A5.16 adds a **live native cordon editor** beside map properties. Edit modern
+loaded/new records, multiple boxes, names and optional activation; legacy bounds,
+activation and removal stay in their original form. The editor shows UNSAVED state,
+uses document-scoped handles, supports atomic Apply/Fit/undo/redo and preserves
+untouched source text. It does **not** clip the viewport or guarantee external
+compiler-region behavior. Preview/unsupported/ambiguous controllers remain guarded.
+Full model243, post-helper-rename model24, full App50 and scoped affected UI13 pass;
+actual app/checker/UI builds have no new compiler warnings and independent review
+found no focused blockers. Owner/Hammer interpretation remains pending. Keep the
+whole A5.15 kit as recovery, without merging DLLs.
+
+Retained A5.15 adds native **Group/Ungroup** through the existing actions for supported
 loaded, fresh and duplicated ordinary groups. Nested groups, plain world brushes
 and whole ordinary entities retain native membership/IDs without changing VMF
 lexical ownership. Undo/redo restores exact live nodes, sibling order and selection;

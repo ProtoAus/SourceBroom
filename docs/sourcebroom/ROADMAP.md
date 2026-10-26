@@ -33,7 +33,18 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.15 candidate:** ordinary native Group/Ungroup actions now handle supported
+- **A5.16 candidate:** live native cordon editing now handles loaded modern and
+  legacy ordinary controllers plus new modern records, multiple boxes, names and
+  optional activation. Atomic Map history, scoped handles, exact no-op/raw save,
+  stale-action refusal and live UNSAVED UI are separate from the read-only saved
+  inspector. Fit copies valid selection bounds without changing selection or soft
+  bounds. No viewport clipping, automatic legacy migration or compiler-region
+  guarantee. Full model243, post-private-rename model24, App50 and affected UI13
+  pass; real callers rebuilt0/no new warnings, independent focused review ready.
+  Corpus38/35/38 and all38 originals unchanged. Human/Hammer acceptance pending;
+  keep whole A5.15 as recovery. Visgroup/hidden authoring needs a larger loaded
+  membership/visibility protocol, not a misleading fresh-only toggle.
+- **Retained A5.15 candidate:** ordinary native Group/Ungroup actions now handle supported
   loaded/new/duplicated nested groups, plain world brushes and whole ordinary
   entities. Native group IDs/membership are staged together; physical editor groups
   do not change VMF lexical solid/entity ownership. Undo/redo restores exact live
@@ -236,8 +247,9 @@ MAP round trip. Arbitrary topology and opaque-reference mutations remain gated.
 Existing native entities have typed FGD hints and an ordered output table;
 supported props have a static root/default-pose preview.
 Ordinary native groups now have bounded scene Group/Ungroup authoring (A5.15).
-The saved-file metadata inspector stays read-only; visgroups, hidden state and
-cordons are not visibility/cordon authoring. A camera action moves the eye only.
+The saved-file metadata inspector stays read-only. A5.16 separately admits live
+ordinary cordon authoring in map properties; visgroups and hidden state are not
+visibility authoring. A camera action moves the eye only.
 Custom dependency discovery is incomplete and writes an explicitly reviewed
 new distribution ZIP, not a BSP pak lump. Generic Source remains configurable
 without certifying arbitrary branches. [Tool limits](SOURCE_TOOLS.md) and

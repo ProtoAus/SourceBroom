@@ -36,6 +36,7 @@
 #include "ui/LayerEditor.h"
 #include "ui/MapDocument.h"
 #include "ui/ModEditor.h"
+#include "ui/NativeCordonEditor.h"
 #include "ui/QStyleUtils.h"
 #include "ui/QVecUtils.h"
 #include "ui/TitledPanel.h"
@@ -108,6 +109,7 @@ void MapInspector::createGui(MapDocument& document)
   sizer->addWidget(createLayerEditor(document), 1);
   sizer->addWidget(new BorderLine{}, 0);
   sizer->addWidget(m_mapPropertiesEditor, 0);
+  sizer->addWidget(new NativeCordonEditor{document}, 0);
   sizer->addWidget(new BorderLine{}, 0);
   sizer->addWidget(m_modEditor, 0);
   setLayout(sizer);

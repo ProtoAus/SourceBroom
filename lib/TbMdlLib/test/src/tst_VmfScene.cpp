@@ -1869,4 +1869,93 @@ TEST_CASE(
   CHECK(preview.serialize(preview.world()) == source);
 }
 
+TEST_CASE(
+  "NativeCordon scene geometry guards and native group namespace remain independent",
+  "[vmf]")
+{
+  const auto bounds = vm::bbox3d{131072.0};
+  const auto legacy = GENERATE(false, true);
+  const auto controller =
+    legacy ? std::string{"cordon { mins \"(0 0 0)\" maxs \"(64 64 64)\" }"}
+           : std::string{
+               "cordons { cordon { box { mins \"(0 0 0)\" maxs \"(64 64 64)\" } } }"};
+  const auto source = fixture() + controller;
+  auto scene = VmfScene::read(source, bounds);
+  auto control = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  const auto binding = node.lineNumber();
+  auto* layer = scene.world().defaultLayer();
+  const auto siblings = layer->children();
+  node.select();
+  auto request = NativeCordonRequest{scene.cordons()};
+  request.records[0].boxes[0].maxs = {80, 90, 100};
+  request.records[0].active = true;
+  auto change = scene.prepareCordonChange(request);
+  REQUIRE(change);
+  scene.applyCordonChange(*change, NativeCordonDirection::Forward);
+  auto invalid = NativeCordonRequest{scene.cordons()};
+  invalid.records[0].boxes[0].maxs[0] = -1;
+  CHECK_THROWS_AS(scene.prepareCordonChange(invalid), std::invalid_argument);
+  CHECK(node.selected());
+  CHECK(node.lineNumber() == binding);
+  CHECK(layer->children() == siblings);
+  CHECK(node.brush().bounds() == vm::bbox3d{{0, 0, 0}, {64, 64, 64}});
+  CHECK(node.visibilityState() == VisibilityState::Inherited);
+  if (legacy)
+  {
+    CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+    CHECK_THROWS_AS(
+      control.validateRemoval({&brush(control.world())}), std::invalid_argument);
+  }
+  else
+  {
+    CHECK_NOTHROW(scene.validateRemoval({&node}));
+    auto group = std::make_unique<GroupNode>(Group{"new"});
+    auto matched = std::make_unique<GroupNode>(Group{"control"});
+    scene.registerGroupChanges(group.get(), {{group.get(), layer}});
+    control.registerGroupChanges(
+      matched.get(), {{matched.get(), control.world().defaultLayer()}});
+    CHECK(scene.nativeId(*group) == control.nativeId(*matched));
+    layer->addChild(group.release());
+    control.world().defaultLayer()->addChild(matched.release());
+  }
+  scene.applyCordonChange(*change, NativeCordonDirection::Backward);
+  CHECK(scene.serialize(scene.world()) == control.serialize(control.world()));
+}
+
+TEST_CASE(
+  "NativeCordon scene preserves hidden opaque and saved metadata authority", "[vmf]")
+{
+  const auto bounds = vm::bbox3d{131072.0};
+  const auto source = fixture(false, "future_side { data retained }", true)
+    + "visgroups { visgroup { name \"preserved\" visgroupid 100 color \"1 2 3\" } }\r\n"
+      "future { output first output second }\r\n"
+      "cordons { active 0 cordon { name \"saved\" box { mins \"(0 0 0)\" maxs \"(72 83 94)\" } } }";
+  auto scene = VmfScene::read(source, bounds);
+  auto& node = brush(scene.world());
+  REQUIRE(node.visibilityState() == VisibilityState::Hidden);
+  CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+  auto request = NativeCordonRequest{scene.cordons()};
+  request.records[0].boxes[0].maxs = {172, 183, 194};
+  request.records[0].name = "live";
+  auto change = scene.prepareCordonChange(request);
+  REQUIRE(change);
+  scene.applyCordonChange(*change, NativeCordonDirection::Forward);
+  auto expected = source;
+  expected.replace(
+    expected.find("(72 83 94)"), std::string{"(72 83 94)"}.size(), "(172 183 194)");
+  expected.replace(
+    expected.find("\"saved\""), std::string{"\"saved\""}.size(), "\"live\"");
+  CHECK(scene.serialize(scene.world()) == expected);
+  CHECK(node.visibilityState() == VisibilityState::Hidden);
+  CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
+  const auto metadata = SourceEditorMetadata::read(scene.document());
+  REQUIRE(metadata.cordons.size() == 1);
+  CHECK(metadata.cordons[0].name == "saved");
+  CHECK(scene.cordons().records[0].name == "live");
+  CHECK(scene.document().source() == source);
+  scene.applyCordonChange(*change, NativeCordonDirection::Backward);
+  CHECK(scene.serialize(scene.world()) == source);
+}
+
 } // namespace tb::mdl

@@ -878,6 +878,7 @@ void VmfScene::registerGroupChanges(
 
 VmfScene::VmfScene(VmfDocument document)
   : m_document{std::move(document)}
+  , m_cordons{m_document}
   , m_nextBinding{m_document.entries().size() + 1}
 {
   // Reserve IDs even in unprojected groups/opaque blocks. Object and side IDs
@@ -1218,6 +1219,35 @@ void VmfScene::requireEditing() const
   {
     refuse(0, "read-only compatibility preview cannot author native data");
   }
+}
+
+NativeCordonSnapshot VmfScene::cordons() const
+{
+  auto snapshot = m_cordons.snapshot();
+  try
+  {
+    requireEditing();
+    requireEditableVersion(m_document);
+  }
+  catch (const std::invalid_argument& e)
+  {
+    snapshot.refusalReason = e.what();
+  }
+  return snapshot;
+}
+std::optional<PreparedNativeCordonChange> VmfScene::prepareCordonChange(
+  const NativeCordonRequest& request) const
+{
+  requireEditing();
+  requireEditableVersion(m_document);
+  return m_cordons.prepare(request);
+}
+void VmfScene::applyCordonChange(
+  PreparedNativeCordonChange& change, const NativeCordonDirection direction)
+{
+  requireEditing();
+  requireEditableVersion(m_document);
+  m_cordons.apply(change, direction);
 }
 
 WorldNode& VmfScene::world()
@@ -3194,6 +3224,7 @@ std::string VmfScene::serialize(const WorldNode& world) const
       refuse(0, "unsupported generated object type");
     }
   }
+  m_cordons.emitEdits(edits, structural, roots);
   if (!roots.empty())
   {
     structural.push_back(

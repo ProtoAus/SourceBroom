@@ -52,7 +52,10 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   duplicated world/plain brush-entity solids. A5.15 adds ordinary native
   Group/Ungroup capability predicates/actions, guarded loaded projection and
   per-component membership isolation; native rename and opened-group removal stay
-  unavailable. Other CSG/topology and opaque/displacement/reference cases still refuse. Some upstream topology/hierarchy tools remain visible.
+  unavailable. A5.16 adds live native cordon preflight/history/UI with strict
+  controller/box/stale guards; it does not clip the viewport or certify compiler
+  regions. Other CSG/topology and opaque/displacement/reference cases still refuse.
+  Some upstream topology/hierarchy tools remain visible.
   Follow-up: complete capability-specific affordances before full A5, not merely save-time
   refusal. Falsifier: each unsupported action is unavailable or explains refusal
   before mutation; supported authoring, transforms, selection and undo still work.

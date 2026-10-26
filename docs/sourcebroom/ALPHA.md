@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.15 native grouping candidate
+# Try the Windows SourceBroom A5.16 live cordon candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,36 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.15: group ordinary native objects without converting the VMF
+## A5.16: live native cordons beside map properties
+
+Open an editable **copy** and find **Live native cordons** in the map inspector.
+This is current UNSAVED map state, not the saved-file metadata dialog. With no
+controller, add a modern cordon: its named record, -64..64 initial box and inactive
+flags are deliberate new defaults. Select a record/box, edit name, ordered min/max
+and optional active flags, then **Apply**. **Not set** preserves absent loaded flags.
+Add boxes/records or remove them; the last box must be removed with its record,
+and removing the final record removes its controller. Empty modern controllers
+also have explicit removal. Semantically unchanged Apply is an exact no-op.
+
+**Fit** copies valid selected bounds; it does not change selection or soft-map
+bounds. Reversed, nonfinite or zero-sized bounds refuse, as do stale row actions,
+unsupported/ambiguous controller data and read-only preview. Loaded legacy cordons
+allow in-place bounds/active/removal only: no rename, second record or silent
+conversion. Unknown data outside the controller remains untouched; unknown payload
+inside the controller requires refusal rather than a guessed rewrite.
+
+Undo/redo and Save As/reopen retain native data and identities. This tool changes
+native metadata only: **it does not clip this viewport, create a gizmo, or guarantee
+an external compiler's region behavior**. Matching Hammer++/SDK interpretation is
+still a manual check. Visgroup/hidden authoring is not unlocked.
+
+**Quick owner check (pending):** on a copy, add/edit a cordon and a second box,
+Apply, undo/redo, Save As and inspect those bounds/flags in matching Hammer++.
+If available, repeat a bounds edit on an existing legacy cordon without converting
+it. Check the live panel is readable/useful. Keep the **whole A5.15** kit as recovery;
+never merge DLLs or overwrite an original just to test a refusal.
+
+## Retained A5.15: group ordinary native objects without converting the VMF
 
 In a new editable map or **copy**, select two plain brushes and use the existing
 **Group** action. The native label is derived as `Group <id>` with no name prompt.
@@ -324,8 +353,9 @@ Hammer++ performance advantage is claimed.
   controllers and shader parity are not claimed.
 - Save, then use **Run -> Compile -> Native metadata / Custom package…**. The
   metadata tab reads the **saved** snapshot: groups, visgroups, hidden state,
-  cameras and cordons are read-only. **Go to camera eye** moves only the eye,
-  not the full Hammer camera orientation. Reload after saving changes.
+  cameras and cordons are read-only in THIS saved inspector. Live ordinary cordon
+  editing is separately available in the map inspector. **Go to camera eye** moves
+  only the eye, not full Hammer orientation. Reload the saved inspector after saving.
 - To test packaging, use a dedicated **custom-only** game-relative content root
   you have rights to distribute. Discover/review the exact plan, then approve it
   separately and write a **new** distribution ZIP. Do not select a Steam install.

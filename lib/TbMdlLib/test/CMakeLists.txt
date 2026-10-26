@@ -5,6 +5,8 @@ if(TARGET libzstd_static)
 endif()
 
 target_sources(TbMdlLibTest PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeCordons.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Map_NativeCordons.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_AssetUtils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Autosaver.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_BezierPatch.cpp

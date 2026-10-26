@@ -339,6 +339,8 @@ struct TestResource
 
 TEST_CASE("MapWindow")
 {
+  auto settingsEnvironment = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{settingsEnvironment.dir()};
   auto appControllerFixture = AppControllerFixture{};
   auto& appController = appControllerFixture.appController();
 
@@ -581,9 +583,10 @@ TEST_CASE(
   "Source displacement inspector applies distance and guards stale grid coordinates",
   "[source]")
 {
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
   auto fixture = AppControllerFixture{};
   auto& appController = fixture.appController();
-  auto env = fs::TestEnvironment{};
   const auto solid = [](const size_t id, const size_t power) {
     const auto planes = std::array<std::string, 6>{
       "(0 0 0) (0 64 0) (0 0 64)",

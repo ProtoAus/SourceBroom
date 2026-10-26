@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include "mdl/NativeCordons.h"
 #include "mdl/VmfDocument.h"
 #include "mdl/WorldNode.h"
 
@@ -37,6 +38,7 @@ class VmfScene
 {
 private:
   VmfDocument m_document;
+  NativeCordons m_cordons;
   std::unique_ptr<WorldNode> m_world;
   std::unique_ptr<WorldNode> m_original;
   // Retains ancestry authority after takeWorld transfers ownership to Map.
@@ -136,6 +138,12 @@ public:
   const VmfDocument& document() const;
   const std::vector<VmfSceneDiagnostic>& diagnostics() const;
   std::string nativeId(const Node& node) const;
+
+  NativeCordonSnapshot cordons() const;
+  std::optional<PreparedNativeCordonChange> prepareCordonChange(
+    const NativeCordonRequest& request) const;
+  void applyCordonChange(
+    PreparedNativeCordonChange& change, NativeCordonDirection direction);
 
   /** Admission precedes command mutation. Generated bindings/IDs survive undo,
    * redo and repeated saves; serialization never allocates identities. */

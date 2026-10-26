@@ -21,6 +21,46 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Live native cordons — A5.16
+
+NativeCordons is VmfScene-owned authoritative state, not a mutable saved inspector.
+Owning snapshots and typed full desired-state requests use strong scene-scoped
+record/box handles, never VmfEntryId/row/name/native numeric identity. Pure prepare
+validates all shapes, values, budgets and expected scope/revision before publish;
+first-dispatch freshness is separate from semantic before/after undo/redo checks.
+New accepted handles replay unchanged and are not recycled into unrelated records.
+No-op/refused requests consume no native namespace or Map history/dirty count.
+
+Immutable document/provenance drives surgical optional scalar/record/box patches;
+unchanged spellings remain untouched, removed-parent children are suppressed and
+new roots join existing native entity/group output in ONE AppendRoot. Repeated
+save and undo after save don't rebase bindings or duplicate controllers. Legacy
+singleton stays legacy; no implicit migration. Malformed/opaque inside refuses,
+unknown outside remains independent. Preview/version and geometry guards remain.
+
+Map_NativeCordons exposes owning live snapshots and Changed/Unchanged/Refused
+requests; NativeCordonCommand uses existing modifying history/transaction behavior.
+Existing document notifications refresh value-only changes while already dirty.
+No node/selection/context/index/bounds/visibility mutation or retry exception.
+NativeCordonEditor in MapInspector captures scope/revision/row identity at action
+press; stale release refuses rather than reading another row/document. Only
+explicitly changed text is parsed/encoded, with blocked refresh signals and
+17-digit numeric display; absent flags/invalid native name bytes remain untouched.
+
+The internal serializer is named emitEdits, NOT emit: Qt's macro collides when the
+model header follows QWidget. This private three-site rename was verified against
+frozen hashes and actual Qt callers. Retained MapWindow tests now use the existing
+owned INI settings scope before all widgets; never run default owner settings as a
+regression fixture or claim earlier unscoped passes establish profile isolation.
+
+Runtime REDs for model/Map/UI retained positive controls and specific dispatch
+failures. Full model243, post-rename focused24, scoped UI13 and parent App50 pass;
+actual public callers rebuild0/zero new warnings, fresh review no findings. Local
+state/name/text/batch boundaries checked; uint64 exhaustion not dynamically tested.
+No viewport/region compiler guarantee, arbitrary observer/OOM atomicity or human
+Hammer/visual acceptance. Further visgroup support needs a separate loaded
+membership/hidden-cause protocol, not a fresh-only toggle.
+
 ## Ordinary native groups — A5.15
 
 `Map_Groups` exposes pure `canGroupSelectedNodes`/`canUngroupSelectedNodes`; native

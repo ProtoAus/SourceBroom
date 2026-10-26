@@ -1,11 +1,55 @@
-# SourceBroom validation — A5.15 ordinary native grouping
+# SourceBroom validation — A5.16 live native cordons
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.15 — ordinary native group membership and safe replay
+## A5.16 — live native cordon state, history and UI
+
+VmfScene owns bounded cordon state with strict local admission, owning snapshots,
+strong scene-scoped record/box handles, pure complete staging and semantic-state
+replay. Original document/bindings stay immutable; surgical emission shares the
+single generated-root append with new native entities/groups. Map requests never
+use saved snapshots or row/name lookup as authoring authority.
+
+- MODEL runtime RED: compilable live staging acted; 16 controls passed and three
+  intended serialized deltas failed before dispatch. Final model focus14/371
+  assertions and preservation/group gate59 pass.
+- MAP/HISTORY runtime RED: nine controls passed/seven intended live/history/save
+  failures. Final history10/229 assertions and one full model **243/243** pass.
+  Changed/Unchanged/Refused results, semantic no-op, Save As/reopen/further edits,
+  same handles on replay, stale/foreign tokens, native namespace and real open-group
+  selection/context/index/bounds/visibility invariants are covered.
+- UI runtime RED: 18 controls passed/six intended live/history/save failures.
+  Final scoped UI **13/13**, 492 assertions, includes six cordon cases/174 assertions
+  and seven retained inspector/window/action/group controls. Actual clicks/typing/
+  press-release stale row/delete/undo/document replacement act, not only API calls.
+- Optional fields and untouched invalid name bytes/noncanonical finite numbers are
+  preserved; changed fields round-trip double precision. Multi-record/multi-box,
+  legacy in-place restrictions, empty/final removal, later-invalid atomic refusal,
+  new-controller plus new-native-entity root composition and local budgets pass.
+- Private serializer helper was renamed `emitEdits` at three sites for Qt macro
+  compatibility, not a macro/include-order workaround. Actual model rebuilt and
+  focused **24/24**, 600 assertions, pass after rename; unchanged full243 was not
+  rerun. Two retained window tests now reuse existing owned INI settings scope.
+  Earlier unscoped pass results are not proof of settings isolation.
+- Parent verified all20 code hashes against the final reviewed snapshot. Actual
+  app/checker/App/UI targets rebuild with zero new compiler warnings; full App
+  **50/50** passes. Final scoped UI13 is reused by exact source identity. Fresh
+  independent review found no issues in the focused implementation.
+- Rebuilt production checker: document38/strict35/preview38, same three strict
+  refusal inputs and all38 original SHA-256 hashes unchanged. Probes act in memory.
+
+No native object/side/group ID, scene node, selection, visibility, index or soft
+bounds is changed by cordon editing. Unknown inside/duplicate/mixed/malformed
+controllers refuse; unrelated outside data and original bytes remain. Preview
+immutability and legacy geometry guards remain. No viewport clipping, compiler
+region execution, automatic legacy migration, arbitrary observer/OOM atomicity,
+full UI pass or universal Source compatibility claim. Human/Hammer/visual checks
+remain pending. Portable installed provenance is recorded by the final receipt.
+
+## Retained A5.15 — ordinary native group membership and safe replay
 
 Supported loaded/new/duplicated nested groups, world brushes and whole ordinary
 entities now act through the existing native Group/Ungroup model and UI actions.

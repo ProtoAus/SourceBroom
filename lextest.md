@@ -213,6 +213,25 @@ is pending, not inferred from source/model/tool/runtime checks:
   ambiguity remain guarded; report exact refusals rather than bypassing native
   preservation through MAP export. Test counts/review are not this observation.
 
+## A5.16 live native cordons — pending owner/Hammer check
+
+Use a **copy**, retaining the whole A5.15 kit as recovery.
+
+- [ ] In map properties find Live native cordons. Add an inactive modern record,
+  edit its bounds/flags/name, add a second box, Apply and undo/redo. Confirm the
+  panel shows UNSAVED changes and is readable/useful.
+- [ ] Fit from an ordinary selected brush; confirm selection and soft-map bounds
+  stay unchanged. Apply without changes should not add history or dirty state.
+- [ ] Save As a new VMF and open it in matching Hammer++: intended cordon records,
+  boxes and flags retained, unrelated map data unchanged.
+- [ ] If available, edit a loaded legacy cordon's bounds/active then undo and
+  reopen without conversion. Do not overwrite an original to test refusal.
+
+All are pending. This is native metadata authoring, not viewport clipping or a
+promise that a compiler applies a region. Any actual selected SDK/cordon compile
+behavior needs its own owner observation. Automated UI/model tests are not these
+human/Hammer/appearance passes; A5.15 grouping checks below also remain pending.
+
 ## A5.15 ordinary native groups — pending owner/Hammer check
 
 Use a **copy** in the whole A5.15 kit, retaining whole A5.14 as recovery.

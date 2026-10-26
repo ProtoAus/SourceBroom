@@ -61,6 +61,30 @@ Other CSG/arbitrary topology, displacement and hidden/opaque/reference ambiguity
 remain refused; no stripping or MAP conversion. Use a copy, Save As and reopen in
 matching Hammer++; no owner/visual acceptance is implied by automated/static checks.
 
+## Live native cordons — A5.16
+
+The map inspector contains **Live native cordons**, reading current UNSAVED state
+through the Map model rather than the saved metadata snapshot. Add a modern cordon
+with an initial valid box, select records/boxes, edit modern name/bounds/optional
+activation and Apply. New records are deliberately inactive with -64..64 bounds.
+Not set is distinct from false on loaded optional flags. Add/remove boxes/records;
+removing the last box requires removing its record, and the last record removes
+its ordinary controller. Empty modern controllers can also be removed.
+
+Loaded legacy singleton cordons support bounds, active and removal in place, not
+rename/adds/implicit modern conversion. Fit copies current valid selected bounds,
+leaving selection and soft bounds unchanged. Semantic no-op Apply changes neither
+bytes nor history; accepted atomic changes support undo/redo and preserving Save As.
+Unsaved UI refreshes through existing document notifications, including undo.
+Scoped handles/revisions prevent stale row/document/delete/undo actions retargeting
+another box. Invalid later fields refuse before partial name/flag publication.
+
+Unknown outside controller data remains independent; malformed/duplicate/competing
+controllers or opaque payload inside them refuse. Preview stays immutable. This
+edits native metadata only: no viewport clipping/gizmo, forced external compiler
+region, camera persistence or visgroup visibility authoring. Test copies in matching
+Hammer++/SDK; those human interpretations and appearance checks remain pending.
+
 ## Ordinary native editor groups — A5.15
 
 Use the existing **Group/Ungroup** actions on supported ordinary objects in an
@@ -194,9 +218,10 @@ opaque. The display is capped, with an explicit notice if not all rows fit.
 These inspector fields remain **read-only**. A5.15 separately enables ordinary
 native grouping through the normal map actions and guarded native bindings, not
 by making this snapshot authoritative or treating group IDs as TrenchBroom parent
-bindings. Visgroup/visibility/cordon authoring is not silently enabled. SourceBroom
-does not apply cordon clipping itself; unchanged metadata is still passed to
-external tools whose behavior must be tested.
+bindings. A5.16 separately enables ordinary live cordons in the map inspector;
+this saved inspector remains read-only. Visgroup/visibility authoring is not
+silently enabled. SourceBroom does not apply cordon clipping itself; native metadata
+is passed to external tools whose actual region behavior must be tested.
 
 **Go to camera eye** moves only the eye and preserves the current view direction;
 it does not import Hammer's whole camera state. Invalid/degenerate cameras or

@@ -17,6 +17,8 @@ target_sources(TbMdlLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/BrushRendererBrushCache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CircleShape.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ClipBrushesBothCommand.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeCordons.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeCordonCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeGroupCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ColorRange.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Command.cpp
@@ -118,6 +120,7 @@ target_sources(TbMdlLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_Entities.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_Geometry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_Groups.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_NativeCordons.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_Layers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_NodeLocking.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_Nodes.cpp
