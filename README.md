@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.33 bounded native displacement position-seam sewing:
+**Status:** Windows A5.34 bounded terrain blend-modulation mask preview:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,25 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.33 adds **Sew selected displacement position seam** in the face inspector.
+A5.34 adds standard **WorldVertexTransition blend-modulation masks** to demanded
+brush previews. A mounted `$blendmodulatetexture` shapes the two terrain layers
+using its red/green data and the stored vertex weight, sharing existing UVs.
+Patterned masks, opacity/fade independence and following ordinary materials are
+covered. Three images share the existing retained-byte budget; no catalog scan,
+vertex-layout, geometry, native save or editing-authority change is introduced.
+Transforms, proxies, masked-blending and enabled self-illumination remain refused.
+
+The same real GPU test goes from 128 desired mask-pixel failures to all 3587
+assertions passing. Full Model315/UI64/App50/GL21/Render28 pass; seven actual
+targets build without compiler diagnostics on eleven held source fingerprints.
+This GPU arm uses synthetic shared-cache Vertex values with the real production
+holder/VBO/Face shaders, not an actual native mesh/cache instance. VMF reader and
+serializer source is unchanged; the A5.31 corpus evidence remains retained, not
+rerun/re-dated. No full shader/SDK/Hammer or new owner acceptance is claimed.
+Use the whole A5.34 kit on copies and retain whole A5.33/A5.32/A5.25 recovery.
+Full native Source support remains in progress.
+
+Retained A5.33 adds **Sew selected displacement position seam** in the face inspector.
 Select two compatible native displacement faces with one full shared base edge
 and the same power. Sew averages corresponding edge positions using XYZ offsets;
 other positions, distance/alpha, base UVs, triangles and IDs stay independent.
@@ -141,7 +159,7 @@ and proxies still refuse. Zero really is invisible; this is not the unsupported
 zero alpha-test-reference sentinel or terrain blend weight.
 
 Actual seven-target build has no compiler warning/error lines; focused material136,
-brush/prop10224 and native packed production GPU2693 assertions pass. Full
+brush/prop10224 and shared-Vertex/production-VBO GPU2693 assertions pass. Full
 Model299/UI59/App50/Render28/GL21 pass. Parent review is not independent/Hammer,
 new human or full shader acceptance. Use the whole A5.27 kit on copies, keep
 whole A5.26 and owner-confirmed A5.25 as recovery; full Source support is ongoing.

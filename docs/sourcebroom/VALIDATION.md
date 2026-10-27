@@ -1,11 +1,48 @@
-# SourceBroom validation — A5.33 native displacement position seams
+# SourceBroom validation — A5.34 standard terrain blend-modulation masks
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.33 — same-power single-edge position seams
+## A5.34 — bounded standard terrain blend-modulation masks
+
+- Actual tests-only parser build0/runtime26:23 acting plain/two-layer/strict/refusal
+  controls pass,3 desired mask admissions fail. No compile/input-error credit.
+- Mask path/schema/storage/loading with OLD helper/Face stages builds0. Actual
+  Windows/desktop GL has3587 assertions:3459 pass,128 failures solely the desired
+  remapped RGB/fade checks. Normal Catch summary, not inactive uniforms or abort.
+- Final helper/Face wiring passes the SAME test SHA,3587/1: uniform/spatial masks,
+  R/G remap, B/alpha independence, zero-width stability, fade, following ordinary/
+  two-only/disabled paths, unit1/unit2 binding and active/client cleanup. Five
+  existing fragment configurations still act. These are SYNTHETIC shared cache
+  Vertex values +actual production holder/VBO/Face stages, NOT an actual native
+  mesh/cache instance; older "native GPU" shorthand is clarified on that basis.
+  Separate native CPU/history/cache and BrushRenderer upload141 are not this arm.
+- Literal three-VTF demand/Patch/budget controls act, including exact12-byte
+  allowance and0/3/4/7/8/11 refusals, missing/broken masks, original fixture bytes
+  unchanged. Lifecycle covers3 uploads/deletes, move/readiness/no-op and flat/data
+  guards. Strict/base-only APIs, bad/duplicate/block paths, transforms, proxies,
+  masked blending and enabled self-illumination stay refused.
+- Full Model315/UI64/App50/GL21/Render28 pass, seven actual target builds0 compiler
+  diagnostics; eleven code fingerprints held. Current LastTest has matching Passed
+  records and ZERO Failed. CTest's old LastTestsFailed files survive success and
+  were classified stale by timestamp, not counted as current failures or removed.
+  Earlier preference245 rename failure remains historical, not fixed/suppressed.
+- Complete direct parent review, changed-range format/diff-check and LSP inspected;
+  not independent/clean-LSP/tidy/all-layout/human/Hammer. Own input/discovery/Qt PATH/
+  guessed-target/CRLF-fixture/console-encoding failures remain recorded, not credit.
+- Native VMF source files remain unchanged A5.33; its A5.31 reader/preserving-writer
+  source-body proof and corpus38/35+same3 reasons/38 stay RETAINED, not rerun/re-dated.
+  Existing checkout CRLF is not raw Git LF; no original/evidence bytes normalized.
+  Fresh installed-loader/owned-probe/whole-kit checks are separate delivery gates.
+
+No full shader/branch/DX/compiler/gamma, performance or new owner acceptance. A
+zero-width interval chooses lower exactly at threshold; it is not a native-DX bit
+parity claim. No vertex layout, map geometry, stored weight or authoring authority
+change. Full Source support continues; whole A5.33/A5.32/A5.25 remains recovery.
+
+## Retained A5.33 — same-power single-edge position seams
 
 - Tests-only actual inspector build0 and runtime missing-button RED after120
   acting legacy/native base movement/height controls. No compile-failure credit.
@@ -188,12 +225,12 @@ and optional owner view check are separate; full Source support is not complete.
 
 - Before semantics, only defaulted schema fields/tests: actual Model64/81,17
   expected scalar-admission failures with ordinary translucency/raw-image controls
-  acting. Native desktop packed production cache/holder/VBO GPU2661/2693: exactly32
+  acting. Desktop synthetic shared-Vertex/production-holder/VBO GPU2661/2693: exactly32
   new red/blue failures for ignored0/.25; factor1 and prior controls pass. This is
   not client-array/stub proof. First test API copy error and offscreen-plugin GL
   creation failure are retained infrastructure attempts, NOT product RED.
 - After wiring, material136, brush/prop10224 (flags, Patch, skin, no-cull, reference
-  and opacity permutations), and native desktop GPU2693 assertions pass. Pixels
+  and opacity permutations), and shared-Vertex desktop GPU2693 assertions pass. Pixels
   exercise0/.25/1 with alpha255/128; blend/depth-mask restoration and null/plain
   following-state reset act. Existing five fragment programs and real packed
   production Face path remain covered; not full native prop vertex-stage proof.

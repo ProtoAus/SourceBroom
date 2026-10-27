@@ -263,7 +263,9 @@ const EmbeddedDefaults& Texture::embeddedDefaults() const
 
 void Texture::setEmbeddedDefaults(EmbeddedDefaults defaults)
 {
-  if (m_sourceBlendTexture && !std::holds_alternative<SourceEmbeddedDefaults>(defaults))
+  if (
+    (m_sourceBlendTexture || m_sourceBlendMaskTexture)
+    && !std::holds_alternative<SourceEmbeddedDefaults>(defaults))
   {
     throw std::invalid_argument("A Source blend texture requires Source render hints");
   }
@@ -280,6 +282,7 @@ void Texture::setSourceBlendTexture(Texture texture)
   if (
     !std::holds_alternative<SourceEmbeddedDefaults>(m_embeddedDefaults)
     || m_sourceBlendTexture || texture.m_sourceBlendTexture
+    || texture.m_sourceBlendMaskTexture
     || !std::holds_alternative<TextureLoadedState>(m_state)
     || !std::holds_alternative<TextureLoadedState>(texture.m_state)
     || buffersIfLoaded().empty() || texture.buffersIfLoaded().empty())
@@ -291,10 +294,34 @@ void Texture::setSourceBlendTexture(Texture texture)
   m_sourceBlendTexture = std::make_unique<Texture>(std::move(texture));
 }
 
+const Texture* Texture::sourceBlendMaskTexture() const
+{
+  return m_sourceBlendMaskTexture.get();
+}
+
+void Texture::setSourceBlendMaskTexture(Texture texture)
+{
+  if (
+    !std::holds_alternative<SourceEmbeddedDefaults>(m_embeddedDefaults)
+    || !m_sourceBlendTexture || m_sourceBlendMaskTexture || texture.m_sourceBlendTexture
+    || texture.m_sourceBlendMaskTexture
+    || !std::holds_alternative<TextureLoadedState>(m_state)
+    || !std::holds_alternative<TextureLoadedState>(m_sourceBlendTexture->m_state)
+    || !std::holds_alternative<TextureLoadedState>(texture.m_state)
+    || buffersIfLoaded().empty() || texture.buffersIfLoaded().empty())
+  {
+    throw std::invalid_argument(
+      "Source blend masks require loaded, unnested data and two color layers");
+  }
+  texture.setAlphaDomain(img::ImageAlphaDomain::Opaque);
+  m_sourceBlendMaskTexture = std::make_unique<Texture>(std::move(texture));
+}
+
 bool Texture::isReady() const
 {
   return std::holds_alternative<TextureReadyState>(m_state)
-         && (!m_sourceBlendTexture || m_sourceBlendTexture->isReady());
+         && (!m_sourceBlendTexture || m_sourceBlendTexture->isReady())
+         && (!m_sourceBlendMaskTexture || m_sourceBlendMaskTexture->isReady());
 }
 
 bool Texture::activate(Gl& gl, const int minFilter, const int magFilter) const
@@ -349,10 +376,18 @@ void Texture::upload(Gl& gl)
   {
     m_sourceBlendTexture->upload(gl);
   }
+  if (m_sourceBlendMaskTexture)
+  {
+    m_sourceBlendMaskTexture->upload(gl);
+  }
 }
 
 void Texture::drop(Gl& gl)
 {
+  if (m_sourceBlendMaskTexture)
+  {
+    m_sourceBlendMaskTexture->drop(gl);
+  }
   if (m_sourceBlendTexture)
   {
     m_sourceBlendTexture->drop(gl);

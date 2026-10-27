@@ -231,6 +231,106 @@ TEST_CASE("Texture")
     CHECK(deleted.size() == 2);
   }
 
+  SECTION("Source blend masks own a third unnested data image and paired lifetime")
+  {
+    const auto image = [](EmbeddedDefaults defaults) {
+      auto pixels = TextureBufferList{};
+      setMipBufferSize(pixels, 1, 1, 1, GL_RGBA);
+      return Texture{1, 1, RgbaF{}, GL_RGBA, std::move(defaults), std::move(pixels)};
+    };
+    auto gl = MockGl{};
+    installTextureUploadSupport(gl);
+    auto nextId = GLuint{10};
+    auto created = std::vector<GLuint>{};
+    auto deleted = std::vector<GLuint>{};
+    gl.onGenTextures = [&](const GLsizei count, GLuint* ids) {
+      for (GLsizei i = 0; i < count; ++i)
+      {
+        ids[i] = nextId++;
+        created.push_back(ids[i]);
+      }
+    };
+    gl.onDeleteTextures = [&](const GLsizei count, const GLuint* ids) {
+      deleted.insert(deleted.end(), ids, ids + count);
+    };
+    auto generic = image(NoEmbeddedDefaults{});
+    CHECK_THROWS_AS(
+      generic.setSourceBlendMaskTexture(image(NoEmbeddedDefaults{})),
+      std::invalid_argument);
+    CHECK(generic.sourceBlendMaskTexture() == nullptr);
+    auto texture = image(SourceEmbeddedDefaults{});
+    CHECK_THROWS_AS(
+      texture.setSourceBlendMaskTexture(image(NoEmbeddedDefaults{})),
+      std::invalid_argument);
+    texture.setSourceBlendTexture(image(NoEmbeddedDefaults{}));
+    auto nested = image(SourceEmbeddedDefaults{});
+    nested.setSourceBlendTexture(image(NoEmbeddedDefaults{}));
+    CHECK_THROWS_AS(
+      texture.setSourceBlendMaskTexture(std::move(nested)), std::invalid_argument);
+    auto dropped = image(NoEmbeddedDefaults{});
+    dropped.drop(gl);
+    CHECK_THROWS_AS(
+      texture.setSourceBlendMaskTexture(std::move(dropped)), std::invalid_argument);
+    CHECK_THROWS_AS(
+      texture.setSourceBlendMaskTexture(Texture{1, 1}), std::invalid_argument);
+    CHECK(texture.sourceBlendMaskTexture() == nullptr);
+    auto mask = image(NoEmbeddedDefaults{});
+    mask.setAlphaDomain(img::ImageAlphaDomain::Binary);
+    texture.setSourceBlendMaskTexture(std::move(mask));
+    REQUIRE(texture.sourceBlendMaskTexture());
+    REQUIRE(texture.sourceBlendTexture());
+    CHECK(texture.sourceBlendMaskTexture()->buffersIfLoaded().size() == 1);
+    CHECK(
+      texture.sourceBlendMaskTexture()->alphaDomain() == img::ImageAlphaDomain::Opaque);
+    texture.setAlphaDomain(img::ImageAlphaDomain::Binary);
+    CHECK(texture.sourceBlendTexture()->alphaDomain() == img::ImageAlphaDomain::Binary);
+    CHECK(
+      texture.sourceBlendMaskTexture()->alphaDomain() == img::ImageAlphaDomain::Opaque);
+    CHECK_THROWS_AS(
+      texture.setSourceBlendMaskTexture(image(NoEmbeddedDefaults{})),
+      std::invalid_argument);
+    CHECK_THROWS_AS(
+      texture.setEmbeddedDefaults(NoEmbeddedDefaults{}), std::invalid_argument);
+    CHECK_FALSE(texture.isReady());
+    CHECK_FALSE(texture.activate(gl, GL_LINEAR, GL_LINEAR));
+    auto moved = std::move(texture);
+    REQUIRE(moved.sourceBlendTexture());
+    REQUIRE(moved.sourceBlendMaskTexture());
+    moved.upload(gl);
+    REQUIRE(moved.isReady());
+    CHECK(moved.sourceBlendTexture()->isReady());
+    CHECK(moved.sourceBlendMaskTexture()->isReady());
+    CHECK(created == std::vector<GLuint>{10, 11, 12});
+    CHECK(moved.buffersIfLoaded().empty());
+    CHECK(moved.sourceBlendTexture()->buffersIfLoaded().empty());
+    CHECK(moved.sourceBlendMaskTexture()->buffersIfLoaded().empty());
+    moved.upload(gl);
+    CHECK(created.size() == 3);
+    moved.drop(gl);
+    CHECK(deleted == std::vector<GLuint>{12, 11, 10});
+    CHECK_FALSE(moved.isReady());
+    CHECK_FALSE(moved.sourceBlendTexture()->isReady());
+    CHECK_FALSE(moved.sourceBlendMaskTexture()->isReady());
+    moved.drop(gl);
+    moved.upload(gl);
+    CHECK(created.size() == 3);
+    CHECK(deleted.size() == 3);
+    created.clear();
+    deleted.clear();
+    auto late = image(SourceEmbeddedDefaults{});
+    late.setSourceBlendTexture(image(NoEmbeddedDefaults{}));
+    late.upload(gl);
+    REQUIRE(late.isReady());
+    CHECK_THROWS_AS(
+      late.setSourceBlendMaskTexture(image(NoEmbeddedDefaults{})), std::invalid_argument);
+    CHECK(late.sourceBlendMaskTexture() == nullptr);
+    late.drop(gl);
+    CHECK(created == std::vector<GLuint>{13, 14});
+    CHECK(deleted == std::vector<GLuint>{14, 13});
+    CHECK_THROWS_AS(
+      late.setSourceBlendMaskTexture(image(NoEmbeddedDefaults{})), std::invalid_argument);
+  }
+
   SECTION("activate selects the mipmap or masked filter mode")
   {
     auto gl = MockGl{};

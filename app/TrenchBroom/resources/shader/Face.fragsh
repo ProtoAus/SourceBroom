@@ -25,6 +25,8 @@ uniform bool ApplyMaterial;
 uniform sampler2D Material;
 uniform bool ApplySourceBlend;
 uniform sampler2D SourceBlendMaterial;
+uniform bool ApplySourceBlendMask;
+uniform sampler2D SourceBlendMaskMaterial;
 uniform bool ApplyTinting;
 uniform vec4 TintColor;
 uniform bool GrayScale;
@@ -54,7 +56,17 @@ vec4 faceMaterialSample(float mipBias)
   if (ApplySourceBlend)
   {
     vec4 secondary = texture2D(SourceBlendMaterial, gl_TexCoord[0].st, mipBias);
-    return mix(primary, secondary, clamp(sourceBlendWeight, 0.0, 1.0));
+    float weight = clamp(sourceBlendWeight, 0.0, 1.0);
+    if (ApplySourceBlendMask)
+    {
+      vec2 mask = texture2D(SourceBlendMaskMaterial, gl_TexCoord[0].st, mipBias).rg;
+      float lower = max(0.0, mask.g - mask.r);
+      float upper = min(1.0, mask.g + mask.r);
+      // A zero-width data interval is a stable hard edge, not undefined smoothstep.
+      weight = upper > lower ? smoothstep(lower, upper, weight)
+                             : (weight > lower ? 1.0 : 0.0);
+    }
+    return mix(primary, secondary, weight);
   }
   return primary;
 }

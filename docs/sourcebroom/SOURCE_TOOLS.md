@@ -5,7 +5,31 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Bounded displacement position-seam sewing — A5.33
+## Standard terrain blend-modulation mask preview — A5.34
+
+Demanded brush WorldVertexTransition materials may additionally name one mounted
+`$blendmodulatetexture` VTF. Its red channel is the transition half-width, green its
+center; the clamped interval smoothly remaps stored vertex weight before mixing
+both color layers. Mask B/alpha are not opacity. All three images use default UV0
+and share the existing <=256MiB retained-image allowance. No catalog-wide decode,
+vertex layout, geometry, weight/save mutation or new editing permission is added.
+
+Missing/unsafe/repeated/block paths refuse. Only explicit TerrainBlendPreview
+admits masks; default/Strict/BaseTexturePreview stay strict. Independent transforms,
+proxies, masked blending and enabled self-illumination with a mask remain guarded.
+Zero-width intervals use a stable hard edge, lower exactly at threshold; no native
+DX/branch bit parity or full material shader reproduction is implied.
+
+Same-test desktop GPU3587 passes after128 desired partial-wiring mask pixel failures.
+Literal demand/budget/lifecycle controls and full Model315/UI64/App50/GL21/Render28
+pass; seven actual builds have no compiler diagnostics on eleven fingerprints.
+GPU values are synthetic shared-cache Vertex type through the REAL production
+holder/VBO/Face stages, not an actual native mesh/cache instance. VMF source/corpus
+proof stays retained, not rerun. Parent review is not independent/clean-LSP/tidy or
+new human/Hammer acceptance. Whole A5.33/A5.32/A5.25 remains recovery; see the small
+[pending owner check](../../lextest.md). Full Source support remains in progress.
+
+## Retained displacement position-seam sewing — A5.33
 
 Select exactly two compatible native displacement faces; **Sew selected displacement
 position seam** averages their corresponding edge positions using XYZ offsets.
@@ -175,7 +199,7 @@ fade. Zero is invisible, not the unsupported zero alpha-test-reference sentinel.
 
 Strict mode and nontranslucent/cutout/WorldVertexTransition/invalid/repeated/block/
 proxy combinations still refuse rather than guessing. This is not full shader
-parity. Actual material136/brush-prop10224/native packed GPU2693 and full
+parity. Actual material136/brush-prop10224/shared-Vertex GPU2693 and full
 Model299/UI59/App50/Render28/GL21 pass with no compiler warning/error lines.
 Parent review is not independent/Hammer or new human acceptance. If a known
 copied map uses such a translucent material, a small owner view check needs no
@@ -220,7 +244,8 @@ unchanged. Alpha for image opacity and editor fade is not a terrain weight.
 Only the brush demand path opts into this mode. Strict/default material readers
 and base-only readers do not silently accept the new shader. Missing/duplicate/
 unsafe second paths, blend-modulation textures, independent transforms and proxies
-remain guarded. Optional bump/detail/specular effects are omitted, not implemented.
+were guarded at A5.24. A5.34 separately adds bounded standard masks above; independent
+transforms/proxies remain guarded. Optional bump/detail/specular effects are omitted, not implemented.
 Plain brushes have weight0; this adds no paint tools, alpha rows or geometry/save
 permissions. Full Model296/GL21/UI59/App50/Render28 and real GPU2580 pass; seven
 build targets have zero warnings/errors. Human appearance/Hammer comparison is

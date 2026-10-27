@@ -43,7 +43,7 @@ enum class SourceMaterialMode
   Strict,
   // Resolve the base image/basic alpha policy, not full shaders or surface effects.
   BaseTexturePreview,
-  // Explicit brush terrain layers, still not full Source shader parity.
+  // Explicit brush terrain layers and standard masks, not full Source shader parity.
   TerrainBlendPreview
 };
 struct SourceMaterialInfo
@@ -54,6 +54,7 @@ struct SourceMaterialInfo
   float alphaTestReference = 0.5f;
   std::optional<std::filesystem::path> secondaryBaseTexture = std::nullopt;
   float opacity = 1.0f; // Explicit translucent preview, not terrain blend weight.
+  std::optional<std::filesystem::path> blendModulateTexture = std::nullopt;
 };
 Result<SourceMaterialInfo> sourceMaterial(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);

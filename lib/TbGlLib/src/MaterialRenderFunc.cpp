@@ -80,6 +80,8 @@ void SourceBlendMaterialRenderFunc::before(Gl& gl, const Material* material)
   // Fail inactive/unlinked uniforms before any GL state or resource activation.
   m_shader.set("ApplySourceBlend", false);
   m_shader.set("SourceBlendMaterial", 1);
+  m_shader.set("ApplySourceBlendMask", false);
+  m_shader.set("SourceBlendMaskMaterial", 2);
   auto active = GLint{};
   gl.getIntegerv(GL_ACTIVE_TEXTURE, &active);
   m_previousActiveTexture = active;
@@ -101,8 +103,15 @@ void SourceBlendMaterialRenderFunc::before(Gl& gl, const Material* material)
   gl.getIntegerv(GL_TEXTURE_BINDING_2D, &binding);
   m_previousSecondaryTexture = binding;
   const auto ready = second->activate(gl, m_minFilter, m_magFilter);
-  gl.activeTexture(GL_TEXTURE0);
   m_shader.set("ApplySourceBlend", ready);
+  if (const auto* mask = ready ? texture->sourceBlendMaskTexture() : nullptr)
+  {
+    gl.activeTexture(GL_TEXTURE0 + 2);
+    gl.getIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+    m_previousMaskTexture = binding;
+    m_shader.set("ApplySourceBlendMask", mask->activate(gl, m_minFilter, m_magFilter));
+  }
+  gl.activeTexture(GL_TEXTURE0);
 }
 
 void SourceBlendMaterialRenderFunc::after(Gl& gl, const Material* material)
@@ -110,6 +119,12 @@ void SourceBlendMaterialRenderFunc::after(Gl& gl, const Material* material)
   if (!m_previousActiveTexture)
   {
     return;
+  }
+  if (m_previousMaskTexture)
+  {
+    gl.activeTexture(GL_TEXTURE0 + 2);
+    gl.bindTexture(GL_TEXTURE_2D, static_cast<GLuint>(*m_previousMaskTexture));
+    m_previousMaskTexture.reset();
   }
   if (m_previousSecondaryTexture)
   {

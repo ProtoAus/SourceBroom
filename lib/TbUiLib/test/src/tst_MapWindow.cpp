@@ -2505,6 +2505,205 @@ void main() {
       }
       vboManager.destroyPendingVbos(gl);
     }
+    {
+      // Synthetic shared Vertex TYPE, actual production holder/VBO and Face stages.
+      // Native cache construction is a separate CPU/upload control, not this arm.
+      using Vertex = mdl::BrushRendererBrushCache::Vertex;
+      using MaskPixel = std::array<uint8_t, 4>;
+      using MaskPixels = std::array<MaskPixel, 4>;
+      const auto uniformMask = [](const MaskPixel rgba) {
+        return MaskPixels{rgba, rgba, rgba, rgba};
+      };
+      const auto masks = std::array{
+        uniformMask({64, 128, 241, 7}),
+        uniformMask({64, 128, 0, 255}),
+        uniformMask({0, 128, 17, 7}),
+        uniformMask({0, 0, 0, 255}),
+        MaskPixels{
+          MaskPixel{64, 128, 255, 0},
+          MaskPixel{64, 192, 0, 255},
+          MaskPixel{32, 64, 0, 17},
+          MaskPixel{0, 0, 255, 0}}};
+      auto sentinels = std::array<GLuint, 2>{};
+      functions->glGenTextures(2, sentinels.data());
+      auto maskVbos = gl::VboManager{};
+      const auto drawPacked = [&](
+                                const gl::Material& subject,
+                                const float weight,
+                                const float fade,
+                                const bool applyBlend = true) {
+        auto samples = MaskPixels{};
+        {
+          const auto quad = std::array{
+            Vertex{
+              vm::vec3f{-1, -1, 0},
+              vm::vec3f{0, 0, 1},
+              vm::vec2f{0, 0},
+              vm::vec<float, 1>{weight}},
+            Vertex{
+              vm::vec3f{1, -1, 0},
+              vm::vec3f{0, 0, 1},
+              vm::vec2f{1, 0},
+              vm::vec<float, 1>{weight}},
+            Vertex{
+              vm::vec3f{-1, 1, 0},
+              vm::vec3f{0, 0, 1},
+              vm::vec2f{0, 1},
+              vm::vec<float, 1>{weight}},
+            Vertex{
+              vm::vec3f{1, 1, 0},
+              vm::vec3f{0, 0, 1},
+              vm::vec2f{1, 1},
+              vm::vec<float, 1>{weight}}};
+          auto uploaded = render::BrushVertexArray{};
+          const auto [allocation, destination] =
+            uploaded.getPointerToInsertVerticesAt(quad.size());
+          REQUIRE(allocation);
+          CHECK(sizeof(*destination) == sizeof(quad.front()));
+          std::copy(quad.begin(), quad.end(), destination);
+          uploaded.prepare(gl, maskVbos);
+          REQUIRE(uploaded.setup(gl, shader.program()));
+          shader.set("Alpha", fade);
+          gl::setAlphaFuncUniforms(shader, &subject);
+          gl.activeTexture(GL_TEXTURE1);
+          gl.bindTexture(GL_TEXTURE_2D, sentinels[0]);
+          gl.activeTexture(GL_TEXTURE0 + 2);
+          gl.bindTexture(GL_TEXTURE_2D, sentinels[1]);
+          gl.activeTexture(GL_TEXTURE0 + 3);
+          auto scoped =
+            gl::SourceBlendMaterialRenderFunc{shader, applyBlend, GL_NEAREST, GL_NEAREST};
+          scoped.before(gl, &subject);
+          gl.disable(GL_DEPTH_TEST);
+          gl.disable(GL_CULL_FACE);
+          if (fade < 1.0f)
+          {
+            gl.enable(GL_BLEND);
+            gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+          }
+          else
+          {
+            gl.disable(GL_BLEND);
+          }
+          gl.clearColor(0, 0, 1, 1);
+          gl.clear(GL_COLOR_BUFFER_BIT);
+          gl.drawArrays(GL_TRIANGLE_STRIP, static_cast<GLint>(allocation->pos), 4);
+          const auto points = std::array{
+            vm::vec2i{2, 2}, vm::vec2i{5, 2}, vm::vec2i{2, 5}, vm::vec2i{5, 5}};
+          for (size_t i = 0; i < points.size(); ++i)
+          {
+            functions->glReadPixels(
+              points[i].x(),
+              points[i].y(),
+              1,
+              1,
+              GL_RGBA,
+              GL_UNSIGNED_BYTE,
+              samples[i].data());
+          }
+          scoped.after(gl, &subject);
+          auto activeUnit = GLint{};
+          gl.getIntegerv(GL_ACTIVE_TEXTURE, &activeUnit);
+          CHECK(activeUnit == GL_TEXTURE0 + 3);
+          for (size_t i = 0; i < sentinels.size(); ++i)
+          {
+            gl.activeTexture(static_cast<GLenum>(GL_TEXTURE1 + i));
+            auto binding = GLint{};
+            gl.getIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+            CHECK(binding == static_cast<GLint>(sentinels[i]));
+          }
+          gl.activeTexture(GL_TEXTURE0 + 3);
+          uploaded.cleanup(gl, shader.program());
+          auto clientUnit = GLint{};
+          gl.getIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &clientUnit);
+          CHECK(clientUnit == GL_TEXTURE0);
+        }
+        maskVbos.destroyPendingVbos(gl);
+        return samples;
+      };
+      const auto remapped = [](const MaskPixel mask, const float weight) {
+        const auto lower = std::max(0.0f, (int(mask[1]) - int(mask[0])) / 255.0f);
+        const auto upper = std::min(1.0f, (int(mask[1]) + int(mask[0])) / 255.0f);
+        const auto t = lower == upper
+                         ? (weight > lower ? 1.0f : 0.0f)
+                         : std::clamp((weight - lower) / (upper - lower), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+      };
+      for (const auto& maskPixels : masks)
+      {
+        gl.activeTexture(GL_TEXTURE0);
+        auto maskBuffer = gl::TextureBuffer{16};
+        for (size_t i = 0; i < maskPixels.size(); ++i)
+        {
+          std::copy(
+            maskPixels[i].begin(), maskPixels[i].end(), maskBuffer.data() + 4 * i);
+        }
+        auto maskedTexture = image({255, 0, 0, 255});
+        maskedTexture.setSourceBlendTexture(image({0, 255, 0, 17}));
+        maskedTexture.setSourceBlendMaskTexture(
+          gl::Texture{
+            2, 2, RgbaF{}, GL_RGBA, gl::NoEmbeddedDefaults{}, std::move(maskBuffer)});
+        auto maskedResource = gl::createTextureResource(std::move(maskedTexture));
+        maskedResource->uploadSync(gl);
+        REQUIRE(maskedResource->get());
+        REQUIRE(maskedResource->get()->sourceBlendMaskTexture());
+        REQUIRE(maskedResource->get()->sourceBlendMaskTexture()->isReady());
+        auto maskedMaterial = gl::Material{"modulated terrain", maskedResource};
+        maskedMaterial.setRelativePath("masked.vmt");
+        for (const auto weight : {0.0f, 0.25f, 0.375f, 0.75f, 1.0f})
+        {
+          CAPTURE(maskPixels, weight);
+          const auto samples = drawPacked(maskedMaterial, weight, 1.0f);
+          for (size_t i = 0; i < samples.size(); ++i)
+          {
+            const auto expected =
+              static_cast<int>(std::lround(255 * remapped(maskPixels[i], weight)));
+            CHECK(std::abs(int(samples[i][0]) - (255 - expected)) <= 2);
+            CHECK(std::abs(int(samples[i][1]) - expected) <= 2);
+            CHECK(samples[i][2] <= 2);
+            CHECK(samples[i][3] >= 253);
+          }
+        }
+        if (maskPixels == masks.front())
+        {
+          const auto fadedMask = drawPacked(maskedMaterial, 0.375f, 0.5f);
+          const auto expected = remapped(maskPixels.front(), 0.375f);
+          for (const auto& pixel : fadedMask)
+          {
+            CHECK(
+              std::abs(int(pixel[0]) - int(std::lround(127.5f * (1 - expected)))) <= 2);
+            CHECK(std::abs(int(pixel[1]) - int(std::lround(127.5f * expected))) <= 2);
+            CHECK(std::abs(int(pixel[2]) - 128) <= 2);
+          }
+        }
+        for (const auto& pixel : drawPacked(material, 0.375f, 1.0f))
+        {
+          CHECK(std::abs(int(pixel[0]) - 159) <= 2);
+          CHECK(std::abs(int(pixel[1]) - 96) <= 2);
+          CHECK(pixel[2] <= 2);
+        }
+        for (const auto& pixel : drawPacked(plain, 1.0f, 1.0f))
+        {
+          CHECK(pixel[0] >= 253);
+          CHECK(pixel[1] <= 2);
+          CHECK(pixel[2] <= 2);
+        }
+        for (const auto& pixel : drawPacked(maskedMaterial, 1.0f, 1.0f, false))
+        {
+          CHECK(pixel[0] >= 253);
+          CHECK(pixel[1] <= 2);
+          CHECK(pixel[2] <= 2);
+        }
+        gl.activeTexture(GL_TEXTURE0);
+        maskedResource->dropSync(gl);
+      }
+      for (size_t i = 0; i < sentinels.size(); ++i)
+      {
+        gl.activeTexture(static_cast<GLenum>(GL_TEXTURE1 + i));
+        gl.bindTexture(GL_TEXTURE_2D, 0);
+      }
+      functions->glDeleteTextures(2, sentinels.data());
+      gl.activeTexture(GL_TEXTURE0);
+    }
     resource->dropSync(gl);
     plainResource->dropSync(gl);
     gl.popAttrib();

@@ -97,6 +97,7 @@ private:
 
   EmbeddedDefaults m_embeddedDefaults;
   std::unique_ptr<Texture> m_sourceBlendTexture;
+  std::unique_ptr<Texture> m_sourceBlendMaskTexture;
 
   mutable TextureState m_state;
 
@@ -109,6 +110,7 @@ private:
     m_alphaDomain,
     m_embeddedDefaults,
     m_sourceBlendTexture,
+    m_sourceBlendMaskTexture,
     m_state);
 
 public:
@@ -153,6 +155,8 @@ public:
 
   const Texture* sourceBlendTexture() const;
   void setSourceBlendTexture(Texture texture);
+  const Texture* sourceBlendMaskTexture() const;
+  void setSourceBlendMaskTexture(Texture texture);
 
   bool isReady() const;
 

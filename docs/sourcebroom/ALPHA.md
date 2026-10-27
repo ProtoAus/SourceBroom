@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.33 — sew a native displacement position seam
+# Try Windows SourceBroom A5.34 — standard terrain blend-modulation masks
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,32 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.33: join one compatible pair of displacement edges
+## A5.34: preview standard terrain blend-modulation masks
+
+Basic WorldVertexTransition previews now admit one mounted `$blendmodulatetexture`
+VTF alongside the two base images. Red/green data shapes the transition using the
+stored displacement weight and shared default UVs; mask blue/alpha is not opacity.
+No vertex layout, geometry, stored weight or save permissions change. Three images
+share the existing retained-image budget, with ordinary/no-mask paths retained.
+
+This is bounded preview, not full Source shader parity: independent transforms,
+proxies, masked-blending and enabled self-illumination with a mask remain refused.
+A zero-width modulation interval uses a deterministic hard edge (lower at exact
+threshold); no branch/DX bit equivalence at that boundary is claimed.
+
+Same-test desktop GPU3587 passes after 128 desired partial-wiring pixel failures.
+Full Model315/UI64/App50/GL21/Render28 pass; seven targets build with no compiler
+diagnostics on eleven held fingerprints. The GPU fixture uses synthetic shared
+Vertex values through the actual production holder/VBO/Face shaders, not an actual
+native mesh/cache instance. Reader/serializer source is unchanged; old corpus
+controls are retained, not new results. Packaging and owner acceptance are separate.
+
+**Small owner check (pending):** if your usual copied map already has masked
+terrain, check its transition pattern instead of editing/saving or hunting for a
+special map. A matching-game/Hammer comparison remains separate. See
+[lextest](../../lextest.md). Keep whole A5.33/A5.32/A5.25 recovery.
+
+## Retained A5.33: join one compatible pair of displacement edges
 
 On a COPY, select two native displacement faces with the SAME power and one full
 shared BASE edge, then use **Sew selected displacement position seam** in the face

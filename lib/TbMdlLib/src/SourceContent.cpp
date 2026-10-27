@@ -364,8 +364,8 @@ Result<SourceMaterialInfo> parseMaterial(
     }
     for (const auto& entry : shader.children)
     {
-      // Basic preview omits these optional effects. Only the explicit terrain mode
-      // admits a second base image, never proxies, transforms or conditional blocks.
+      // Basic preview omits these optional effects. Terrain mode admits two color
+      // layers and a blend mask, never proxies, transforms or conditional blocks.
       const auto previewParameter = preview
         && (entry.key == "$bumpmap" || entry.key == "$bumpmap2"
             || entry.key == "$normalmapalphaenvmapmask" || entry.key == "$ssbump"
@@ -387,7 +387,8 @@ Result<SourceMaterialInfo> parseMaterial(
             || entry.key == "$blendtintbybasealpha" || entry.key == "$envmaplightscale"
             || entry.key == "$color" || entry.key == "$color2");
       if (entry.block || (!previewParameter && entry.key != "$basetexture"
-          && !(terrainBlend && entry.key == "$basetexture2")
+          && !(terrainBlend && (entry.key == "$basetexture2"
+                                || entry.key == "$blendmodulatetexture"))
           && entry.key != "$surfaceprop" && entry.key != "$surfaceprop2"
           && entry.key != "$keywords" && entry.key != "$model"
           && !entry.key.starts_with('%') && !entry.key.starts_with("$compile")))
@@ -410,6 +411,7 @@ Result<SourceMaterialInfo> parseMaterial(
       return std::get<Error>(primaryPath.error());
     }
     auto secondaryPath = std::optional<std::filesystem::path>{};
+    auto modulationPath = std::optional<std::filesystem::path>{};
     if (terrainBlend)
     {
       if (
@@ -429,12 +431,37 @@ Result<SourceMaterialInfo> parseMaterial(
         return std::get<Error>(path.error());
       }
       secondaryPath = std::move(path) | kdl::value();
+      if (
+        std::ranges::count(
+          shader.children, std::string{"$blendmodulatetexture"}, &Entry::key)
+        > 1)
+      {
+        return Error{
+          "Repeated Source $blendmodulatetexture requires explicit resolution"};
+      }
+      if (const auto* mask = child(shader.children, "$blendmodulatetexture"))
+      {
+        if (mask->value.empty())
+        {
+          return Error{"Empty Source $blendmodulatetexture"};
+        }
+        auto maskPath = sourceTexturePath(mask->value);
+        if (maskPath.is_error())
+        {
+          return std::get<Error>(maskPath.error());
+        }
+        modulationPath = std::move(maskPath) | kdl::value();
+      }
     }
     auto translucent = false;
     auto alphaTest = false;
     auto noCull = false;
-    for (const auto* flag : {"$translucent", "$alphatest", "$nocull"})
+    for (const auto* flag : {"$translucent", "$alphatest", "$nocull", "$selfillum"})
     {
+      if (!modulationPath && std::string_view{flag} == "$selfillum")
+      {
+        continue;
+      }
       if (std::ranges::count(shader.children, std::string{flag}, &Entry::key) > 1)
       {
         return Error{"Repeated Source material flag requires explicit resolution"};
@@ -456,7 +483,15 @@ Result<SourceMaterialInfo> parseMaterial(
           }
           enabled = number == 1.0f;
         }
-        if (entry->key == "$alphatest")
+        if (entry->key == "$selfillum")
+        {
+          if (enabled)
+          {
+            return Error{
+              "Source blend modulation preview does not support self illumination"};
+          }
+        }
+        else if (entry->key == "$alphatest")
         {
           alphaTest = enabled;
         }
@@ -547,7 +582,8 @@ Result<SourceMaterialInfo> parseMaterial(
       noCull,
       alphaTestReference,
       std::move(secondaryPath),
-      opacity};
+      opacity,
+      std::move(modulationPath)};
   }
   catch (const std::runtime_error& e)
   {

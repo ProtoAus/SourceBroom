@@ -192,6 +192,58 @@ TEST_CASE("Source translucent opacity is explicit bounded and demanded")
   }
 }
 
+TEST_CASE("Source terrain modulation masks require explicit bounded preview")
+{
+  const auto plain = sourceMaterial("LightmappedGeneric { $basetexture ground/low }");
+  REQUIRE(plain.is_success());
+  CHECK((plain | kdl::value()).baseTexture == "materials/ground/low.vtf");
+  const auto prefix = std::string{
+    "WorldVertexTransition { $basetexture ground/low $basetexture2 ground/high "};
+  const auto basic =
+    sourceMaterial(prefix + "}", SourceMaterialMode::TerrainBlendPreview);
+  REQUIRE(basic.is_success());
+  CHECK((basic | kdl::value()).secondaryBaseTexture == "materials/ground/high.vtf");
+  for (const auto* mask :
+       {"$blendmodulatetexture ground/mask",
+        "$BLENDMODULATETEXTURE \"ground/mask.vtf\" $selfillum 0",
+        "$blendmodulatetexture ground/mask $selfillum 0 $nocull 1"})
+  {
+    CAPTURE(mask);
+    const auto text = prefix + mask + " }";
+    CHECK(sourceMaterial(text, SourceMaterialMode::Strict).is_error());
+    CHECK(sourceMaterial(text, SourceMaterialMode::BaseTexturePreview).is_error());
+    const auto result = sourceMaterial(text, SourceMaterialMode::TerrainBlendPreview);
+    REQUIRE(result.is_success());
+    const auto info = result | kdl::value();
+    CHECK(info.blendModulateTexture == "materials/ground/mask.vtf");
+    CHECK(info.secondaryBaseTexture == "materials/ground/high.vtf");
+  }
+  for (const auto* invalid :
+       {"$blendmodulatetexture \"\"",
+        "$blendmodulatetexture ../mask",
+        "$blendmodulatetexture C:/mask",
+        "$blendmodulatetexture { nested mask }",
+        "$blendmodulatetexture a $blendmodulatetexture b",
+        "$blendmodulatetexture ground/mask $selfillum 1",
+        "$blendmodulatetexture ground/mask $selfillum invalid",
+        "$blendmodulatetexture ground/mask $blendmasktransform \"center 0 0\"",
+        "$blendmodulatetexture ground/mask $maskedblending 1",
+        "$blendmodulatetexture ground/mask Proxies {}"})
+  {
+    CAPTURE(invalid);
+    CHECK(sourceMaterial(prefix + invalid + " }", SourceMaterialMode::TerrainBlendPreview)
+            .is_error());
+  }
+  for (const auto* shader : {"LightmappedGeneric", "UnlitGeneric", "VertexLitGeneric"})
+  {
+    CHECK(sourceMaterial(
+            std::string{shader}
+              + " { $basetexture ground/low $blendmodulatetexture ground/mask }",
+            SourceMaterialMode::TerrainBlendPreview)
+            .is_error());
+  }
+}
+
 TEST_CASE("Source terrain material requires an explicit bounded blend preview mode")
 {
   const auto ordinary = sourceMaterial(
@@ -202,6 +254,7 @@ TEST_CASE("Source terrain material requires an explicit bounded blend preview mo
   CHECK(one.baseTexture == "materials/ground/low.vtf");
   CHECK(one.noCull);
   CHECK_FALSE(one.secondaryBaseTexture.has_value());
+  CHECK_FALSE(one.blendModulateTexture.has_value());
   const auto text = std::string{
     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 ground/high })"};
   CHECK(sourceMaterial(text, SourceMaterialMode::Strict).is_error());
@@ -213,6 +266,7 @@ TEST_CASE("Source terrain material requires an explicit bounded blend preview mo
   REQUIRE(info.secondaryBaseTexture.has_value());
   CHECK(*info.secondaryBaseTexture == "materials/ground/high.vtf");
   CHECK(info.alphaDomain == img::ImageAlphaDomain::Opaque);
+  CHECK_FALSE(info.blendModulateTexture.has_value());
   CHECK(sourceMaterial(
           R"(LightmappedGeneric { $basetexture ground/low $nocull 1 })",
           SourceMaterialMode::TerrainBlendPreview)
@@ -225,7 +279,6 @@ TEST_CASE("Source terrain material requires an explicit bounded blend preview mo
      R"(WorldVertexTransition { $basetexture ground/low $basetexture2 ../outside })",
      R"(WorldVertexTransition { $basetexture ground/low $basetexture2 C:/outside })",
      R"(WorldVertexTransition { $basetexture ground/low $basetexture2 { nested yes } })",
-     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 a $blendmodulatetexture mask })",
      R"(WorldVertexTransition { $basetexture ground/low $basetexture2 a $basetexturetransform2 "center 0 0" })",
      R"(WorldVertexTransition { $basetexture ground/low $basetexture2 a Proxies {} })",
      R"(LightmappedGeneric { $basetexture ground/low $basetexture2 a })"})
@@ -235,7 +288,7 @@ TEST_CASE("Source terrain material requires an explicit bounded blend preview mo
   }
 }
 
-TEST_CASE("Source terrain demand owns two VTF layers within one retained budget")
+TEST_CASE("Source terrain demand owns bounded color layers and modulation mask")
 {
   auto env = fs::TestEnvironment{};
   env.createDirectory("materials/ground");
@@ -282,9 +335,37 @@ TEST_CASE("Source terrain demand owns two VTF layers within one retained budget"
   env.createFile("materials/patch.vmt", R"(Patch {
     include materials/terrain.vmt replace { $basetexture2 ground/low }
   })");
+  env.createFile("materials/ground/mask.vtf", vtf(64, 128, 241, 7));
+  const auto maskedSource = std::string{R"(WorldVertexTransition {
+    $basetexture ground/low $basetexture2 ground/high
+    $blendmodulatetexture ground/mask
+  })"};
+  const auto maskedPatch = std::string{R"(Patch {
+    include materials/terrain.vmt insert { $blendmodulatetexture ground/mask }
+  })"};
+  env.createFile("materials/masked.vmt", maskedSource);
+  env.createFile("materials/masked-patch.vmt", maskedPatch);
+  env.createFile("materials/missing-mask.vmt", R"(WorldVertexTransition {
+    $basetexture ground/low $basetexture2 ground/high
+    $blendmodulatetexture ground/missing
+  })");
+  env.createFile("materials/ground/broken.vtf", "not an image");
+  env.createFile("materials/broken-mask.vmt", R"(WorldVertexTransition {
+    $basetexture ground/low $basetexture2 ground/high
+    $blendmodulatetexture ground/broken
+  })");
   auto fs = GameFileSystem{};
   auto logger = NullLogger{};
   REQUIRE(fs.initializeSource(env.dir(), logger).is_success());
+  const auto exactBytes = [&](const char* path) {
+    const auto file = fs.openFile(path) | kdl::value();
+    auto reader = file->reader();
+    auto bytes = std::string(file->size(), '\0');
+    reader.read(bytes.data(), bytes.size());
+    return bytes;
+  };
+  const auto maskedBefore = exactBytes("materials/masked.vmt");
+  const auto patchBefore = exactBytes("materials/masked-patch.vmt");
   const auto beforeFile = fs.openFile("materials/terrain.vmt") | kdl::value();
   const auto before = beforeFile->reader().readString(beforeFile->size());
   auto single = loadTexture("materials/ordinary.vmt", "ordinary", fs, std::nullopt, 4);
@@ -292,6 +373,7 @@ TEST_CASE("Source terrain demand owns two VTF layers within one retained budget"
   const auto one = std::move(single) | kdl::value();
   CHECK(one.buffersIfLoaded()[0].data()[0] == 255);
   CHECK(one.sourceBlendTexture() == nullptr);
+  CHECK(one.sourceBlendMaskTexture() == nullptr);
   auto raw = loadTexture("materials/ground/high.vtf", "high", fs, std::nullopt, 4);
   REQUIRE(raw.is_success());
   const auto rawTexture = std::move(raw) | kdl::value();
@@ -310,6 +392,7 @@ TEST_CASE("Source terrain demand owns two VTF layers within one retained budget"
   CHECK(texture.sourceBlendTexture()->buffersIfLoaded()[0].data()[3] == 17);
   CHECK(texture.alphaDomain() == img::ImageAlphaDomain::Opaque);
   CHECK(texture.sourceBlendTexture()->alphaDomain() == img::ImageAlphaDomain::Opaque);
+  CHECK(texture.sourceBlendMaskTexture() == nullptr);
   for (const auto budget : {4u, 7u})
   {
     const auto rejected =
@@ -324,6 +407,50 @@ TEST_CASE("Source terrain demand owns two VTF layers within one retained budget"
   const auto patched = std::move(inherited) | kdl::value();
   REQUIRE(patched.sourceBlendTexture());
   CHECK(patched.sourceBlendTexture()->buffersIfLoaded()[0].data()[0] == 255);
+  CHECK(patched.sourceBlendMaskTexture() == nullptr);
+  auto rawMask =
+    loadTexture("materials/ground/mask.vtf", "raw mask", fs, std::nullopt, 4);
+  REQUIRE(rawMask.is_success());
+  CHECK(rawMask.value().alphaDomain() == img::ImageAlphaDomain::Graduated);
+  for (const auto* path : {"materials/masked.vmt", "materials/masked-patch.vmt"})
+  {
+    CAPTURE(path);
+    auto masked = loadTexture(path, "masked terrain", fs, std::nullopt, 12);
+    REQUIRE(masked.is_success());
+    const auto& loaded = masked.value();
+    REQUIRE(loaded.sourceBlendTexture());
+    REQUIRE(loaded.sourceBlendMaskTexture());
+    CHECK(loaded.buffersIfLoaded().size() == 1);
+    CHECK(loaded.sourceBlendTexture()->buffersIfLoaded().size() == 1);
+    const auto& mask = *loaded.sourceBlendMaskTexture();
+    REQUIRE(mask.buffersIfLoaded().size() == 1);
+    const auto& buffer = mask.buffersIfLoaded().front();
+    REQUIRE(buffer.size() == 4);
+    CHECK(buffer.data()[0] == 64);
+    CHECK(buffer.data()[1] == 128);
+    CHECK(buffer.data()[2] == 241);
+    CHECK(buffer.data()[3] == 7);
+    CHECK(loaded.buffersIfLoaded().front().data()[0] == 255);
+    CHECK(loaded.sourceBlendTexture()->buffersIfLoaded().front().data()[1] == 255);
+    CHECK(mask.alphaDomain() == img::ImageAlphaDomain::Opaque);
+    CHECK(mask.sourceBlendTexture() == nullptr);
+    CHECK(mask.sourceBlendMaskTexture() == nullptr);
+    for (const auto budget : {0u, 3u, 4u, 7u, 8u, 11u})
+    {
+      CAPTURE(budget);
+      CHECK(loadTexture(path, "masked terrain", fs, std::nullopt, budget).is_error());
+    }
+  }
+  for (const auto* path : {"materials/missing-mask.vmt", "materials/broken-mask.vmt"})
+  {
+    CHECK(loadTexture(path, "bad mask", fs, std::nullopt, 12).is_error());
+  }
+  CHECK(exactBytes("materials/ground/low.vtf") == vtf(255, 0, 0, 255));
+  CHECK(exactBytes("materials/ground/high.vtf") == vtf(0, 255, 0, 17));
+  CHECK(exactBytes("materials/ground/mask.vtf") == vtf(64, 128, 241, 7));
+  CHECK(exactBytes("materials/ground/broken.vtf") == "not an image");
+  CHECK(exactBytes("materials/masked.vmt") == maskedBefore);
+  CHECK(exactBytes("materials/masked-patch.vmt") == patchBefore);
   const auto original = fs.openFile("materials/terrain.vmt") | kdl::value();
   CHECK(original->reader().readString(original->size()) == before);
 }

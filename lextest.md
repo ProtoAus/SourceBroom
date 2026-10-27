@@ -4,6 +4,22 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.34 terrain blend-modulation masks — pending small owner check
+
+No new owner observation. Whole A5.34 on COPY only; keep whole A5.33/A5.32/A5.25
+recovery. GPU3587 and Model315/UI64/App50/GL21/Render28 are automated, not human or
+matching-game/Hammer shader acceptance. GPU geometry is synthetic shared Vertex
+values through the actual production holder/VBO, not an actual native mesh/cache.
+
+- [ ] If a usual copied map already has WorldVertexTransition terrain with a
+  blend-modulation mask, check the visible transition pattern. No editing/saving
+  or search for a special map is needed. If none is available, leave pending.
+- [ ] Optional separate matching-game/Hammer view of that material. No general
+  shader, branch/DX/gamma, performance or full Source compatibility confirmation.
+
+Pending only. Transforms/proxies/masked-blending/selfillum-enabled masks stay
+unsupported; stable zero-width threshold behavior is not native-DX bit parity.
+
 ## A5.33 displacement position seams — pending small owner check
 
 No new owner observation. Whole A5.33 on COPY only; keep A5.32/A5.31/A5.25 recovery.
@@ -99,7 +115,7 @@ all layouts/maps/branches or establish performance/new render acceptance.
 
 Use whole A5.27 on a COPY; keep whole A5.26 and owner-confirmed A5.25 as recovery.
 No A5.27 owner observation has been received. Automated material136, brush/prop
-metadata10224, native packed GPU2693 and full Model299/UI59/App50/Render28/GL21
+metadata10224, synthetic shared-Vertex GPU2693 and full Model299/UI59/App50/Render28/GL21
 are not human/Hammer/full-shader acceptance.
 
 - [ ] If a known copied map uses a basic VMT with explicit `$translucent 1` and

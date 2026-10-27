@@ -48,8 +48,8 @@ public:
   void after(Gl& gl, const Material* material) override;
 };
 
-// Face-only two-layer preview. Owns unit0 draw activation and restores the caller's
-// active texture unit and previous unit1 binding in after(). Requires Face uniforms.
+// Face-only two-color preview with optional modulation data. Owns unit0 activation,
+// restoring the caller's active unit and prior unit1/unit2 bindings in after().
 class SourceBlendMaterialRenderFunc : public DefaultMaterialRenderFunc
 {
 private:
@@ -60,6 +60,7 @@ private:
   bool m_materialActivated = false;
   std::optional<int> m_previousActiveTexture;
   std::optional<int> m_previousSecondaryTexture;
+  std::optional<int> m_previousMaskTexture;
 
 public:
   SourceBlendMaterialRenderFunc(

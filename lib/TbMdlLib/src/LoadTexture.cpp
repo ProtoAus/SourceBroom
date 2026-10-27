@@ -87,7 +87,26 @@ Result<gl::Texture> loadTexture(
                  {
                    return std::get<Error>(second.error());
                  }
-                 texture.setSourceBlendTexture(std::move(second) | kdl::value());
+                 auto secondary = std::move(second) | kdl::value();
+                 for (const auto& buffer : secondary.buffersIfLoaded())
+                 {
+                   if (buffer.size() > budget - retained)
+                   {
+                     return Error{"Source material exceeds retained image budget"};
+                   }
+                   retained += buffer.size();
+                 }
+                 texture.setSourceBlendTexture(std::move(secondary));
+                 if (info.blendModulateTexture)
+                 {
+                   auto mask = loadTexture(
+                     *info.blendModulateTexture, name, fs, palette, budget - retained);
+                   if (mask.is_error())
+                   {
+                     return std::get<Error>(mask.error());
+                   }
+                   texture.setSourceBlendMaskTexture(std::move(mask) | kdl::value());
+                 }
                }
                return texture;
              });

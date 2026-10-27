@@ -21,7 +21,58 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Bounded native displacement position seams — A5.33
+## Standard terrain blend-modulation masks — A5.34
+
+TerrainBlendPreview + WorldVertexTransition alone admits one scalar safe mounted
+$blendmodulatetexture. Default/Strict/BaseTexturePreview stay strict. Existing final
+Patch validation handles the field; empty/duplicate/block/path cases still refuse.
+A mask also validates $selfillum and refuses enabled illumination rather than
+pretending the different shader route is equivalent. Transforms/proxies/masked
+blending remain guarded. No parser/save/edit authority or vertex layout changes.
+
+Texture owns a flat loaded third data image only with Source hints and a secondary
+color layer. Readiness/upload/drop/move include all three; mask opacity policy stays
+opaque data even when color-layer alpha policy changes. Primary/secondary/mask share
+the existing <=256MiB retained-byte ceiling. A failed third demand releases staged
+loaded children; no new catalog scan, cache or authority is added.
+
+Face-only binding validates linked mask uniforms before GL mutation, binds sampler2
+only for a ready mask, then restores prior unit1/unit2 bindings and caller active
+unit. Following ordinary/two-only/disabled paths reset flags. The Face fragment
+remaps the clamped vertex weight with red half-width/green center and smooth Hermite
+interpolation at shared UV0, including the grid decision sample. A zero-width
+interval is a deterministic hard edge, lower at equality, not undefined smoothstep.
+Public SDK behavior was consulted read-only; no SDK implementation was copied or
+bundled. This is basic preview, not branch/DX/gamma/full-shader equivalence.
+
+Actual tests-only parser baseline:26 assertions,23 acting controls,3 desired runtime
+admission failures. With storage/loading but OLD helper/stages, the real GPU test
+has3587 assertions:3459 controls pass,128 desired mask RGB/fade failures. Final
+wiring passes the SAME compiled test SHA,3587/1, including spatial masks, B/alpha
+independence, endpoint/interior/fade and following-state/unit cleanup. Full
+Model315/UI64/App50/GL21/Render28 pass, seven actual target builds0 compiler
+diagnostics, eleven held code fingerprints. Complete direct parent review and LSP
+inspection are not independent/clean-LSP/tidy/human/Hammer acceptance.
+
+Evidence correction: historical "native packed GPU" shorthand uses SYNTHETIC values
+of the shared cache Vertex TYPE +actual production holder/VBO/Face shaders. It does
+NOT obtain those values from an actual native mesh/cache instance. Separate native
+CPU/cache/history and actual BrushRenderer upload141 controls remain separate.
+VMF native source is unchanged A5.33 (existing checkout CRLF differs from Git LF);
+retain its exact A5.31 normalized-source-body/corpus proof, not fresh corpus runs.
+Never normalize original assets or evidence bytes to make a hash pass.
+
+Own setup failures are retained, not product RED: --no-tests is a CTest option, not
+Catch's; hidden GPU cases need their named direct entrypoint; Qt bin PATH is needed
+for POSTBUILD discovery (0xc0000135 was not fixture-rm failure); the app target is
+TbAppLibTest. Capture byte-valued logs as bytes, print ASCII summaries. Source image
+paths are materials-relative, not automatically prefix-stripped. Fixture text writes
+CRLF, so preservation compares ACTUAL pre-demand bytes. CTest leaves old
+LastTestsFailed.log even after success: current LastTest has315/64/50/21/28 Passed
+and zero Failed, not the stale earlier records. No skips/fixes/retries for green.
+Small owner/matching-game comparison remains pending; full Source work continues.
+
+## Retained bounded native displacement position seams — A5.33
 
 Pure planner matches exactly one full same-power base edge, all corresponding
 samples within existing TransformEpsilon1e-6, including reversed ordering. Native
@@ -267,8 +318,8 @@ only this multiplier without changing legacy cutout rules. Shared fragment logic
 multiplies it after the existing raw cutoff/mask rule and before editor fade.
 
 Actual defaulted-schema-only partial build: Model64/81 (17 scalar-admission
-failures while ordinary translucent controls act). Actual native packed cache ->
-holder -> VBO production GL arm:2661/2693, precisely32 new red/blue pixel failures
+failures while ordinary translucent controls act). Synthetic shared Vertex type ->
+production holder -> VBO GL arm:2661/2693, precisely32 new red/blue pixel failures
 for ignored0/.25, while factor1 and all prior controls pass. Source/parser/loader/
 binding/shader semantics were withheld. First compile used a value adaptor that
 copies move-only Texture; borrowing value()const& fixed only the test API, not

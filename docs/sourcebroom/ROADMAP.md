@@ -33,7 +33,16 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.33 candidate:** same-power single-shared-edge native displacement POSITION
+- **A5.34 candidate:** standard WorldVertexTransition modulation-mask preview on
+  demanded brush materials: mounted scalar path, flat third data image, shared
+  byte budget, red/green weight remap and sampler2 restoration. No layout/geometry/
+  native-write widening. Same GPU3587 passes after128 desired runtime pixel RED;
+  full Model315/UI64/App50/GL21/Render28 pass, seven builds0 compiler diagnostics.
+  GPU values are synthetic shared-cache Vertex type through real holder/VBO/Face
+  stages, not actual native cache construction. VMF/corpus boundaries retained,
+  not rerun. Transforms/proxies/masked-blending/selfillum-enabled masks stay gated;
+  no full shader/SDK/Hammer/new human acceptance. Keep A5.33/A5.32/A5.25 recovery.
+- **Retained A5.33 candidate:** same-power single-shared-edge native displacement POSITION
   seams via staged XYZ offsets, one undo and preserving Save As/reopen. Partial,
   ambiguous/disconnected/power/readonly guards stay; no normals/neighbor/topology
   or general sculpt/sew claim. Model177/UI170 and full Model314/App50 pass.
