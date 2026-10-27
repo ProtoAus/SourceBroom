@@ -2103,6 +2103,195 @@ TEST_CASE("VmfMap displacement translation undo and continued saving", "[vmf]")
   CHECK(readBinary(originalPath) == original);
 }
 
+TEST_CASE(
+  "VmfMap native XYZ offset commands preserve geometry history and source", "[vmf]")
+{
+  const auto tablePresent = GENERATE(false, true);
+  auto original = nativeDisplacementRoom();
+  if (tablePresent)
+  {
+    auto table = std::string{"offsets { // original vector spellings\n"};
+    for (size_t row = 0; row < 5; ++row)
+    {
+      table += "row" + std::to_string(row) + " \"";
+      for (size_t column = 0; column < 5; ++column)
+      {
+        table += "0.00 +0 -0 ";
+      }
+      table += "\"\n";
+    }
+    table += "}\n";
+    const auto pos = original.find("triangle_tags");
+    REQUIRE(pos != std::string::npos);
+    original.insert(pos, table);
+  }
+  auto env = fs::TestEnvironment{};
+  const auto originalPath = env.dir() / "XYZ offset original.vmf";
+  writeBinary(originalPath, original);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(originalPath, config);
+  auto& node = ramp(map);
+  const auto face = node.brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(face);
+  selectBrushFaces(map, {BrushFaceHandle{node, *face}});
+  const auto before = *node.brush().face(*face).sourceDisplacement();
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24));
+  REQUIRE(map.vmfScene()->serialize(map.worldNode()) != original);
+  map.undoCommand();
+  REQUIRE(map.vmfScene()->serialize(map.worldNode()) == original);
+  REQUIRE(before.canEditOffsets() == tablePresent);
+  REQUIRE(before.canInitializeOffsets() != tablePresent);
+
+  SECTION("production edit undo redo SaveAs reopen and base movement compose")
+  {
+    if (!tablePresent)
+    {
+      CHECK_FALSE(setSourceDisplacementOffset(map, 2, 2, {1, 2, 3}));
+      REQUIRE(initializeSourceDisplacementOffsets(map));
+      CHECK(
+        node.brush().face(*face).sourceDisplacement()->positions() == before.positions());
+    }
+    CHECK_FALSE(initializeSourceDisplacementOffsets(map));
+    const auto offset = vm::vec3d{1.25, -2.5, 3.75};
+    const auto count = map.modificationCount();
+    REQUIRE(setSourceDisplacementOffset(map, 2, 2, offset));
+    CHECK(map.modificationCount() == count + 1);
+    CHECK(
+      node.brush().face(*face).sourceDisplacement()->positions()[12]
+      == before.positions()[12] + offset);
+    CHECK(
+      node.brush().face(*face).sourceDisplacement()->basePositions()
+      == before.basePositions());
+    CHECK(node.brush().face(*face).sourceDisplacement()->alphas() == before.alphas());
+    CHECK(
+      node.brush().face(*face).sourceDisplacement()->distance(2, 2)
+      == before.distance(2, 2));
+    CHECK(node.brush().face(*face).sourceDisplacement()->bounds().max.z() == 83.75);
+    const auto authored = map.vmfScene()->serialize(map.worldNode());
+    REQUIRE(authored != original);
+    map.undoCommand();
+    CHECK(node.brush().face(*face).sourceDisplacement()->offset(2, 2) == vm::vec3d{});
+    if (!tablePresent)
+    {
+      map.undoCommand();
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+      map.redoCommand();
+    }
+    else
+    {
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    }
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == authored);
+    const auto savePath = env.dir() / "XYZ offset SaveAs.vmf";
+    REQUIRE(map.saveAs(savePath).is_success());
+    CHECK(readBinary(originalPath) == original);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(savePath, config);
+    auto& reopenedNode = ramp(reopened);
+    const auto reopenedFace = reopenedNode.brush().findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(reopenedFace);
+    CHECK(
+      reopenedNode.brush().face(*reopenedFace).sourceDisplacement()->offset(2, 2)
+      == offset);
+    CHECK(
+      reopenedNode.brush().face(*reopenedFace).sourceDisplacement()->positions()
+      == node.brush().face(*face).sourceDisplacement()->positions());
+    REQUIRE(reopened.saveAs(savePath).is_success());
+    CHECK(readBinary(savePath) == authored);
+    deselectAll(map);
+    selectNodes(map, {&node});
+    const auto delta = vm::vec3d{96, 0, 0};
+    REQUIRE(transformSelection(
+      map, "Move offset-authored base", vm::translation_matrix(delta)));
+    CHECK(
+      node.brush().face(*face).sourceDisplacement()->positions()[12]
+      == before.positions()[12] + offset + delta);
+    REQUIRE(map.saveAs(savePath).is_success());
+    auto movedFixture = MapFixture{};
+    auto& moved = movedFixture.load(savePath, config);
+    auto& movedNode = ramp(moved);
+    const auto movedFace = movedNode.brush().findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(movedFace);
+    CHECK(
+      movedNode.brush().face(*movedFace).sourceDisplacement()->positions()[12]
+      == before.positions()[12] + offset + delta);
+    CHECK(readBinary(originalPath) == original);
+  }
+  SECTION("noops and invalid edits preserve pending redo and exact bytes")
+  {
+    if (!tablePresent)
+    {
+      REQUIRE(initializeSourceDisplacementOffsets(map));
+    }
+    const auto zero = map.vmfScene()->serialize(map.worldNode());
+    REQUIRE(setSourceDisplacementOffset(map, 2, 2, {1, 2, 3}));
+    const auto authored = map.vmfScene()->serialize(map.worldNode());
+    map.undoCommand();
+    const auto count = map.modificationCount();
+    const auto redo = map.redoCommandName();
+    REQUIRE(setSourceDisplacementOffset(map, 2, 2, {}));
+    CHECK_FALSE(setSourceDisplacementOffset(map, 5, 2, {1, 2, 3}));
+    CHECK_FALSE(setSourceDisplacementOffset(map, 2, 5, {1, 2, 3}));
+    CHECK_FALSE(setSourceDisplacementOffset(map, 2, 2, {10000, 0, 0}));
+    CHECK_FALSE(setSourceDisplacementOffset(
+      map, 2, 2, {0, std::numeric_limits<double>::quiet_NaN(), 0}));
+    CHECK(map.modificationCount() == count);
+    CHECK(map.redoCommandName() == redo);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == zero);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == authored);
+  }
+  SECTION("selection and explicit readonly preview do not acquire edit authority")
+  {
+    deselectAll(map);
+    const auto count = map.modificationCount();
+    CHECK_FALSE(initializeSourceDisplacementOffsets(map));
+    CHECK_FALSE(setSourceDisplacementOffset(map, 2, 2, {1, 2, 3}));
+    selectBrushFaces(
+      map, {BrushFaceHandle{node, (*face + 1) % node.brush().faceCount()}});
+    CHECK_FALSE(initializeSourceDisplacementOffsets(map));
+    CHECK_FALSE(setSourceDisplacementOffset(map, 2, 2, {}));
+    CHECK(map.modificationCount() == count);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    auto previewConfig = config;
+    previewConfig.readOnlyVmfPreview = true;
+    auto previewFixture = MapFixture{};
+    auto& preview = previewFixture.load(originalPath, previewConfig);
+    auto& previewNode = ramp(preview);
+    const auto previewFace = previewNode.brush().findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(previewFace);
+    selectBrushFaces(preview, {BrushFaceHandle{previewNode, *previewFace}});
+    const auto previewCount = preview.modificationCount();
+    CHECK_FALSE(initializeSourceDisplacementOffsets(preview));
+    CHECK_FALSE(setSourceDisplacementOffset(preview, 2, 2, {1, 2, 3}));
+    CHECK_FALSE(setSourceDisplacementOffset(preview, 2, 2, {}));
+    CHECK(preview.modificationCount() == previewCount);
+    CHECK(preview.vmfScene()->serialize(preview.worldNode()) == original);
+  }
+  SECTION("explicit table initialization is a collation boundary")
+  {
+    if (!tablePresent)
+    {
+      map.setIsCommandCollationEnabled(true);
+      REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24));
+      const auto distanceOnly = map.vmfScene()->serialize(map.worldNode());
+      REQUIRE(initializeSourceDisplacementOffsets(map));
+      REQUIRE(setSourceDisplacementOffset(map, 2, 2, {1, 2, 3}));
+      REQUIRE(setSourceDisplacementOffset(map, 2, 2, {2, 3, 4}));
+      map.undoCommand();
+      CHECK(node.brush().face(*face).sourceDisplacement()->offset(2, 2) == vm::vec3d{});
+      CHECK(node.brush().face(*face).sourceDisplacement()->canEditOffsets());
+      map.undoCommand();
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == distanceOnly);
+      map.undoCommand();
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    }
+  }
+}
+
 TEST_CASE("VmfMap explicitly initializes absent alpha rows with exact history", "[vmf]")
 {
   auto original = nativeDisplacementRoom();

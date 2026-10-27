@@ -74,6 +74,7 @@
 #include "mdl/Map.h"
 #include "mdl/MapFormat.h"
 #include "mdl/Map_Assets.h"
+#include "mdl/Map_Brushes.h"
 #include "mdl/Map_Entities.h"
 #include "mdl/Map_Groups.h"
 #include "mdl/Map_NativeCameras.h"
@@ -1238,7 +1239,8 @@ TEST_CASE(
                        const size_t id,
                        const size_t power,
                        const bool withAlphas,
-                       const bool partial = false) {
+                       const bool partial = false,
+                       const size_t offsetRows = 0) {
     const auto planes = std::array<std::string, 6>{
       "(0 0 0) (0 64 0) (0 0 64)",
       "(64 0 0) (64 0 64) (64 64 0)",
@@ -1290,6 +1292,20 @@ TEST_CASE(
           }
           text += "}\n";
         }
+        if (offsetRows != 0)
+        {
+          text += "offsets {\n";
+          for (size_t row = 0; row < offsetRows; ++row)
+          {
+            text += "row" + std::to_string(row) + " \"";
+            for (size_t column = 0; column < size; ++column)
+            {
+              text += "0.00 +0 -0 ";
+            }
+            text += "\"\n";
+          }
+          text += "}\n";
+        }
         text += "}\n";
       }
       text += "}\n";
@@ -1298,8 +1314,9 @@ TEST_CASE(
   };
   env.createFile(
     "displacement.vmf",
-    "world { id 1 classname worldspawn\n" + solid(2, 6, true) + solid(20, 2, true)
-      + solid(40, 2, false) + solid(60, 2, true, true) + "}\n");
+    "world { id 1 classname worldspawn\n" + solid(2, 6, true)
+      + solid(20, 2, true, false, 5) + solid(40, 2, false) + solid(60, 2, true, true, 1)
+      + "}\n");
   auto loaded = MapDocument::loadDocument(
     appController.environmentConfig(),
     mdl::QuakeGameInfo,
@@ -1443,6 +1460,131 @@ TEST_CASE(
   const auto partialCount = map.modificationCount();
   initializeAlpha->click();
   CHECK(map.modificationCount() == partialCount);
+  // Actual legacy distance/alpha/history controls act before the missing offset UI.
+  auto* applyOffset = editor.findChild<QPushButton*>("sourceDisplacementOffsetApply");
+  auto* initializeOffset =
+    editor.findChild<QPushButton*>("sourceDisplacementOffsetInitialize");
+  const auto offset = std::array{
+    editor.findChild<QDoubleSpinBox*>("sourceDisplacementOffsetX"),
+    editor.findChild<QDoubleSpinBox*>("sourceDisplacementOffsetY"),
+    editor.findChild<QDoubleSpinBox*>("sourceDisplacementOffsetZ")};
+  REQUIRE(applyOffset);
+  REQUIRE(initializeOffset);
+  for (auto* box : offset)
+  {
+    REQUIRE(box);
+    CHECK_FALSE(box->isEnabled()); // Present partial rows are not silently filled.
+  }
+  CHECK_FALSE(applyOffset->isEnabled());
+  CHECK(initializeOffset->isHidden());
+  map.setIsCommandCollationEnabled(false);
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*small, *smallFace}});
+  QApplication::processEvents();
+  row->setValue(2);
+  column->setValue(2);
+  REQUIRE(applyOffset->isEnabled());
+  CHECK(initializeOffset->isHidden());
+  const auto beforeOffset = *small->brush().face(*smallFace).sourceDisplacement();
+  const auto offsetCount = map.modificationCount();
+  offset[0]->setValue(1.25);
+  offset[1]->setValue(-2.5);
+  offset[2]->setValue(3.75);
+  distance->setValue(999); // These unrelated drafts must not be applied.
+  alpha->setValue(7);
+  applyOffset->click();
+  CHECK(map.modificationCount() == offsetCount + 1);
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->offset(2, 2)
+    == vm::vec3d{1.25, -2.5, 3.75});
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->positions()[12]
+    == beforeOffset.positions()[12] + vm::vec3d{1.25, -2.5, 3.75});
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->distance(2, 2)
+    == beforeOffset.distance(2, 2));
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->alphas()
+    == beforeOffset.alphas());
+  applyOffset->click();
+  CHECK(map.modificationCount() == offsetCount + 1);
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(*small->brush().face(*smallFace).sourceDisplacement() == beforeOffset);
+  offset[0]->setValue(4);
+  offset[1]->setValue(5);
+  offset[2]->setValue(6);
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "pressed"));
+  offset[0]->setValue(100); // Freeze field intent, not only the target row.
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "clicked"));
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->offset(2, 2)
+    == vm::vec3d{4, 5, 6});
+  map.undoCommand();
+  QApplication::processEvents();
+  const auto staleCount = map.modificationCount();
+  offset[0]->setValue(1);
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "pressed"));
+  row->setValue(3);
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "clicked"));
+  CHECK(map.modificationCount() == staleCount);
+  CHECK(*small->brush().face(*smallFace).sourceDisplacement() == beforeOffset);
+  row->setValue(2);
+  offset[0]->setValue(1);
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "pressed"));
+  REQUIRE(mdl::setSourceDisplacementAlpha(map, 2, 2, 23.5));
+  const auto backendCount = map.modificationCount();
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "clicked"));
+  CHECK(map.modificationCount() == backendCount);
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->offset(2, 2) == vm::vec3d{});
+  map.undoCommand();
+  QApplication::processEvents();
+  offset[0]->setValue(1);
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "pressed"));
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*sparse, *sparseFace}});
+  // Synchronous notification denies the old action before queued widget refresh.
+  CHECK_FALSE(applyOffset->isEnabled());
+  REQUIRE(QMetaObject::invokeMethod(applyOffset, "clicked"));
+  CHECK(map.modificationCount() == staleCount);
+  QApplication::processEvents();
+  REQUIRE_FALSE(initializeOffset->isHidden());
+  REQUIRE(initializeOffset->isEnabled());
+  CHECK_FALSE(applyOffset->isEnabled());
+  const auto sparseBeforeOffset = *sparse->brush().face(*sparseFace).sourceDisplacement();
+  REQUIRE(QMetaObject::invokeMethod(initializeOffset, "pressed"));
+  REQUIRE(
+    QMetaObject::invokeMethod(
+      applyOffset, "clicked")); // Wrong button consumes no operation.
+  REQUIRE(QMetaObject::invokeMethod(initializeOffset, "clicked"));
+  CHECK(map.modificationCount() == staleCount);
+  initializeOffset->click();
+  CHECK(map.modificationCount() == staleCount + 1);
+  REQUIRE(applyOffset->isEnabled());
+  CHECK(initializeOffset->isHidden());
+  CHECK(
+    sparse->brush().face(*sparseFace).sourceDisplacement()->positions()
+    == sparseBeforeOffset.positions());
+  offset[2]->setValue(2);
+  applyOffset->click();
+  CHECK(
+    sparse->brush().face(*sparseFace).sourceDisplacement()->positions()[12]
+    == sparseBeforeOffset.positions()[12] + vm::vec3d{0, 0, 2});
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(sparse->brush().face(*sparseFace).sourceDisplacement()->canEditOffsets());
+  CHECK(offset[2]->value() == 0);
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(sparse->brush().face(*sparseFace).sourceDisplacement()->canInitializeOffsets());
+  CHECK_FALSE(applyOffset->isEnabled());
+  map.redoCommand();
+  map.redoCommand();
+  QApplication::processEvents();
+  CHECK(
+    sparse->brush().face(*sparseFace).sourceDisplacement()->offset(2, 2)
+    == vm::vec3d{0, 0, 2});
 }
 
 TEST_CASE("Source material settings group game mounts without changing the catalog")

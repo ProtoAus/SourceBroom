@@ -60,6 +60,9 @@ bool setBrushFaceAttributes(Map& map, const UpdateBrushFaceAttributes& update);
 bool setSourceDisplacementDistance(Map& map, size_t row, size_t column, double distance);
 bool setSourceDisplacementAlpha(Map& map, size_t row, size_t column, double alpha);
 bool initializeSourceDisplacementAlphas(Map& map);
+bool setSourceDisplacementOffset(
+  Map& map, size_t row, size_t column, const vm::vec3d& offset);
+bool initializeSourceDisplacementOffsets(Map& map);
 
 bool copyUv(
   Map& map,

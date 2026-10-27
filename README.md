@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.30 scoped LIVE native camera authoring:
+**Status:** Windows A5.31 native displacement XYZ offset authoring:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,26 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.30 adds a **LIVE native cameras** panel beneath map properties in the Map
+A5.31 adds independent **Offset X/Y/Z** fields and **Apply XYZ offset** to the
+selected displacement-vertex inspector. Complete native tables edit surgically;
+genuinely absent tables need explicit **Initialize zero offset rows** first.
+Distance, alpha, base UV positions and triangle layout stay independent. Geometry,
+derived normals, bounds and picking follow the offset, with production undo/redo
+and preserving Save As/reopen. Partial/empty/case-aliased tables stay protected.
+Alpha authoring also now refuses case-aliased table names without guessing.
+
+Offset model checks pass 449 assertions across three cases; the actual inspector
+passes 116 including its retained legacy controls. Full Model312/App50 pass.
+UI63/64 retains the untouched known Windows preference Unicode-rename failure;
+its prior isolated failure remains retained evidence, not a fresh pass. Five
+actual targets build without compiler diagnostics. Fresh corpus controls are
+38 document /35 strict with the same three reasons /38 preview, with acting edit
+probes and all original hashes unchanged. Nine compiled fingerprints and direct
+parent review do not establish human/Hammer, full branch, sculpt/sew or GPU parity.
+Use the whole A5.31 kit on copies; retain whole A5.30/A5.29 and owner-confirmed
+A5.25 recovery. Full Source support remains in progress.
+
+Retained A5.30 adds a **LIVE native cameras** panel beneath map properties in the Map
 inspector. On an editable native VMF/copy it edits eye/look XYZ, appends/deletes
 records, sets/removes the stored active-camera field and removes a supported
 controller through normal undo/redo and Save As. Look is an absolute target, not
@@ -47,7 +66,7 @@ a direction. Deleting before the active record remaps its ordinal; deleting the
 active record explicitly clears it. This is not capture-current-view, viewport
 navigation or projection/FOV import. The saved Source Tools dialog stays read-only.
 
-Actual five-target builds have zero compiler warning/error lines. New Model262
+Historical A5.30 five-target builds have zero compiler warning/error lines. Its Model262
 and live UI136 assertions pass; full Model309 and App50 pass. Full UI is63/64:
 the untouched known Windows QPreferenceStore Unicode-fixture rename also fails
 isolated, without a skip or suppression. Fresh production-checker corpus controls

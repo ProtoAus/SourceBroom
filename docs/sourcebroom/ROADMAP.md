@@ -33,7 +33,16 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.30 candidate:** scoped LIVE native camera eye/look/record CRUD and stored
+- **A5.31 candidate:** native displacement per-vertex XYZ offsets and explicit
+  absent-table initialization, production history/Save As and independent distance/
+  alpha. Partial/empty/case-aliased data stays protected; alpha aliases also now deny
+  typed authoring without flattening. Offset Model449/3 and actual UI116/1 pass;
+  full Model312/App50 pass, UI63/64 only known untouched Windows preference rename.
+  Five-target build0 without compiler diagnostics, nine fingerprints/direct parent
+  review, fresh corpus38/35+same3 reasons/38 and original hashes. No full Source,
+  sculpt/sew/new/power/normal authoring, arbitrary compiler or human/Hammer/GPU
+  acceptance. Keep whole A5.30/A5.29/A5.25 recovery; pending small owner check.
+- **Retained A5.30 candidate:** scoped LIVE native camera eye/look/record CRUD and stored
   active choice, production undo/redo/Save As, not generic raw-entry writes.
   Strong IDs/revisions/staged replay and protected unknown shapes; saved Tools
   remains saved/read-only. No viewport capture/motion or projection/FOV import.
@@ -418,8 +427,9 @@ reported before a misleading successful build.
 
 The current foundation admits bounded native meshes, distance samples, selected
 proper similarity transforms and separately stored alpha samples (A5.23).
-A5.26 adds explicit absent-alpha-table initialization. A5.27's bounded scalar VMT
-opacity is distinct from displacement weights or shader parity. This foundation
+A5.26 adds explicit absent-alpha-table initialization; A5.31 adds independent
+per-sample XYZ offsets and explicit absent-offset-table initialization. A5.27's
+bounded scalar VMT opacity is distinct from displacement weights or shader parity. This foundation
 does not complete A6: stored blend-weight editing is not full shader blending,
 paint/smoothing or topology/power/sew, and independent native acceptance remains
 pending. The remaining feature/exit requirements below still apply.

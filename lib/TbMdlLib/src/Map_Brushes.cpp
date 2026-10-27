@@ -248,6 +248,75 @@ bool setSourceDisplacementDistance(
   });
 }
 
+bool setSourceDisplacementOffset(
+  Map& map, const size_t row, const size_t column, const vm::vec3d& offset)
+{
+  const auto faces = map.selection().allBrushFaces();
+  if (
+    !map.vmfScene() || map.isReadOnlyVmfPreview() || faces.size() != 1
+    || !faces[0].face().sourceDisplacement())
+  {
+    return false;
+  }
+  const auto& displacement = *faces[0].face().sourceDisplacement();
+  if (
+    !displacement.canEditOffsets() || row >= displacement.size()
+    || column >= displacement.size())
+  {
+    return false;
+  }
+  if (displacement.offset(row, column) == offset)
+  {
+    return true;
+  }
+  return applyAndSwap(map, "Change Displacement Offset", faces, [&](auto& face) {
+    try
+    {
+      auto edited = *face.sourceDisplacement();
+      edited.setOffset(row, column, offset);
+      face.setSourceDisplacement(std::move(edited));
+      return true;
+    }
+    catch (const std::exception& error)
+    {
+      map.logger().error() << "Could not change displacement offset: " << error.what();
+      return false;
+    }
+  });
+}
+
+bool initializeSourceDisplacementOffsets(Map& map)
+{
+  const auto faces = map.selection().allBrushFaces();
+  if (
+    !map.vmfScene() || map.isReadOnlyVmfPreview() || faces.size() != 1
+    || !faces[0].face().sourceDisplacement()
+    || !faces[0].face().sourceDisplacement()->canInitializeOffsets())
+  {
+    return false;
+  }
+  return applyAndSwap(
+    map,
+    "Initialize Displacement Offsets",
+    faces,
+    [&](auto& face) {
+      try
+      {
+        auto edited = *face.sourceDisplacement();
+        edited.initializeOffsets();
+        face.setSourceDisplacement(std::move(edited));
+        return true;
+      }
+      catch (const std::exception& error)
+      {
+        map.logger().error() << "Could not initialize displacement offsets: "
+                             << error.what();
+        return false;
+      }
+    },
+    false); // Explicit table creation is its own undo boundary.
+}
+
 bool initializeSourceDisplacementAlphas(Map& map)
 {
   const auto faces = map.selection().allBrushFaces();

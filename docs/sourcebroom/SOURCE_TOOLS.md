@@ -5,7 +5,44 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## LIVE camera records and active choice — A5.30
+## Native displacement XYZ offset authoring — A5.31
+
+Select one native displacement face, then choose its grid row/column in the face
+inspector. **Offset X/Y/Z** are native world-axis vectors, independent of stored
+normal/distance and alpha. Apply changes only the displayed vector. It rebuilds
+positions/derived normals/bounds/picking but not base UV coordinates, grid power
+or triangle layout. No-op/revert preserve existing row spellings and unknown data.
+
+Complete bound rows permit surgery. A genuinely absent table permits explicit
+**Initialize zero offset rows** only, then normal editing. Initialization is its
+own history boundary and adds one bounded table (up to the existing65x65 maximum).
+Present empty/partial/malformed or case-aliased tables never become missing-table
+authority. Typed alpha authoring likewise now refuses case aliases rather than
+flattening or guessing them; independent supported distance edits still act.
+
+Production undo/redo, Save As/reopen/repeat save and proper admitted base movement
+compose. Alpha+offset initialization emits one combined append per parent: the
+existing structural emitter rejects overlapping inserts, so do not submit two
+appends at the same native parent. Original bytes/IDs/unknown metadata remain
+owned by the preserving document. No geometry-ID allocation or raw metadata API.
+
+UI selection/backend notifications synchronously disable offset actions before
+deferred widget refresh. Pressed generation/row/column/XYZ and button identity
+freeze; stale or cross-button releases cannot redirect an old draft. Nonfinite,
+out-of-world, wrong selection/plain face and read-only preview refuse atomically.
+
+Offset Model449/3 and actual UI116/1 pass, including acting legacy controls. Full
+Model312/App50 pass; UI63/64 retains the untouched known Windows preference rename
+failure, with prior isolated evidence retained. Five actual targets build without
+compiler diagnostics on nine fingerprints. Fresh corpus38/35+same3 reasons/38,
+probes38/35/38 and original hashes pass. Direct parent review is not independent,
+clean-LSP/tidy, human/Hammer, full branch or new GPU acceptance.
+
+This is not sculpt/sew/create/re-power or normal/offset-normal authoring, and does
+not guarantee arbitrary deformations compile or avoid self-intersection. Keep
+whole A5.30/A5.29/A5.25 recovery; the small [owner check](../../lextest.md) is pending.
+
+## Retained LIVE camera records and active choice — A5.30
 
 The Map inspector's **LIVE native cameras** panel authors supported editable
 VMF metadata, including UNSAVED changes. Eye/look are manual XYZ, look an absolute
@@ -594,6 +631,8 @@ Source grid, not a screen-space brush. The distance tool is disabled when the
 original normal/distance data is incomplete or cannot safely express a distance
 change. A5.23 adds the separate stored-alpha controls described above; alpha-row
 eligibility is independent, and neither tool silently authors missing rows.
+A5.31 separately adds explicit single-vertex XYZ offset authoring and absent-table
+initialization, not native normal or offset-normal authoring.
 
 Use a copy until manual/Hammer acceptance is recorded. Unknown attachments and
 references remain guarded; missing or malformed meshes are not silently replaced

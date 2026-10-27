@@ -59,6 +59,7 @@
 #include <ctre.hpp>
 
 #include <string>
+#include <utility>
 
 namespace tb::ui
 {
@@ -649,6 +650,33 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   displacementLayout->addWidget(m_applyDisplacementAlpha, 3, 3);
   displacementLayout->addWidget(m_initializeDisplacementAlpha, 4, 0, 1, 4);
   displacementLayout->addWidget(m_displacementAlphaStatus, 5, 0, 1, 4);
+  const auto offsetLabels = std::array{tr("Offset X"), tr("Offset Y"), tr("Offset Z")};
+  const auto offsetNames = std::array{
+    "sourceDisplacementOffsetX",
+    "sourceDisplacementOffsetY",
+    "sourceDisplacementOffsetZ"};
+  for (size_t component = 0; component < m_displacementOffset.size(); ++component)
+  {
+    auto* box = new QDoubleSpinBox{};
+    box->setObjectName(offsetNames[component]);
+    box->setRange(-1048576.0, 1048576.0);
+    box->setDecimals(6);
+    box->setToolTip(tr("Stored displacement offset in native VMF world axes."));
+    m_displacementOffset[component] = box;
+    displacementLayout->addWidget(
+      new QLabel{offsetLabels[component]}, 6 + int(component), 0);
+    displacementLayout->addWidget(box, 6 + int(component), 1, 1, 2);
+  }
+  m_applyDisplacementOffset = new QPushButton{tr("Apply XYZ offset")};
+  m_applyDisplacementOffset->setObjectName("sourceDisplacementOffsetApply");
+  m_initializeDisplacementOffsets = new QPushButton{tr("Initialize zero offset rows")};
+  m_initializeDisplacementOffsets->setObjectName("sourceDisplacementOffsetInitialize");
+  m_displacementOffsetStatus = new QLabel{};
+  m_displacementOffsetStatus->setObjectName("sourceDisplacementOffsetStatus");
+  m_displacementOffsetStatus->setWordWrap(true);
+  displacementLayout->addWidget(m_applyDisplacementOffset, 8, 3);
+  displacementLayout->addWidget(m_initializeDisplacementOffsets, 9, 0, 1, 4);
+  displacementLayout->addWidget(m_displacementOffsetStatus, 10, 0, 1, 4);
   faceAttribsLayout->addWidget(m_displacementEditor, r, 0, 1, 4);
   connect(m_displacementRow, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
     updateDisplacementSample();
@@ -675,6 +703,18 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   connect(m_initializeDisplacementAlpha, &QAbstractButton::clicked, this, [this] {
     mdl::initializeSourceDisplacementAlphas(m_document.map());
     updateControls();
+  });
+  connect(m_applyDisplacementOffset, &QAbstractButton::pressed, this, [this] {
+    prepareDisplacementOffset(false);
+  });
+  connect(m_applyDisplacementOffset, &QAbstractButton::clicked, this, [this] {
+    applyDisplacementOffset(false);
+  });
+  connect(m_initializeDisplacementOffsets, &QAbstractButton::pressed, this, [this] {
+    prepareDisplacementOffset(true);
+  });
+  connect(m_initializeDisplacementOffsets, &QAbstractButton::clicked, this, [this] {
+    applyDisplacementOffset(true);
   });
   faceAttribsLayout->setColumnStretch(1, 1);
   faceAttribsLayout->setColumnStretch(3, 1);
@@ -794,6 +834,15 @@ void FaceAttribsEditor::connectObservers()
 
 void FaceAttribsEditor::refresh()
 {
+  // Selection/backend notifications are synchronous; widget refresh is deferred.
+  m_displacementControlsCurrent = false;
+  invalidateDisplacementOffsetIntent();
+  m_applyDisplacementOffset->setEnabled(false);
+  m_initializeDisplacementOffsets->setEnabled(false);
+  for (auto* box : m_displacementOffset)
+  {
+    box->setEnabled(false);
+  }
   updateControlsDelayed();
 }
 
@@ -818,8 +867,60 @@ static void setValueOrMulti(QDoubleSpinBox* box, const bool multi, const double 
   }
 }
 
+void FaceAttribsEditor::invalidateDisplacementOffsetIntent()
+{
+  ++m_displacementGeneration;
+  m_displacementOffsetIntent.reset();
+}
+
+void FaceAttribsEditor::prepareDisplacementOffset(const bool initialize)
+{
+  m_displacementOffsetIntent.reset();
+  const auto* button =
+    initialize ? m_initializeDisplacementOffsets : m_applyDisplacementOffset;
+  if (!m_displacementControlsCurrent || !button->isEnabled())
+  {
+    return;
+  }
+  m_displacementOffsetIntent = DisplacementOffsetIntent{
+    m_displacementGeneration,
+    initialize,
+    static_cast<size_t>(m_displacementRow->value()),
+    static_cast<size_t>(m_displacementColumn->value()),
+    {m_displacementOffset[0]->value(),
+     m_displacementOffset[1]->value(),
+     m_displacementOffset[2]->value()}};
+}
+
+void FaceAttribsEditor::applyDisplacementOffset(const bool initialize)
+{
+  const auto intent = std::exchange(m_displacementOffsetIntent, std::nullopt);
+  const auto* button =
+    initialize ? m_initializeDisplacementOffsets : m_applyDisplacementOffset;
+  if (
+    !intent || !m_displacementControlsCurrent || !button->isEnabled()
+    || intent->generation != m_displacementGeneration || intent->initialize != initialize)
+  {
+    return;
+  }
+  if (initialize)
+  {
+    mdl::initializeSourceDisplacementOffsets(m_document.map());
+  }
+  else
+  {
+    mdl::setSourceDisplacementOffset(
+      m_document.map(),
+      intent->row,
+      intent->column,
+      vm::vec3d{intent->value[0], intent->value[1], intent->value[2]});
+  }
+  updateControls();
+}
+
 void FaceAttribsEditor::updateDisplacementSample()
 {
+  invalidateDisplacementOffsetIntent();
   const auto faces = m_document.map().selection().allBrushFaces();
   if (faces.size() != 1 || !faces[0].face().sourceDisplacement())
   {
@@ -835,10 +936,16 @@ void FaceAttribsEditor::updateDisplacementSample()
   }
   m_displacementDistance->setValue(displacement.distance(row, column));
   m_displacementAlpha->setValue(displacement.alpha(row, column));
+  const auto offset = displacement.offset(row, column);
+  for (size_t component = 0; component < m_displacementOffset.size(); ++component)
+  {
+    m_displacementOffset[component]->setValue(offset[component]);
+  }
 }
 
 void FaceAttribsEditor::updateControls()
 {
+  invalidateDisplacementOffsetIntent();
   // block signals emitted when updating the editor values
   const auto blockXOffsetEditor = QSignalBlocker{m_xOffsetEditor};
   const auto blockYOffsetEditor = QSignalBlocker{m_yOffsetEditor};
@@ -875,6 +982,26 @@ void FaceAttribsEditor::updateControls()
   const auto alphaRows = displacement && displacement->canEditAlphas();
   const auto alphaEditable = writable && alphaRows;
   m_displacementEditor->setEnabled(writable);
+  m_displacementControlsCurrent = writable;
+  const auto offsetRows = displacement && displacement->canEditOffsets();
+  const auto canInitializeOffsets = displacement && displacement->canInitializeOffsets();
+  for (auto* box : m_displacementOffset)
+  {
+    box->setEnabled(writable && offsetRows);
+  }
+  m_applyDisplacementOffset->setEnabled(writable && offsetRows);
+  m_initializeDisplacementOffsets->setVisible(canInitializeOffsets);
+  m_initializeDisplacementOffsets->setEnabled(writable && canInitializeOffsets);
+  m_displacementOffsetStatus->setText(
+    !displacement ? tr("No native displacement selected.")
+    : !writable   ? tr("Read-only native preview; XYZ offsets are preserved.")
+    : canInitializeOffsets
+      ? tr("No offset table. Initialize zero rows before editing XYZ.")
+    : !offsetRows
+      ? tr("Incomplete offset rows are preserved; other tools are independent.")
+      : tr(
+          "Stored per-vertex XYZ offset; distance and alpha are independent. No "
+          "sculpt/sew."));
   m_displacementDistance->setEnabled(distanceEditable);
   m_applyDisplacement->setEnabled(distanceEditable);
   m_displacementAlpha->setEnabled(alphaEditable);

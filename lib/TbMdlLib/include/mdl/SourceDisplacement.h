@@ -67,6 +67,10 @@ private:
   bool m_rotationSupported = true;
   bool m_alphaTableMissing = false;
   bool m_alphaRowsInitialized = false;
+  bool m_alphaAuthoringSupported = true;
+  bool m_offsetTableMissing = false;
+  bool m_offsetRowsInitialized = false;
+  bool m_offsetAuthoringSupported = true;
   std::vector<vm::vec3d> m_positions;
   std::vector<vm::vec3d> m_basePositions;
   std::vector<vm::vec3d> m_normals;
@@ -74,6 +78,7 @@ private:
   vm::bbox3d m_bounds;
 
   bool hasUnboundAlphaRows() const;
+  bool hasUnboundOffsetRows() const;
   void rebuild();
   SourceDisplacement similarityTransformed(
     const vm::mat4x4d& transform, double scale) const;
@@ -101,9 +106,15 @@ public:
   const std::vector<vm::vec3d>& normals() const { return m_normals; }
   const std::vector<uint32_t>& indices() const { return m_indices; }
   const std::vector<double>& alphas() const { return m_alphas; }
+  const std::vector<vm::vec3d>& offsets() const { return m_offsets; }
   const vm::bbox3d& bounds() const { return m_bounds; }
   double distance(size_t row, size_t column) const;
   double alpha(size_t row, size_t column) const;
+  vm::vec3d offset(size_t row, size_t column) const;
+  bool canEditOffsets() const;
+  bool canInitializeOffsets() const;
+  void initializeOffsets();
+  void setOffset(size_t row, size_t column, const vm::vec3d& offset);
   bool canEditDistances() const;
   bool canEditAlphas() const;
   bool canInitializeAlphas() const;

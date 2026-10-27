@@ -65,6 +65,24 @@ std::optional<VmfEntryId> member(
   }
   return found;
 }
+bool hasAliasedMember(
+  const VmfDocument& document, const VmfEntryId owner, const std::string& name)
+{
+  return std::any_of(
+    document.entries()[owner].children.begin(),
+    document.entries()[owner].children.end(),
+    [&](const auto id) {
+      const auto candidate = key(document, id);
+      return candidate != name && candidate.size() == name.size()
+             && std::equal(
+               candidate.begin(),
+               candidate.end(),
+               name.begin(),
+               [](const unsigned char a, const unsigned char b) {
+                 return std::tolower(a) == std::tolower(b);
+               });
+    });
+}
 std::string value(const VmfDocument& document, const VmfEntryId id)
 {
   return decode(document, *document.entries()[id].value);
@@ -320,6 +338,8 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
         result.m_distances[y * result.m_size + x] = values[x].value;
       }
     });
+  result.m_offsetAuthoringSupported = !hasAliasedMember(document, *block, "offsets");
+  result.m_offsetTableMissing = !member(document, *block, "offsets", true);
   readRows(
     "offsets",
     3,
@@ -353,6 +373,7 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
     result.m_offsetNormals.assign(total, vm::vec3d{});
     result.m_offsetNormalRows.assign(result.m_size, Row{});
   }
+  result.m_alphaAuthoringSupported = !hasAliasedMember(document, *block, "alphas");
   result.m_alphaTableMissing = !member(document, *block, "alphas", true);
   readRows(
     "alphas",
@@ -471,6 +492,54 @@ double SourceDisplacement::alpha(const size_t row, const size_t column) const
   }
   return m_alphas[row * m_size + column];
 }
+vm::vec3d SourceDisplacement::offset(const size_t row, const size_t column) const
+{
+  if (row >= m_size || column >= m_size)
+  {
+    throw std::out_of_range{"displacement sample"};
+  }
+  return m_offsets[row * m_size + column];
+}
+bool SourceDisplacement::hasUnboundOffsetRows() const
+{
+  return m_size > 0 && m_offsetRows.size() == m_size
+         && m_offsets.size() == m_size * m_size
+         && std::all_of(m_offsetRows.begin(), m_offsetRows.end(), [](const auto& row) {
+              return !row.entry && row.text.empty() && row.spans.empty();
+            });
+}
+bool SourceDisplacement::canInitializeOffsets() const
+{
+  return m_offsetAuthoringSupported && m_offsetTableMissing && !m_offsetRowsInitialized
+         && hasUnboundOffsetRows()
+         && std::all_of(m_offsets.begin(), m_offsets.end(), [](const auto& offset) {
+              return offset == vm::vec3d{};
+            });
+}
+void SourceDisplacement::initializeOffsets()
+{
+  if (!canInitializeOffsets())
+  {
+    invalid(m_entry, "offset initialization requires a genuinely absent native table");
+  }
+  m_offsetRowsInitialized = true;
+}
+bool SourceDisplacement::canEditOffsets() const
+{
+  if (!m_offsetAuthoringSupported)
+  {
+    return false;
+  }
+  if (m_offsetRowsInitialized)
+  {
+    return m_offsetTableMissing && hasUnboundOffsetRows();
+  }
+  return m_offsetRows.size() == m_size && m_offsets.size() == m_size * m_size
+         && std::all_of(
+           m_offsetRows.begin(), m_offsetRows.end(), [this](const auto& row) {
+             return row.entry && row.spans.size() == 3 * m_size;
+           });
+}
 bool SourceDisplacement::hasUnboundAlphaRows() const
 {
   return m_size > 0 && m_alphaRows.size() == m_size && m_alphas.size() == m_size * m_size
@@ -480,7 +549,8 @@ bool SourceDisplacement::hasUnboundAlphaRows() const
 }
 bool SourceDisplacement::canInitializeAlphas() const
 {
-  return m_alphaTableMissing && !m_alphaRowsInitialized && hasUnboundAlphaRows()
+  return m_alphaAuthoringSupported && m_alphaTableMissing && !m_alphaRowsInitialized
+         && hasUnboundAlphaRows()
          && std::all_of(m_alphas.begin(), m_alphas.end(), [](const double value) {
               return value == 0;
             });
@@ -495,6 +565,10 @@ void SourceDisplacement::initializeAlphas()
 }
 bool SourceDisplacement::canEditAlphas() const
 {
+  if (!m_alphaAuthoringSupported)
+  {
+    return false;
+  }
   if (m_alphaRowsInitialized)
   {
     return m_alphaTableMissing && hasUnboundAlphaRows();
@@ -553,6 +627,26 @@ void SourceDisplacement::setAlpha(
   (void)alpha(row, column);
   // Blend weight only: geometry, normals and bounds remain unchanged.
   m_alphas[row * m_size + column] = value;
+}
+void SourceDisplacement::setOffset(
+  const size_t row, const size_t column, const vm::vec3d& value)
+{
+  if (!canEditOffsets() || !vm::is_finite(value))
+  {
+    invalid(m_entry, "offset editing requires complete native rows and finite vectors");
+  }
+  const auto previous = offset(row, column);
+  m_offsets[row * m_size + column] = value;
+  try
+  {
+    rebuild();
+  }
+  catch (...)
+  {
+    m_offsets[row * m_size + column] = previous;
+    rebuild();
+    throw;
+  }
 }
 SourceDisplacement SourceDisplacement::translated(const vm::vec3d& delta) const
 {
@@ -768,7 +862,7 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   auto values = editsFrom(before, structure);
   if (!structure.empty())
   {
-    invalid(m_entry, "alpha initialization requires the structural emitter");
+    invalid(m_entry, "native table initialization requires the structural emitter");
   }
   return values;
 }
@@ -781,12 +875,21 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
     || m_size != before.m_size || m_elevationRow != before.m_elevationRow
     || m_startRow != before.m_startRow || m_worldBounds != before.m_worldBounds
     || m_normalsBound != before.m_normalsBound
+    || m_alphaAuthoringSupported != before.m_alphaAuthoringSupported
+    || m_offsetAuthoringSupported != before.m_offsetAuthoringSupported
     || m_alphaTableMissing != before.m_alphaTableMissing
     || (m_alphaRowsInitialized && !m_alphaTableMissing)
     || (m_alphaTableMissing && !m_alphaRowsInitialized
         && std::any_of(m_alphas.begin(), m_alphas.end(), [](const double value) { return value != 0; }))
+    || m_offsetTableMissing != before.m_offsetTableMissing
+    || (m_offsetRowsInitialized && !m_offsetTableMissing)
+    || (m_offsetTableMissing && !m_offsetRowsInitialized
+        && std::any_of(m_offsets.begin(), m_offsets.end(), [](const auto& offset) {
+             return offset != vm::vec3d{};
+           }))
     || m_rotationSupported != before.m_rotationSupported
     || m_alphas.size() != before.m_alphas.size()
+    || m_offsets.size() != before.m_offsets.size()
     || m_directionRows != before.m_directionRows
     || m_distanceRows != before.m_distanceRows || m_alphaRows != before.m_alphaRows
     || m_offsetRows != before.m_offsetRows
@@ -837,7 +940,12 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
     };
   if (
     !followsLinearFrame(before.m_directions, m_directions, rotation)
-    || !followsLinearFrame(before.m_offsets, m_offsets, linear)
+    || (!followsLinearFrame(before.m_offsets, m_offsets, linear)
+        && !(canEditOffsets()
+             && (before.canEditOffsets() || before.canInitializeOffsets())
+             && std::all_of(m_offsets.begin(), m_offsets.end(), [](const auto& offset) {
+                  return vm::is_finite(offset);
+                })))
     || !followsLinearFrame(before.m_offsetNormals, m_offsetNormals, rotation))
   {
     invalid(m_entry, "displacement vectors do not follow the base frame");
@@ -911,6 +1019,8 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   editVectors(before.m_directionRows, before.m_directions, m_directions);
   editVectors(before.m_offsetRows, before.m_offsets, m_offsets);
   editVectors(before.m_offsetNormalRows, before.m_offsetNormals, m_offsetNormals);
+  // The preserving emitter admits one append per parent, including combined tables.
+  auto newTables = std::string{};
   if (m_alphaRowsInitialized)
   {
     auto text = std::string{"\nalphas\n{\n"};
@@ -928,7 +1038,33 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
       text += "\"\n";
     }
     text += "}\n";
-    structure.push_back({VmfStructuralEdit::Type::Append, m_entry, std::move(text)});
+    newTables += text;
+  }
+  if (m_offsetRowsInitialized)
+  {
+    auto text = std::string{"\noffsets\n{\n"};
+    for (size_t y = 0; y < m_size; ++y)
+    {
+      text += "\"row" + std::to_string(y) + "\" \"";
+      for (size_t x = 0; x < m_size; ++x)
+      {
+        for (size_t component = 0; component < 3; ++component)
+        {
+          if (x != 0 || component != 0)
+          {
+            text += " ";
+          }
+          text += numberText(m_offsets[y * m_size + x][component]);
+        }
+      }
+      text += "\"\n";
+    }
+    text += "}\n";
+    newTables += text;
+  }
+  if (!newTables.empty())
+  {
+    structure.push_back({VmfStructuralEdit::Type::Append, m_entry, std::move(newTables)});
   }
   return edits;
 }

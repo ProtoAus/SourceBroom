@@ -1,11 +1,48 @@
-# SourceBroom validation — A5.30 scoped LIVE native cameras
+# SourceBroom validation — A5.31 native displacement XYZ offsets
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.30 — scoped LIVE camera records and active-camera persistence
+## A5.31 — independent per-vertex XYZ offsets
+
+- Tests-only actual inspector compiles0/no diagnostics and runtime RED follows64
+  acting legacy distance/alpha/init/history assertions: missing offset Apply.
+  Separate alias regressions show unsafe typed alpha/offset authority. No missing
+  C++ API/compile failure, test toggle or suppression counts as the falsifier.
+- Final offset Model449 across3 cases passes: one-vector lexical surgery, exact
+  parsed no-op/revert, immutable original, derived geometry/normals/bounds/picking,
+  independent distance/alpha/baseUV/triangles, invalid atomic rollback, row provenance,
+  explicit absent-only initialization, full65x65 budget and protected empty/partial/
+  aliased/malformed data. Alpha alias regression is included among six related
+  model cases totaling1153 assertions. Independent admitted base motion composes.
+- Production history includes absent and original complete tables: edit/init undo/
+  redo, collation boundary, Save As/reopen/repeat save and later base movement.
+  No-op/refusal retains redo; no/plain selection and read-only preview refuse.
+  Both newly initialized alpha and offset tables share ONE parent append; original
+  input and unknown tokens/IDs remain unchanged. No SDK/Hammer claim from self-read.
+- Actual inspector116 includes partial protection, independent field drafts,
+  frozen pressed XYZ, stale row/backend and selection refresh before queued widget
+  refresh, cross-button releases, initialization and undo/redo. It does not stand
+  in for an owner visual check or all-layout/read-only-UI matrix.
+- Full Model312/App50 pass. UI63/64 has only untouched known QPreferenceStore Windows
+  Unicode-fixture rename (existing379 site). Prior A530 isolation remains retained;
+  no fresh isolated pass/fail, skip/suppression or64/64 claim. Five targets build0
+  with zero compiler diagnostics on nine fingerprints; changed-range format,
+  diff-check and complete direct parent review are not independent/clean-LSP/tidy.
+- Fresh current production checker corpus: document38/strict35+same3 refusal set
+  AND reasons/preview38; acting generic value-edit probes38/35/38. All38 original
+  hashes unchanged. Clean installed binary/loader proof is recorded separately at
+  delivery; no external offset authoring, original writes or new GPU equivalence.
+
+Own combined-table overlap was fixed in the displacement structural seam, not by
+weakening the preserving emitter. Own missing direct UI test include was fixed,
+not counted as runtime RED. Full Source, arbitrary-deformation compiler validity,
+sculpt/sew/new/power/normal edits and matching Hammer/human remain unproven.
+Keep whole A5.30/A5.29/A5.25 recovery; see lextest.md.
+
+## Retained A5.30 — scoped LIVE camera records and active-camera persistence
 
 - Actual13-file protected read-only prototype builds0, zero diagnostics; source/
   fingerprints retained. Runtime scene8/9, history6/7 and RootUI6/7 expose the

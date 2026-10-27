@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.30 — LIVE native camera records
+# Try Windows SourceBroom A5.31 — native displacement XYZ offsets
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,38 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.30: edit live camera records, not just the saved snapshot
+## A5.31: edit a native displacement vertex's XYZ offset
+
+On a COPY with a native displacement, select its single base face and use the
+face inspector's displacement row/column controls. **Offset X/Y/Z** are stored
+vectors in native VMF world axes, not absolute positions or scalar distance.
+**Apply XYZ offset** changes only that vector: drafted distance/alpha are not
+applied. If no offset table exists, **Initialize zero offset rows** is an explicit
+separate undo step and does not move the mesh. Existing empty/partial tables or
+case-aliased names are preserved, not silently repaired or overwritten.
+
+Undo/redo and Save As/reopen use the normal production model. Stale selection,
+row or backend refresh cancels a pending offset action before queued UI refresh;
+pressed field values and button identity are frozen. Alpha and offset initialization
+compose into one preserving append per native parent. Case-aliased alpha names
+also now deny typed authoring while independent supported distance edits work.
+
+Offset model449 and actual inspector116 assertions pass, as do full Model312 and
+App50. UI63/64 retains the known untouched Windows preference Unicode-rename
+failure; no skip/suppression or64/64 claim. Five actual targets have zero compiler
+diagnostics. Fresh corpus38/35+same3 reasons/38, edit probes38/35/38 and all original
+hashes pass. These are not matching-Hammer, human, full-branch or new GPU results.
+
+This is bounded single-vertex offset editing, not sculpt/sew/create/power changes,
+native normal/offset-normal authoring, or a guarantee that arbitrary deformation
+compiles or remains non-self-intersecting. Keep the whole A5.30/A5.29 and A5.25
+recovery kits. Full Source support continues.
+
+**Small owner check (pending):** on a copy, add 1 to one vertex's Offset Z, Apply,
+then Undo. The vertex should move and return without changing distance/alpha.
+Save As/reopen in matching Hammer is a separate optional check. See [lextest](../../lextest.md).
+
+## Retained A5.30: edit live camera records, not just the saved snapshot
 
 On a COPY of an editable native VMF, open the Map inspector and scroll beneath
 map properties to **LIVE native cameras**. Select a record, edit eye/look XYZ

@@ -4,6 +4,22 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.31 displacement XYZ offsets — pending small owner check
+
+Whole A5.31 on a COPY; keep whole A5.30/A5.29 and owner-confirmed A5.25 recovery.
+No new owner observation received. Automated offset449/inspector116, Model312/App50,
+UI63/64 known unrelated preference rename and corpus controls are not human/Hammer
+or measured performance acceptance.
+
+- [ ] On a copied native displacement, select one base face and grid sample. If
+  missing, explicitly Initialize zero offset rows. Add1 to Offset Z, Apply, then
+  Undo: the vertex should move and return, with stored distance/alpha unchanged.
+- [ ] Optional separate check: Save As a NEW copy and reopen in matching Hammer;
+  compare the offset sample and unchanged other records. Never overwrite original.
+
+Pending only. Not sculpt/sew/create/re-power or native normal/offset-normal editing,
+arbitrary compiler validity, all-layout/full-branch or new GPU acceptance.
+
 ## A5.30 LIVE native cameras — pending small owner check
 
 Use whole A5.30 on a COPY; keep whole A5.29 and owner-confirmed A5.25 recovery.

@@ -67,7 +67,258 @@ std::string alphaFixture()
   rows += "}\ntriangle_tags {";
   return replaceOnce(displacementFixture(), "triangle_tags {", rows);
 }
+std::string offsetFixture(const size_t rowCount = 5)
+{
+  auto rows = std::string{"offsets { // preserve vector spelling\n"};
+  for (size_t row = 0; row < rowCount; ++row)
+  {
+    rows += "\"row" + std::to_string(row)
+            + "\" \"+0 0.00 -0   +0 0.00 -0   +0 0.00 -0   +0 0.00 -0   +0 0.00 -0\"\n";
+  }
+  rows += "}\ntriangle_tags {";
+  return replaceOnce(displacementFixture(), "triangle_tags {", rows);
+}
 } // namespace
+
+TEST_CASE("SourceDisplacement XYZ offset edits preserve native bindings")
+{
+  const auto source = offsetFixture();
+  const auto document = VmfDocument::parse(source);
+  const auto original = loadDisplacement(source);
+  REQUIRE(original.canEditOffsets());
+  REQUIRE_FALSE(original.canInitializeOffsets());
+  auto control = original;
+  control.setDistance(2, 2, 24);
+  REQUIRE(document.serialize(control.editsFrom(original)) != source);
+  control.setDistance(2, 2, 16);
+  REQUIRE(document.serialize(control.editsFrom(original)) == source);
+  auto edited = original;
+  SECTION("one vector is surgical with derived geometry picking and exact reversal")
+  {
+    const auto offset = vm::vec3d{1.25, -2.5, 3.75};
+    edited.setOffset(2, 2, offset);
+    CHECK(edited.offset(2, 2) == offset);
+    CHECK(original.offset(2, 2) == vm::vec3d{});
+    CHECK(edited.positions()[12] == original.positions()[12] + offset);
+    CHECK(edited.basePositions() == original.basePositions());
+    CHECK(edited.indices() == original.indices());
+    CHECK(edited.alphas() == original.alphas());
+    CHECK(edited.distance(2, 2) == original.distance(2, 2));
+    CHECK(edited.normals() != original.normals());
+    CHECK(edited.bounds().max.z() == 19.75);
+    const auto hit = edited.intersect(vm::ray3d{{33.25, 29.5, 100}, {0, 0, -1}});
+    REQUIRE(hit);
+    CHECK(*hit == Catch::Approx(80.25));
+    const auto edits = edited.editsFrom(original);
+    REQUIRE(edits.size() == 1);
+    const auto saved = document.serialize(edits);
+    CHECK(
+      saved
+      == replaceOnce(
+        source,
+        "\"row2\" \"+0 0.00 -0   +0 0.00 -0   +0 0.00 -0   +0 0.00 -0   +0 0.00 -0\"",
+        "\"row2\" \"+0 0.00 -0   +0 0.00 -0   1.25 -2.5 3.75   +0 0.00 -0   +0 0.00 "
+        "-0\""));
+    const auto reopened = loadDisplacement(saved);
+    CHECK(reopened.offsets() == edited.offsets());
+    CHECK(reopened.positions() == edited.positions());
+    CHECK(reopened.normals() == edited.normals());
+    CHECK(reopened.bounds() == edited.bounds());
+    CHECK(reopened.canEditOffsets());
+    edited.setOffset(2, 2, {});
+    CHECK(edited == original);
+    CHECK(document.serialize(edited.editsFrom(original)) == source);
+  }
+  SECTION("same parsed zeros preserve their original spelling")
+  {
+    edited.setOffset(2, 2, {});
+    CHECK(edited == original);
+    CHECK(edited.editsFrom(original).empty());
+    CHECK(document.serialize(edited.editsFrom(original)) == source);
+  }
+  SECTION("nonfinite out of world and invalid coordinates refuse atomically")
+  {
+    for (const auto& value : std::vector<vm::vec3d>{
+           {1000, 0, 0},
+           {0, 1000, 0},
+           {0, 0, 1000},
+           {std::numeric_limits<double>::infinity(), 0, 0},
+           {0, std::numeric_limits<double>::quiet_NaN(), 0}})
+    {
+      CHECK_THROWS_AS(edited.setOffset(2, 2, value), std::invalid_argument);
+      CHECK(edited == original);
+    }
+    CHECK_THROWS_AS(edited.setOffset(5, 2, {}), std::out_of_range);
+    CHECK_THROWS_AS(edited.setOffset(2, 5, {}), std::out_of_range);
+    CHECK_THROWS_AS(edited.offset(5, 2), std::out_of_range);
+    CHECK_THROWS_AS(edited.offset(2, 5), std::out_of_range);
+    CHECK(edited == original);
+  }
+  SECTION("foreign same-value row spelling is not native edit authority")
+  {
+    const auto foreign = loadDisplacement(
+      replaceOnce(source, "\"row2\" \"+0 0.00 -0", "\"row2\" \"0e0 0.00 -0"));
+    CHECK(foreign.offsets() == original.offsets());
+    CHECK_THROWS_AS(foreign.editsFrom(original), std::invalid_argument);
+  }
+  SECTION("offsets compose with alpha distance and admitted base motion")
+  {
+    edited.setOffset(2, 2, {1, 2, 3});
+    edited.setDistance(2, 2, 24);
+    edited.initializeAlphas();
+    edited.setAlpha(2, 2, 17.5);
+    const auto delta = vm::vec3d{4, 8, 0};
+    auto rotation = vm::mat4x4d::identity();
+    rotation[1][1] = 0;
+    rotation[2][2] = 0;
+    rotation[1][2] = 1;
+    rotation[2][1] = -1;
+    const auto scale = 1.25;
+    const auto beforeMotion = edited;
+    edited = edited.translated(delta).rigidlyTransformed(rotation).uniformlyScaled(
+      vm::scaling_matrix(vm::vec3d{scale, scale, scale}));
+    CHECK(edited.offset(2, 2) == vm::vec3d{1.25, -3.75, 2.5});
+    CHECK(
+      edited.positions()[12]
+      == scale * (rotation * (beforeMotion.positions()[12] + delta)));
+    CHECK(edited.alpha(2, 2) == 17.5);
+    edited.setOffset(2, 2, edited.offset(2, 2) + vm::vec3d{0.5, 0.25, -0.5});
+    auto structure = std::vector<VmfStructuralEdit>{};
+    const auto values = edited.editsFrom(original, structure);
+    REQUIRE(structure.size() == 1);
+    const auto saved = document.serialize(values, structure);
+    auto newCorners = corners;
+    for (auto& corner : newCorners)
+    {
+      corner = scale * (rotation * (corner + delta));
+    }
+    const auto parsed = VmfDocument::parse(saved);
+    const auto reopened = SourceDisplacement::read(
+      parsed,
+      parsed.roots()[0],
+      newCorners,
+      vm::slice<3, 3>(rotation, 0, 0) * vm::vec3d{0, 0, 1},
+      bounds);
+    REQUIRE(reopened);
+    CHECK(reopened->positions() == edited.positions());
+    CHECK(reopened->offsets() == edited.offsets());
+    CHECK(reopened->alphas() == edited.alphas());
+  }
+}
+
+TEST_CASE("SourceDisplacement explicitly initializes only absent offset tables")
+{
+  const auto source = displacementFixture();
+  const auto document = VmfDocument::parse(source);
+  const auto original = loadDisplacement(source);
+  REQUIRE(original.canInitializeOffsets());
+  REQUIRE_FALSE(original.canEditOffsets());
+  auto control = original;
+  control.setDistance(2, 2, 24);
+  REQUIRE(document.serialize(control.editsFrom(original)) != source);
+  control.setDistance(2, 2, 16);
+  REQUIRE(document.serialize(control.editsFrom(original)) == source);
+  auto edited = original;
+  CHECK_THROWS(edited.setOffset(2, 2, {1, 2, 3}));
+  CHECK(edited == original);
+  SECTION(
+    "explicit bounded zero table then vector edit and independent alpha initialization")
+  {
+    edited.initializeOffsets();
+    REQUIRE(edited.canEditOffsets());
+    CHECK_FALSE(edited.canInitializeOffsets());
+    CHECK_THROWS(edited.initializeOffsets());
+    CHECK(edited.offsets() == std::vector<vm::vec3d>(25));
+    CHECK(edited.positions() == original.positions());
+    CHECK_THROWS(edited.editsFrom(original));
+    edited.setOffset(2, 2, {1.25, -2.5, 3.75});
+    edited.initializeAlphas();
+    edited.setAlpha(2, 2, 17.5);
+    auto structure = std::vector<VmfStructuralEdit>{};
+    const auto values = edited.editsFrom(original, structure);
+    CHECK(values.empty());
+    REQUIRE(structure.size() == 1); // Both tables share the same native parent.
+    const auto output = document.serialize(values, structure);
+    const auto reopened = loadDisplacement(output);
+    CHECK(reopened.canEditOffsets());
+    CHECK_FALSE(reopened.canInitializeOffsets());
+    CHECK(reopened.offset(2, 2) == vm::vec3d{1.25, -2.5, 3.75});
+    CHECK(reopened.positions() == edited.positions());
+    CHECK(reopened.basePositions() == original.basePositions());
+    CHECK(reopened.alpha(2, 2) == 17.5);
+    CHECK(output.find("future { key \"opaque\" }") != std::string::npos);
+    CHECK(output.find("triangle_tags { row0 \"0 0 0 0 0 0 0 0\" }") != std::string::npos);
+    CHECK(VmfDocument::parse(output).serialize(reopened.editsFrom(reopened)) == output);
+    edited = original;
+    structure.clear();
+    CHECK(document.serialize(edited.editsFrom(original, structure), structure) == source);
+    CHECK(structure.empty());
+  }
+  SECTION("present empty partial and complete tables are not overwritten")
+  {
+    for (const auto rows : {size_t{0}, size_t{1}, size_t{5}})
+    {
+      const auto input = offsetFixture(rows);
+      auto mesh = loadDisplacement(input);
+      const auto before = mesh;
+      CHECK_FALSE(mesh.canInitializeOffsets());
+      CHECK_THROWS(mesh.initializeOffsets());
+      CHECK(mesh == before);
+      CHECK(mesh.canEditOffsets() == (rows == 5));
+      if (rows != 5)
+      {
+        CHECK_THROWS(mesh.setOffset(2, 2, {1, 2, 3}));
+        CHECK(mesh == before);
+      }
+      mesh.setDistance(2, 2, 24);
+      CHECK_FALSE(mesh.editsFrom(before).empty());
+    }
+  }
+  SECTION("maximum bounded grid writes every vector without changing geometry")
+  {
+    const auto input =
+      std::string{"side { dispinfo { power 6 startposition \"[0 0 0]\" } }"};
+    auto mesh = loadDisplacement(input);
+    REQUIRE(mesh.size() == 65);
+    REQUIRE(mesh.canInitializeOffsets());
+    mesh.initializeOffsets();
+    auto structure = std::vector<VmfStructuralEdit>{};
+    const auto values = mesh.editsFrom(loadDisplacement(input), structure);
+    REQUIRE(structure.size() == 1);
+    const auto reopened =
+      loadDisplacement(VmfDocument::parse(input).serialize(values, structure));
+    CHECK(reopened.offsets() == std::vector<vm::vec3d>(65 * 65));
+    CHECK(reopened.positions() == mesh.positions());
+  }
+  SECTION("case-aliased table names preserve loading without granting authoring")
+  {
+    for (const auto& input : std::vector<std::string>{
+           replaceOnce(offsetFixture(), "offsets {", "Offsets {"),
+           replaceOnce(offsetFixture(), "offsets {", "Offsets {} offsets {"),
+           replaceOnce(source, "triangle_tags {", "Offsets scalar triangle_tags {")})
+    {
+      auto mesh = loadDisplacement(input);
+      const auto before = mesh;
+      CHECK_FALSE(mesh.canEditOffsets());
+      CHECK_FALSE(mesh.canInitializeOffsets());
+      CHECK_THROWS(mesh.initializeOffsets());
+      CHECK_THROWS(mesh.setOffset(2, 2, {1, 2, 3}));
+      CHECK(mesh == before);
+      mesh.setDistance(2, 2, 24);
+      CHECK_FALSE(mesh.editsFrom(before).empty());
+    }
+  }
+  SECTION("foreign present bindings and malformed rows remain protected")
+  {
+    edited.initializeOffsets();
+    edited.setOffset(2, 2, {1, 2, 3});
+    auto structure = std::vector<VmfStructuralEdit>{};
+    CHECK_THROWS(edited.editsFrom(loadDisplacement(offsetFixture()), structure));
+    CHECK(structure.empty());
+    CHECK_THROWS(loadDisplacement(replaceOnce(offsetFixture(), "+0 0.00 -0", "nan 0 0")));
+    CHECK_THROWS(loadDisplacement(replaceOnce(offsetFixture(), "\"row1\"", "\"row0\"")));
+  }
+}
 
 TEST_CASE("SourceDisplacement explicitly initializes only absent alpha tables")
 {
@@ -158,6 +409,23 @@ TEST_CASE("SourceDisplacement explicitly initializes only absent alpha tables")
       loadDisplacement(VmfDocument::parse(input).serialize(values, structure));
     CHECK(result.alphas() == std::vector<double>(65 * 65, 0));
     CHECK(result.positions() == mesh.positions());
+  }
+  SECTION("case-aliased alpha tables preserve loading but refuse authoring")
+  {
+    for (const auto& input : std::vector<std::string>{
+           replaceOnce(alphaFixture(), "alphas {", "Alphas {"),
+           replaceOnce(alphaFixture(), "alphas {", "Alphas {} alphas {")})
+    {
+      auto mesh = loadDisplacement(input);
+      const auto before = mesh;
+      CHECK_FALSE(mesh.canInitializeAlphas());
+      CHECK_FALSE(mesh.canEditAlphas());
+      CHECK_THROWS(mesh.initializeAlphas());
+      CHECK_THROWS(mesh.setAlpha(2, 2, 17.5));
+      CHECK(mesh == before);
+      mesh.setDistance(2, 2, 24);
+      CHECK_FALSE(mesh.editsFrom(before).empty());
+    }
   }
   SECTION("foreign present-table provenance cannot become missing-table authority")
   {

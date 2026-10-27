@@ -23,6 +23,9 @@
 
 #include "base/NotifierConnection.h"
 
+#include <array>
+#include <cstddef>
+#include <optional>
 #include <tuple>
 
 class QAbstractButton;
@@ -102,6 +105,21 @@ private:
   QAbstractButton* m_applyDisplacementAlpha = nullptr;
   QAbstractButton* m_initializeDisplacementAlpha = nullptr;
   QLabel* m_displacementAlphaStatus = nullptr;
+  std::array<QDoubleSpinBox*, 3> m_displacementOffset{};
+  QAbstractButton* m_applyDisplacementOffset = nullptr;
+  QAbstractButton* m_initializeDisplacementOffsets = nullptr;
+  QLabel* m_displacementOffsetStatus = nullptr;
+  struct DisplacementOffsetIntent
+  {
+    std::size_t generation;
+    bool initialize;
+    std::size_t row;
+    std::size_t column;
+    std::array<double, 3> value;
+  };
+  std::size_t m_displacementGeneration = 0;
+  bool m_displacementControlsCurrent = false;
+  std::optional<DisplacementOffsetIntent> m_displacementOffsetIntent;
   SignalDelayer* m_updateControlsSignalDelayer = nullptr;
 
   NotifierConnection m_notifierConnection;
@@ -133,6 +151,9 @@ private:
   void colorValueUnset();
   void updateIncrements();
   void updateDisplacementSample();
+  void invalidateDisplacementOffsetIntent();
+  void prepareDisplacementOffset(bool initialize);
+  void applyDisplacementOffset(bool initialize);
 
 private:
   void createGui(AppController& appController);

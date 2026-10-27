@@ -21,7 +21,47 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Scoped LIVE native cameras — A5.30
+## Native displacement XYZ offsets — A5.31
+
+SourceDisplacement owns finite native offsets and original vector-row bindings.
+Complete rows authorize setters; absence is recorded separately from empty/partial
+presence. Explicit zero initialization alone admits an absent table, stays bounded
+at the existing65x65 maximum and is a separate production history boundary.
+Private values/rebuild rollback, provenance/row equality and world bounds protect
+surgery. Vector authoring composes with the existing admitted base frame without
+loosening direction/offset-normal, affine, topology or geometry-ID policies.
+
+Eye/metadata/camera paths are unchanged. Face inspector offset drafts are independent
+of distance/alpha. Synchronous selection/backend notifications invalidate and disable
+new actions before deferred refresh; pressed generation/row/XYZ/button identity
+freeze. Production Map content swaps provide undo/redo/Save As/reopen, not a raw
+entry-index edit. Preview, no selection/plain face, invalid indices/nonfinite or
+out-of-world edits refuse; no-op/refusal retains pending redo and source bytes.
+
+Tests-only actual inspector RED occurs after64 acting legacy assertions: the
+assertion65 fails on the missing offset Apply; consumers compile0. Separate runtime alias
+regressions expose unsafe alpha/offset typed authority for case-variant names.
+Case aliases now preserve import/save and independent distance edits but deny
+initialization/typed authoring. This is NOT general case-insensitive VMF support.
+
+Own initial alpha+offset structural initialization tried two appends at one parent;
+the production emitter correctly refused overlap. Accumulate both tables into one
+append, preserving existing alpha-only output; do not weaken the emitter. Own UI
+test later needed its direct Map_Brushes include; that compile failure is not RED
+feature evidence. Failed raw logs are retained, no test switch or skip.
+
+Offset Model449/3 and actual inspector116/1 pass; all six related model cases total
+1153 assertions. Full Model312/App50 pass. UI63/64 retains the untouched known
+QPreferenceStore Unicode-fixture rename, now observed at its existing379 site;
+A530 isolated evidence is retained, not rerun/re-dated. Five current targets build0
+without compiler diagnostics on nine fingerprints. Fresh production-checker
+corpus38/35+same3 reasons/38, acting generic edit probes38/35/38 and all original
+hashes pass. Direct parent review is not independent/clean-LSP/tidy/human/Hammer.
+Existing renderer/GPU results remain retained A527 boundaries, not new equivalence.
+Arbitrary deformation compiler validity and sculpt/sew/new/power/normal edits are
+not established; owner check remains pending in lextest.
+
+## Retained scoped LIVE native cameras — A5.30
 
 NativeCameras is VmfScene-owned and independent of source-entry/geometry IDs.
 Private owned scope/opaque handles, complete expected state+revision and an
