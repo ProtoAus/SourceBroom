@@ -1,11 +1,48 @@
-# SourceBroom validation — A5.29 direct saved Source tools
+# SourceBroom validation — A5.30 scoped LIVE native cameras
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.29 — direct saved tools without compile or autosave authority
+## A5.30 — scoped LIVE camera records and active-camera persistence
+
+- Actual13-file protected read-only prototype builds0, zero diagnostics; source/
+  fingerprints retained. Runtime scene8/9, history6/7 and RootUI6/7 expose the
+  missing writer/panel after existing entity edit/undo and camera-reader controls
+  act. No compile failure, test toggle or raw-index bypass counts as RED.
+- Final new Model262/10 and LIVE RootUI136/3 assertions pass: pose/record CRUD,
+  absent/-1/selected activation, delete-before-active remapping, explicit clear,
+  pure creation/deletion/recreation, exact lexical no-op/refusal/undo, staged
+  non-consumption, stale/foreign/duplicate/reordered/bad-later requests, scope-preserving
+  move/replay, generated entity ID independence and camera/cordon/root composition.
+  Production history Save As/reopen/repeat save retains original input; refused/
+  no-op calls preserve redo. Preview/version/non-native authoring remains denied.
+- Actual UI freezes pressed scope/row AND field intent and pending-button identity.
+  Stale row/backend refresh and cross-button release cannot retarget a request;
+  invalid drafts/no-op do not write. Eye/heading of the actual perspective view
+  remain unchanged during metadata authoring. Saved Tools remains saved/read-only.
+- Current full Model309/App50 pass. Regular offscreen UI is63/64, NOT64/64: untouched
+  known QPreferenceStore Windows Unicode-fixture rename fails, also isolated.
+  No test skip/suppression or unrelated repair. All new camera UI cases pass.
+  Five actual build targets have zero compiler warning/error lines on17 compiled
+  fingerprints. Direct parent review is not independent or clean-LSP/tidy proof.
+- Fresh current production-checker, system-only PATH: document38/strict35+same3
+  refusal set AND reasons/preview38; actual generic value-edit probes38/35/38.
+  Original38 SHA unchanged. This proves the changed Scene constructor/serializer
+  boundary, not every external camera mutation, Hammer or shader equivalence.
+- Own by-value-vector-accessor compile error was fixed, not counted as runtime RED.
+  Link OOM was environmental commit pressure; only proven current-host auxiliary
+  ownership was stopped, peers/game untouched and flags unchanged. cp1252 capture/
+  console exceptions were corrected at the bytes/ASCII-summary seam; raw actual
+  CTest failure logs retained. No fabricated suite pass or preference fix.
+
+No capture-current-view, viewport motion, projection/FOV or arbitrary unknown camera
+fields; no full Source/branch/Hammer/human/all-layout acceptance. Renderer/GPU are
+retained A5.27 boundaries. Whole-kit/native smoke and pending owner checks remain
+separate evidence; see lextest.md.
+
+## Retained A5.29 — direct saved tools without compile or autosave authority
 
 - Actual tests-only Tools115/116 reaches real rights/discovery/approval before
   failing the absent target selector. Corrected Root18/22 has four missing-action

@@ -5,7 +5,40 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Direct saved-source entry — A5.29
+## LIVE camera records and active choice — A5.30
+
+The Map inspector's **LIVE native cameras** panel authors supported editable
+VMF metadata, including UNSAVED changes. Eye/look are manual XYZ, look an absolute
+target. Apply changes only edited pose fields; Add appends the displayed draft.
+Delete preserves the identity of any retained active record and remaps its native
+ordinal, explicitly clearing the active choice when deleting that record. The
+separate active dropdown/Apply supports absent field, -1, or a retained record.
+Removing the controller is explicit and undoable. Undo/redo, Save As, reopen and
+repeat save use the production model, not a generic raw metadata editor.
+
+Opaque scoped IDs/revisions, immutable expected snapshots, full preflight,
+staged non-consuming allocation and controller-incarnation/replay checks protect
+the operation. No loaded-record reordering, unknown-field guessing, stale/foreign
+IDs, partial/nonfinite/degenerate poses, or excess1024 records. Unsupported,
+repeated or malformed camera controllers stay protected while independent entity
+edits remain possible. No-op/refusal/undo preserve BOM/comments/CRLF and tokens;
+geometry IDs are independent and camera/cordon/generated-root edits compose.
+Pressed intent freezes scope/row AND fields; refresh and cross-button releases
+cannot redirect it. Preview/version/non-native guards still deny live authoring.
+
+No viewport movement/capture or projection/FOV import is added. Saved Source Tools
+remains the saved read-only snapshot, not the live camera source. Save As/reload
+before using its existing eye/view navigation on newly saved camera data.
+
+Model262/live UI136 and full Model309/App50 pass; regular UI63/64 has the untouched
+known Windows QPreferenceStore Unicode rename failure, also isolated. No skip or
+suppression. Five build targets have zero compiler warning/error lines. Fresh
+corpus document38/strict35+same3 reasons/preview38 and edit-probe38/35/38 pass;
+all38 original hashes unchanged. Seventeen fingerprints/direct parent review do
+not establish independent/human/Hammer/full-branch or all-layout acceptance.
+See pending small [owner check](../../lextest.md); keep whole A5.29/A5.25 recovery.
+
+## Retained direct saved-source entry — A5.29
 
 **Run -> Source Tools (Saved VMF)...** opens the saved native snapshot directly,
 including on explicit read-only compatibility previews. It does not autosave
@@ -196,8 +229,10 @@ The title/status/viewport persistently identify the mode and omission count.
 Labelled orange points are only source-plane samples; unlocated omissions are
 counted and at most 128 markers draw. Camera movement and selection/undo/redo
 are allowed; native authoring, entity drops, normal save/overwrite, export and
-compile/play are not. The saved-file build/metadata/package workflow below is
-for normally editable documents, not an escape from preview restrictions.
+compile/play are not. A5.29's direct saved Source Tools entry permits bounded
+snapshot inspection/navigation and the independently guarded explicit package
+workflow; it does not make the live preview editable or enable build/launch.
+The Compile route remains for normally editable documents.
 
 **Save unchanged native copy…** is a separate new-file operation. It copies the
 loaded original bytes, refuses existing destinations or any native delta, and
@@ -463,8 +498,9 @@ original native property; this is not validation of every model's skin table.
 
 ## Read-only editor metadata and camera navigation
 
-Save the VMF, then open **Run -> Compile** and choose
-**Native metadata / Custom package…**. These tools read a snapshot of the
+Open **Run -> Source Tools (Saved VMF)...** directly (including read-only preview),
+or use the older editable-only Compile dialog's **Native metadata / Custom
+package…** entry. These tools read a snapshot of the
 **saved file**, not unsaved editor changes. Reload explicitly after saving again.
 
 The metadata tab interprets groups, nested visgroups, object membership, hidden
@@ -476,7 +512,8 @@ These inspector fields remain **read-only**. A5.15 separately enables ordinary
 native grouping through the normal map actions and guarded native bindings, not
 by making this snapshot authoritative or treating group IDs as TrenchBroom parent
 bindings. A5.16 separately enables ordinary live cordons and A5.21 enables the
-bounded LIVE manual-visgroup interface in the map inspector; this saved inspector
+bounded LIVE manual-visgroup interface in the map inspector. A5.30 separately
+adds scoped LIVE camera record/active-choice authoring there; this saved inspector
 remains read-only. It does not grant wrapper/automatic visibility authoring.
 SourceBroom does not apply cordon clipping itself; native metadata
 is passed to external tools whose actual region behavior must be tested.

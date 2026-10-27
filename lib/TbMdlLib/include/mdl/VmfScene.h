@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include "mdl/NativeCameras.h"
 #include "mdl/NativeCordons.h"
 #include "mdl/NativeVisgroups.h"
 #include "mdl/NativeVisibility.h"
@@ -52,6 +53,7 @@ class VmfScene
 {
 private:
   VmfDocument m_document;
+  NativeCameras m_cameras;
   NativeCordons m_cordons;
   NativeVisgroups m_visgroups;
   std::shared_ptr<const void> m_lifecycleScope = std::make_shared<int>(0);
@@ -186,6 +188,12 @@ public:
   // Complete projected visibility invalidation closure; no geometry changes.
   std::vector<Node*> applyVisgroupChange(
     PreparedNativeVisgroupChange& change, NativeVisgroupDirection direction);
+
+  NativeCameraSnapshot cameras() const;
+  std::optional<PreparedNativeCameraChange> prepareCameraChange(
+    const NativeCameraRequest& request) const;
+  void applyCameraChange(
+    PreparedNativeCameraChange& change, NativeCameraDirection direction);
 
   NativeCordonSnapshot cordons() const;
   std::optional<PreparedNativeCordonChange> prepareCordonChange(

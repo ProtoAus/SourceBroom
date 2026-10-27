@@ -4,6 +4,23 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.30 LIVE native cameras — pending small owner check
+
+Use whole A5.30 on a COPY; keep whole A5.29 and owner-confirmed A5.25 recovery.
+No A5.30 owner observation received. New Model262/live UI136 and Model309/App50,
+fresh corpus controls and UI63/64 (known unrelated Windows preference rename)
+are not human or matching-Hammer acceptance.
+
+- [ ] On a copied editable VMF with a valid camera, open the Map inspector's LIVE
+  native cameras panel below map properties. Change one eye coordinate, Apply,
+  then Undo: the record should return and the current viewport should not move.
+- [ ] Optional separate check: Add from displayed eye/look, choose the stored
+  active record, Save As a NEW copy and reopen. Compare native camera records /
+  active selection in matching Hammer, without overwriting the original.
+
+Pending only. This is manual XYZ metadata authoring, not capture-current-view,
+projection/FOV import, full-branch/all-layout or measured performance acceptance.
+
 ## A5.29 direct saved Source tools — pending small owner check
 
 Use whole A5.29 on a COPY; keep whole A5.28 and owner-confirmed A5.25 recovery.

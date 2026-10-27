@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.29 — direct saved Source tools
+# Try Windows SourceBroom A5.30 — LIVE native camera records
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,42 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.29: inspect saved native tools without opening Compile
+## A5.30: edit live camera records, not just the saved snapshot
+
+On a COPY of an editable native VMF, open the Map inspector and scroll beneath
+map properties to **LIVE native cameras**. Select a record, edit eye/look XYZ
+(look is an ABSOLUTE target), and Apply edited eye/look. Add uses the displayed
+draft. Delete removes the selected camera; deleting the active one explicitly
+clears the stored choice. Deleting an earlier record keeps the active record's
+identity and remaps its native ordinal. The separate active dropdown supports
+Not stored, No active camera (-1), or a record; its Apply button is explicit.
+Remove camera controller removes its supported records/field, with undo.
+
+These are production-model undo/redo and Save As edits to UNSAVED live metadata,
+not raw entry-index writes. No-op/refusal/undo preserve original native bytes;
+unknown/repeated/malformed camera controllers remain protected, not flattened.
+Foreign/stale requests, bad poses, reordering, excessive records, read-only preview
+and unsupported versions refuse before mutation. Existing geometry/native-ID
+allocation, compiler/launch gates and saved Source Tools authority stay unchanged.
+
+This does NOT capture the current view, move the viewport, import projection/FOV,
+author arbitrary unknown fields or prove full Hammer state/branch parity. The
+**Run -> Source Tools (Saved VMF)...** dialog still reads only the SAVED file;
+after Save As, reopen/reload that snapshot to navigate newly saved cameras.
+
+Model262/live UI136 assertions, full Model309/App50 and fresh corpus38/35+same3/38
+pass. Full UI63/64 retains the untouched known Windows preference Unicode-rename
+failure (also isolated); no skip/suppression or64/64 claim. All38 original hashes
+stay unchanged; five actual build targets have zero compiler warning/error lines.
+Seventeen fingerprints/direct parent review are not independent/Hammer or human
+acceptance. Keep whole A5.29 and owner-confirmed A5.25 recovery.
+
+**Small optional owner check (pending):** on a copy with a valid camera, change
+one eye coordinate here, Apply, then Undo. The viewport should not move and the
+record should return. Save As/reopen or matching-Hammer validation is a separate
+optional check; never overwrite the original to test it. See [lextest](../../lextest.md).
+
+## Retained A5.29: inspect saved native tools without opening Compile
 
 Open a saved native VMF and choose **Run -> Source Tools (Saved VMF)...**. This
 works in normal editing and an explicitly chosen read-only compatibility preview.

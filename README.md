@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.29 direct saved Source tools, including read-only previews:
+**Status:** Windows A5.30 scoped LIVE native camera authoring:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,25 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.29 adds **Run -> Source Tools (Saved VMF)...**, independent of Compile, for
+A5.30 adds a **LIVE native cameras** panel beneath map properties in the Map
+inspector. On an editable native VMF/copy it edits eye/look XYZ, appends/deletes
+records, sets/removes the stored active-camera field and removes a supported
+controller through normal undo/redo and Save As. Look is an absolute target, not
+a direction. Deleting before the active record remaps its ordinal; deleting the
+active record explicitly clears it. This is not capture-current-view, viewport
+navigation or projection/FOV import. The saved Source Tools dialog stays read-only.
+
+Actual five-target builds have zero compiler warning/error lines. New Model262
+and live UI136 assertions pass; full Model309 and App50 pass. Full UI is63/64:
+the untouched known Windows QPreferenceStore Unicode-fixture rename also fails
+isolated, without a skip or suppression. Fresh production-checker corpus controls
+are38 document /35 strict+same3 reasons /38 preview, with actual value-edit probes
+and all38 original hashes unchanged. Seventeen compiled fingerprints and direct
+parent review are not independent/Hammer/human or all-layout acceptance. Use the
+whole A5.30 kit on copies; retain whole A5.29 and owner-confirmed A5.25 recovery.
+Full Source support remains in progress.
+
+Retained A5.29 adds **Run -> Source Tools (Saved VMF)...**, independent of Compile, for
 saved native VMFs including explicitly read-only previews. It inspects the saved
 snapshot without saving current drafts, creating a builder or enabling Compile /
 Launch. Reopening the entry reuses that path's dialog and review state. New unsaved
@@ -47,8 +65,8 @@ and non-native maps are refused. The custom-package tab now exposes its local
 Generic/unknown, CSS20 or Strata25 optional-BSP contract; changing it invalidates
 plan approval, not global build settings. Existing rights/budget/header guards stay.
 
-Actual product/UI builds have zero compiler warning/error lines. Tools132 and
-native Qt menu-to-dialog-to-root camera75 assertions pass; the regular offscreen
+Historical A5.29 product/UI builds have zero compiler warning/error lines. Its
+Tools132 and native Qt menu-to-dialog-to-root camera75 pass; the then offscreen
 UI suite is61/61. Eight compiled code fingerprints and direct parent review do
 not establish independent/Hammer, human, all-layout or performance acceptance.
 App50 is retained A5.28 evidence; Model299/Render28/GL21/GPU2693 are retained

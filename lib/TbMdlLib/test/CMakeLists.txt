@@ -5,6 +5,8 @@ if(TARGET libzstd_static)
 endif()
 
 target_sources(TbMdlLibTest PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeCameras.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Map_NativeCameras.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeCordons.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeVisgroups.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Map_NativeVisgroups.cpp

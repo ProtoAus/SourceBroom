@@ -21,7 +21,55 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Direct saved SourceTools access — A5.29
+## Scoped LIVE native cameras — A5.30
+
+NativeCameras is VmfScene-owned and independent of source-entry/geometry IDs.
+Private owned scope/opaque handles, complete expected state+revision and an
+internal controller incarnation guard requests/replay. Preflight is pure and
+bounded: new handles stage locally, first publication owns the serial interval,
+undo never reuses it, revision stays monotonic. Strong activation distinguishes
+absent field, -1 and a retained camera handle. Selecting a newly created record
+uses its published handle in a later command. No reordering; append only, with
+explicit clear/retarget for a removed active record and ordinal remapping when
+an earlier record is deleted. No-op/refusal/undo preserve exact source bytes.
+
+Known controller/position/look shapes alone author; unknown/repeated/case-variant/
+partial/malformed data protects all camera edits but not independent entity edits.
+Reuse existing SourceEditorCamera::navigable admission (including finite squared
+norm); do not silently claim all mathematical extreme/tiny vectors are supported.
+Classic-locale max_digits10 fields, bounded records/scalars and pure value/tree
+edits compose with cordons/generated roots without consuming geometry IDs.
+Scene preview/version gates and normal production Map command/history/save remain.
+
+The LIVE Map inspector freezes pressed scope/row/field intent, checks generation
+on release and binds pending intent to its specific button. UI drafts do not edit
+metadata until an explicit action. Preview/unsupported/non-native modes deny all
+buttons; saved Source Tools stays saved/read-only. No automatic capture, viewport
+motion or projection/FOV change. Existing unchanged bytes survive Save As/reopen/
+repeat save; no-op/refusal preserves pending redo.
+
+Actual protected read-only prototype consumers build0 with no diagnostics. Scene
+8/9, production history6/7 and Root UI6/7 runtime RED follow acting legacy entity/
+reader controls. The missing writer/panel is not a compile failure or test toggle;
+prototype source/fingerprints retained. Final new Model262/live UI136 pass;
+full Model309/App50 pass and UI63/64 retains the known untouched QPreferenceStore
+Windows Unicode-fixture rename failure, also isolated. No skip or unrelated fix.
+Actual five-target build0 has zero compiler warning/error lines. Fresh current
+production checker document38/strict35+same3 reasons/preview38 has acting generic
+value-edit probes38/35/38; all original SHA unchanged. This is not external-camera
+CRUD/Hammer acceptance. Renderer/GPU evidence remains retained A5.27, not re-dated.
+
+Own UI parser initially extracted into by-value vm.x/y/z; indexed references fix
+that compile error. A later linker OOM was system commit pressure: only a freshly
+verified current-host child auxiliary clangd was stopped, never peer/game/owner
+processes, with no compiler flag weakening. For Windows orchestration capture
+subprocess logs as BYTES and ASCII-escape console summaries: default cp1252 can
+fail both stdout decoding and later diagnostic printing. Preserve raw CTest logs;
+neither wrapper exception counts as feature RED or erases a real test failure.
+Seventeen compiled fingerprints and complete direct parent review are not clean
+LSP/tidy, independent, all-layout or new human/Hammer acceptance.
+
+## Retained direct saved SourceTools access — A5.29
 
 The Run menu's Source Tools (Saved VMF) entry requires a persistent native VMF,
 not editable-scene authority. Controller repeats the guard and NEVER calls save,

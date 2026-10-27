@@ -37,6 +37,7 @@
 #include "ui/LayerEditor.h"
 #include "ui/MapDocument.h"
 #include "ui/ModEditor.h"
+#include "ui/NativeCameraEditor.h"
 #include "ui/NativeCordonEditor.h"
 #include "ui/NativeVisgroupEditor.h"
 #include "ui/QStyleUtils.h"
@@ -111,6 +112,7 @@ void MapInspector::createGui(MapDocument& document)
   sizer->addWidget(createLayerEditor(document), 1);
   sizer->addWidget(new BorderLine{}, 0);
   sizer->addWidget(m_mapPropertiesEditor, 0);
+  sizer->addWidget(new NativeCameraEditor{document}, 0);
   sizer->addWidget(new NativeCordonEditor{document}, 0);
   sizer->addWidget(new NativeVisgroupEditor{document}, 0);
   sizer->addWidget(new BorderLine{}, 0);

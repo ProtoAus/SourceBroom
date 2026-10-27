@@ -23,6 +23,7 @@
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QInputDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
@@ -75,9 +76,11 @@
 #include "mdl/Map_Assets.h"
 #include "mdl/Map_Entities.h"
 #include "mdl/Map_Groups.h"
+#include "mdl/Map_NativeCameras.h"
 #include "mdl/Map_NativeVisgroups.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
+#include "mdl/SourceEditorMetadata.h"
 #include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
 #include "render/BrushRendererArrays.h"
@@ -132,6 +135,267 @@ public:
   }
   ~NativeGroupSettingsScope() { QSettings::setDefaultFormat(m_previous); }
 };
+
+TEST_CASE("NativeCamera UI actual MapWindow live authoring and history")
+{
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  const auto source = std::string{
+    "world { id 1 classname worldspawn }\r\n"
+    "cameras { activecamera 0 camera { position \"[1 2 3]\" look \"[1 3 3]\" } }\r\n"};
+  const auto path = env.dir() / "camera-live.vmf";
+  {
+    auto stream = std::ofstream{path, std::ios::binary};
+    stream << source;
+    REQUIRE(stream);
+  }
+  auto loaded = MapDocument::loadDocument(
+    app.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192},
+    path,
+    app.taskManager(),
+    app.glManager().resourceManager());
+  REQUIRE(loaded.is_success());
+  auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+  auto& map = window.document().map();
+  REQUIRE(
+    mdl::SourceEditorMetadata::read(map.vmfScene()->document()).cameras.size() == 1);
+  REQUIRE(mdl::setEntityProperty(map, "camera_ui_control", "acted"));
+  CHECK(
+    map.vmfScene()->serialize(map.worldNode()).find("camera_ui_control")
+    != std::string::npos);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  auto* views = window.findChild<SwitchableMapViewContainer*>();
+  REQUIRE(views);
+  const auto viewPositionBefore = views->perspectiveCamera().position();
+  const auto viewDirectionBefore = views->perspectiveCamera().direction();
+  auto* panel = window.findChild<QWidget*>("nativeCameraEditor");
+  REQUIRE(panel);
+  auto* eye = panel->findChild<QLineEdit*>("nativeCameraEye");
+  auto* apply = panel->findChild<QPushButton*>("nativeCameraApply");
+  REQUIRE(eye);
+  REQUIRE(apply);
+  REQUIRE(apply->isEnabled());
+  eye->setText("10 20 30");
+  eye->setModified(true);
+  apply->click();
+  CHECK(map.vmfScene()->cameras().records[0].eye == vm::vec3d{10, 20, 30});
+  CHECK(map.modified());
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+  map.redoCommand();
+  CHECK(map.vmfScene()->cameras().records[0].eye == vm::vec3d{10, 20, 30});
+  auto* records = panel->findChild<QComboBox*>("nativeCameraRecords");
+  auto* active = panel->findChild<QComboBox*>("nativeCameraActive");
+  auto* activeApply = panel->findChild<QPushButton*>("nativeCameraApplyActive");
+  auto* add = panel->findChild<QPushButton*>("nativeCameraAdd");
+  auto* remove = panel->findChild<QPushButton*>("nativeCameraDelete");
+  auto* clear = panel->findChild<QPushButton*>("nativeCameraRemove");
+  REQUIRE(records);
+  REQUIRE(active);
+  REQUIRE(activeApply);
+  REQUIRE(add);
+  REQUIRE(remove);
+  REQUIRE(clear);
+  active->setCurrentIndex(0);
+  activeApply->click();
+  CHECK(map.vmfScene()->cameras().active.kind == mdl::NativeCameraActiveKind::Absent);
+  active->setCurrentIndex(1);
+  activeApply->click();
+  CHECK(map.vmfScene()->cameras().active.kind == mdl::NativeCameraActiveKind::None);
+  add->click();
+  REQUIRE(records->count() == 2);
+  const auto retained = map.vmfScene()->cameras().records[1].id;
+  active->setCurrentIndex(3);
+  activeApply->click();
+  CHECK(map.vmfScene()->cameras().active.camera == retained);
+  records->setCurrentIndex(0);
+  remove->click();
+  REQUIRE(records->count() == 1);
+  CHECK(map.vmfScene()->cameras().active.camera == retained);
+  CHECK(map.vmfScene()->cameras().records[0].id == retained);
+  clear->click();
+  CHECK_FALSE(map.vmfScene()->cameras().present);
+  map.undoCommand();
+  CHECK(map.vmfScene()->cameras().present);
+  REQUIRE(map.vmfScene()->cameras().records.size() == 1);
+  CHECK(map.vmfScene()->cameras().records[0].id == retained);
+  CHECK(views->perspectiveCamera().position() == viewPositionBefore);
+  CHECK(views->perspectiveCamera().direction() == viewDirectionBefore);
+  auto original = std::ifstream{path, std::ios::binary};
+  CHECK(
+    std::string{
+      std::istreambuf_iterator<char>{original}, std::istreambuf_iterator<char>{}}
+    == source);
+}
+
+TEST_CASE("NativeCamera UI freezes field intent and rejects stale row releases")
+{
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  const auto source = std::string{
+    "world { id 1 classname worldspawn }\n"
+    "cameras { activecamera 0 camera { position \"[1 2 3]\" look \"[1 3 3]\" }"
+    " camera { position \"[4 5 6]\" look \"[4 6 6]\" } }\n"};
+  const auto path = env.dir() / "camera-stale.vmf";
+  {
+    auto stream = std::ofstream{path, std::ios::binary};
+    stream << source;
+    REQUIRE(stream);
+  }
+  auto loaded = MapDocument::loadDocument(
+    app.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192},
+    path,
+    app.taskManager(),
+    app.glManager().resourceManager());
+  REQUIRE(loaded.is_success());
+  auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+  auto& map = window.document().map();
+  auto* panel = window.findChild<QWidget*>("nativeCameraEditor");
+  REQUIRE(panel);
+  auto* records = panel->findChild<QComboBox*>("nativeCameraRecords");
+  auto* eye = panel->findChild<QLineEdit*>("nativeCameraEye");
+  auto* apply = panel->findChild<QPushButton*>("nativeCameraApply");
+  auto* add = panel->findChild<QPushButton*>("nativeCameraAdd");
+  auto* status = panel->findChild<QLabel*>("nativeCameraStatus");
+  REQUIRE(records);
+  REQUIRE(eye);
+  REQUIRE(apply);
+  REQUIRE(add);
+  REQUIRE(status);
+  const auto press = [](QPushButton* button) {
+    REQUIRE(QMetaObject::invokeMethod(button, "pressed", Qt::DirectConnection));
+  };
+  const auto release = [](QPushButton* button) {
+    REQUIRE(
+      QMetaObject::invokeMethod(
+        button, "clicked", Qt::DirectConnection, Q_ARG(bool, false)));
+  };
+  eye->setText("50 60 70");
+  eye->setModified(true);
+  press(apply);
+  eye->setText("80 90 100");
+  eye->setModified(true);
+  release(apply);
+  CHECK(map.vmfScene()->cameras().records[0].eye == vm::vec3d{50, 60, 70});
+  eye->setText("11 12 13");
+  eye->setModified(true);
+  press(apply);
+  const auto count = map.modificationCount();
+  records->setCurrentIndex(1);
+  release(apply);
+  CHECK(map.modificationCount() == count);
+  CHECK(status->text().contains("Stale"));
+  CHECK(map.vmfScene()->cameras().records[1].eye == vm::vec3d{4, 5, 6});
+  records->setCurrentIndex(0);
+  eye->setText("14 15 16");
+  eye->setModified(true);
+  press(apply);
+  auto changed = mdl::NativeCameraRequest{mdl::nativeCameras(map)};
+  changed.records[1].look = {7, 8, 9};
+  REQUIRE(
+    mdl::applyNativeCameras(map, changed).status
+    == mdl::NativeCameraApplyStatus::Changed);
+  const auto after = map.modificationCount();
+  release(apply);
+  CHECK(map.modificationCount() == after);
+  CHECK(status->text().contains("Stale"));
+  CHECK(map.vmfScene()->cameras().records[0].eye == vm::vec3d{50, 60, 70});
+  eye->setText("20 30 40");
+  eye->setModified(true);
+  press(apply);
+  press(add);
+  release(apply);
+  CHECK(map.modificationCount() == after);
+  release(add);
+  CHECK(map.vmfScene()->cameras().records.size() == 3);
+  CHECK(map.modificationCount() == after + 1);
+  const auto bytes = map.vmfScene()->serialize(map.worldNode());
+  const auto unchanged = map.modificationCount();
+  eye->setText("invalid");
+  eye->setModified(true);
+  apply->click();
+  CHECK(map.modificationCount() == unchanged);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == bytes);
+}
+TEST_CASE("NativeCamera UI readonly unsupported and nonnative modes deny authoring")
+{
+  const auto kind = GENERATE(0, 1, 2, 3);
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  auto source = std::string{
+    "world { id 1 classname worldspawn }\n"
+    "cameras { activecamera 0 camera { position \"[1 2 3]\" look \"[1 3 3]\" } }\n"};
+  if (kind == 1)
+  {
+    source = "versioninfo { formatversion 999 }\n" + source;
+  }
+  if (kind == 2)
+  {
+    source += "cameras {}\n";
+  }
+  if (kind == 3)
+  {
+    source = "{\n\"classname\" \"worldspawn\"\n}\n";
+  }
+  const auto path = env.dir() / (kind == 3 ? "other.map" : "restricted.vmf");
+  {
+    auto stream = std::ofstream{path, std::ios::binary};
+    stream << source;
+    REQUIRE(stream);
+  }
+  auto loaded = MapDocument::loadDocument(
+    app.environmentConfig(),
+    mdl::QuakeGameInfo,
+    kind == 3 ? mdl::MapFormat::Standard : mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192},
+    path,
+    app.taskManager(),
+    app.glManager().resourceManager(),
+    kind == 0);
+  REQUIRE(loaded.is_success());
+  auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+  auto& map = window.document().map();
+  auto* panel = window.findChild<QWidget*>("nativeCameraEditor");
+  REQUIRE(panel);
+  if (kind == 3)
+  {
+    CHECK(panel->isHidden());
+  }
+  for (const auto* name :
+       {"nativeCameraAdd",
+        "nativeCameraApply",
+        "nativeCameraDelete",
+        "nativeCameraApplyActive",
+        "nativeCameraRemove"})
+  {
+    auto* button = panel->findChild<QPushButton*>(name);
+    REQUIRE(button);
+    CHECK_FALSE(button->isEnabled());
+    button->click();
+  }
+  CHECK_FALSE(map.modified());
+  CHECK_FALSE(map.undoCommandName());
+  if (kind != 3)
+  {
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == source);
+    auto* inspect = window.findAction("Menu/Run/Source Tools...");
+    REQUIRE(inspect);
+    CHECK(inspect->isEnabled());
+  }
+}
 
 TEST_CASE("Source tools direct saved action is safe for read-only and unsaved maps")
 {

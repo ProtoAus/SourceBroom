@@ -1479,6 +1479,7 @@ void VmfScene::registerGroupChanges(
 
 VmfScene::VmfScene(VmfDocument document)
   : m_document{std::move(document)}
+  , m_cameras{m_document}
   , m_cordons{m_document}
   , m_visgroups{m_document}
   , m_nextBinding{m_document.entries().size() + 1}
@@ -2260,6 +2261,35 @@ std::vector<Node*> VmfScene::applyVisgroupChange(
     }
   }
   return closure;
+}
+
+NativeCameraSnapshot VmfScene::cameras() const
+{
+  auto snapshot = m_cameras.snapshot();
+  try
+  {
+    requireEditing();
+    requireEditableVersion(m_document);
+  }
+  catch (const std::invalid_argument& e)
+  {
+    snapshot.refusalReason = e.what();
+  }
+  return snapshot;
+}
+std::optional<PreparedNativeCameraChange> VmfScene::prepareCameraChange(
+  const NativeCameraRequest& request) const
+{
+  requireEditing();
+  requireEditableVersion(m_document);
+  return m_cameras.prepare(request);
+}
+void VmfScene::applyCameraChange(
+  PreparedNativeCameraChange& change, NativeCameraDirection direction)
+{
+  requireEditing();
+  requireEditableVersion(m_document);
+  m_cameras.apply(change, direction);
 }
 
 NativeCordonSnapshot VmfScene::cordons() const
@@ -4927,6 +4957,7 @@ std::string VmfScene::serialize(const WorldNode& world) const
   }
   m_visgroups.emitTreeEdits(d, edits, structural, roots);
   m_cordons.emitEdits(edits, structural, roots);
+  m_cameras.emitEdits(edits, structural, roots);
   if (!roots.empty())
   {
     structural.push_back(

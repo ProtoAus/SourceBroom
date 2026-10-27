@@ -33,7 +33,16 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.29 candidate:** direct saved native Source Tools entry, including explicit
+- **A5.30 candidate:** scoped LIVE native camera eye/look/record CRUD and stored
+  active choice, production undo/redo/Save As, not generic raw-entry writes.
+  Strong IDs/revisions/staged replay and protected unknown shapes; saved Tools
+  remains saved/read-only. No viewport capture/motion or projection/FOV import.
+  New Model262/live UI136, full Model309/App50 and fresh corpus38/35+same3/38 pass;
+  original38 SHA unchanged. UI63/64 keeps the untouched known Windows preference
+  Unicode-rename failure, also isolated; no skip/suppression. Actual five-target
+  builds0 new warnings,17 fingerprints and direct parent review, not independent/
+  Hammer/human/all-layout or full Source acceptance. Keep whole A5.29/A5.25 recovery.
+- **Retained A5.29 candidate:** direct saved native Source Tools entry, including explicit
   read-only previews, without autosaving current drafts or creating/enabling a
   compiler/launcher. New/non-native documents remain refused; repeated entry
   preserves the same-path dialog/review. Local optional-BSP target changes clear
@@ -381,8 +390,11 @@ ordinary cordon authoring in map properties. A5.21 separately adds manual-visgro
 hierarchy/direct membership and explicit manual visibility intent, without
 wrapper/automatic flag authoring, automatic classification or a reconstructed
 Hammer checkbox. A5.22 separately adds explicit own-record visgroup RGB only,
-not member editor.color, object tint or color propagation. The saved-file inspector is still read-only and
-a camera action moves the eye only.
+not member editor.color, object tint or color propagation. A5.30 adds scoped
+LIVE camera record/active-choice authoring separately. The saved-file inspector
+is still read-only; its distinct eye and A5.28 view-navigation actions preserve
+or apply look direction respectively, without projection/FOV import. A5.29 makes
+that saved inspection reachable directly on read-only previews, not editable.
 Custom dependency discovery is incomplete and writes an explicitly reviewed
 new distribution ZIP, not a BSP pak lump. Generic Source remains configurable
 without certifying arbitrary branches. [Tool limits](SOURCE_TOOLS.md) and
