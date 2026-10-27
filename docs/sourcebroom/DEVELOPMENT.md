@@ -21,7 +21,33 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Native displacement XYZ offsets — A5.31
+## Active3D camera draft capture — A5.32
+
+UI-only NativeCameraCapture carries owned eye/look values, no native IDs/scope.
+The owning MapWindow uses currentMapViewBase's existing current/fallback policy,
+requires perspective projection and converts eye/direction to double before a
+64-unit absolute target addition. Inspector/MapInspector forward the optional
+provider after QWidget parent, preserving current constructor call forms.
+
+NativeCameraEditor reads only into draft/modified-field flags; no native dispatch,
+viewport movement or active-camera change. Existing pure navigable admission and
+row-revision checks reject invalid/stale provider results; press/read cancels old
+pending write intent. Explicit Add/Apply retains existing scoped requests/history.
+Absent-provider, 2D and guarded modes refuse without replacing fields. No FOV/roll import.
+
+Tests-only Root UI RED follows35 acting camera/history/view/input assertions:
+assertion36 fails on missing capture. Consumer build0, not a compile-failure RED.
+Final native-camera UI175/3, full UI64/App50 pass. Actual Qt focus-route simulation
+checks owned3D and2D providers, explicit Apply/Undo, draft-only/count/redo/view
+preservation, pending-write cancellation and invalid/no-provider/guarded modes.
+This is not a human focus/appearance or all-layout check. The preference rename
+passed this run; its measured intermittent failure remains open, no fix claimed.
+Nine compiled UI-only fingerprints, changed-range format and direct parent review
+are not independent/clean-LSP/tidy/human/Hammer. Core reader/serializer, shader and
+flags unchanged: retain A531 Model312/corpus38/35+same3/38 and A527 GPU boundaries,
+not re-dated. Owner check pending in lextest; full Source support continues.
+
+## Retained native displacement XYZ offsets — A5.31
 
 SourceDisplacement owns finite native offsets and original vector-row bindings.
 Complete rows authorize setters; absence is recorded separately from empty/partial

@@ -15,6 +15,7 @@
 #include "mdl/Map.h"
 #include "mdl/MapFormat.h"
 #include "mdl/Map_NativeCameras.h"
+#include "mdl/SourceEditorMetadata.h"
 #include "mdl/WorldNode.h"
 #include "ui/MapDocument.h"
 
@@ -46,15 +47,18 @@ std::optional<vm::vec3d> parseVector(const QString& text)
   return input.eof() ? std::optional<vm::vec3d>{point} : std::nullopt;
 }
 } // namespace
-NativeCameraEditor::NativeCameraEditor(MapDocument& document, QWidget* parent)
+NativeCameraEditor::NativeCameraEditor(
+  MapDocument& document, QWidget* parent, NativeCameraCapture capture)
   : QWidget{parent}
   , m_document{document}
+  , m_capture{std::move(capture)}
 {
   setObjectName("nativeCameraEditor");
   auto* layout = new QVBoxLayout{this};
   auto* warning = new QLabel{tr(
-    "LIVE native cameras (including UNSAVED changes). Eye/look XYZ authoring only; does "
-    "not move this viewport or capture/import projection or FOV.")};
+    "LIVE native cameras (including UNSAVED changes). Read the active 3D view into "
+    "the eye/look draft, then explicitly Add/Apply. No viewport movement or "
+    "projection/FOV import.")};
   warning->setWordWrap(true);
   layout->addWidget(warning);
   auto* form = new QFormLayout{};
@@ -77,6 +81,7 @@ NativeCameraEditor::NativeCameraEditor(MapDocument& document, QWidget* parent)
     layout->addWidget(result);
     return result;
   };
+  m_captureView = button("nativeCameraCapture", tr("Read current 3D view into draft"));
   m_add = button("nativeCameraAdd", tr("Add camera from displayed eye/look"));
   m_applyPose =
     button("nativeCameraApply", tr("Apply edited eye/look to selected camera"));
@@ -87,6 +92,36 @@ NativeCameraEditor::NativeCameraEditor(MapDocument& document, QWidget* parent)
   m_status->setObjectName("nativeCameraStatus");
   m_status->setWordWrap(true);
   layout->addWidget(m_status);
+  connect(m_captureView, &QPushButton::pressed, this, [this] {
+    m_pendingAction = {};
+    m_pendingButton = nullptr;
+  });
+  connect(m_captureView, &QPushButton::clicked, this, [this] {
+    m_pendingAction = {};
+    m_pendingButton = nullptr;
+    if (!m_capture || !m_snapshot.refusalReason.empty())
+    {
+      return;
+    }
+    const auto revision = m_rowRevision;
+    const auto draft = m_capture();
+    if (revision != m_rowRevision)
+    {
+      m_status->setText(tr("Camera state changed; review current fields and try again"));
+      return;
+    }
+    if (!draft || !mdl::SourceEditorCamera{0, draft->eye, draft->look}.navigable())
+    {
+      m_status->setText(tr("Activate a valid 3D viewport, then read its view again"));
+      return;
+    }
+    m_eye->setText(vectorText(draft->eye));
+    m_look->setText(vectorText(draft->look));
+    m_eye->setModified(true);
+    m_look->setModified(true);
+    m_status->setText(
+      tr("Eye/look draft only. Explicitly Add or Apply to write a camera."));
+  });
   connect(m_records, &QComboBox::currentIndexChanged, this, [this] { showRow(); });
   connect(m_active, &QComboBox::currentIndexChanged, this, [this](int index) {
     m_applyActive->setEnabled(m_snapshot.refusalReason.empty() && index >= 0);
@@ -142,6 +177,7 @@ void NativeCameraEditor::showRow()
   m_eye->setEnabled(available);
   m_look->setEnabled(available);
   m_active->setEnabled(available);
+  m_captureView->setEnabled(available && bool(m_capture));
   m_add->setEnabled(
     available && snapshot.records.size() < mdl::NativeCameras::MaxRecords);
   m_applyPose->setEnabled(available && valid);

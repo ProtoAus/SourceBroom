@@ -50,6 +50,7 @@
 #include <fmt/ostream.h>
 
 #include <optional>
+#include <utility>
 
 namespace tb::ui
 {
@@ -88,10 +89,11 @@ QString formatVec(const std::optional<vm::bbox3d>& bbox, const bool max)
 
 // MapInspector
 
-MapInspector::MapInspector(MapDocument& document, QWidget* parent)
+MapInspector::MapInspector(
+  MapDocument& document, QWidget* parent, NativeCameraCapture capture)
   : TabBookPage{parent}
 {
-  createGui(document);
+  createGui(document, std::move(capture));
 }
 
 MapInspector::~MapInspector()
@@ -100,7 +102,7 @@ MapInspector::~MapInspector()
   saveWidgetState(m_modEditor);
 }
 
-void MapInspector::createGui(MapDocument& document)
+void MapInspector::createGui(MapDocument& document, NativeCameraCapture capture)
 {
   m_mapPropertiesEditor = createMapPropertiesEditor(document);
   m_modEditor = createModEditor(document);
@@ -112,7 +114,7 @@ void MapInspector::createGui(MapDocument& document)
   sizer->addWidget(createLayerEditor(document), 1);
   sizer->addWidget(new BorderLine{}, 0);
   sizer->addWidget(m_mapPropertiesEditor, 0);
-  sizer->addWidget(new NativeCameraEditor{document}, 0);
+  sizer->addWidget(new NativeCameraEditor{document, nullptr, std::move(capture)}, 0);
   sizer->addWidget(new NativeCordonEditor{document}, 0);
   sizer->addWidget(new NativeVisgroupEditor{document}, 0);
   sizer->addWidget(new BorderLine{}, 0);

@@ -1,11 +1,30 @@
-# SourceBroom validation — A5.31 native displacement XYZ offsets
+# SourceBroom validation — A5.32 active3D camera draft capture
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.31 — independent per-vertex XYZ offsets
+## A5.32 — read-only capture into a live camera draft
+
+- Tests-only Root UI build0 and missing-capture runtime RED after35 acting native
+  camera/history/view/input assertions; no compile failure or test toggle.
+- Native-camera UI175/3 and full UI64/App50 pass. Actual owned-window focus routing
+  is simulated through Qt's signal; active3D captures eye+absolute64-unit look,
+  active2D refuses. Capture fills the draft only; map count/redo/native bytes and
+  view stay unchanged until explicit Apply acts; Undo restores. Invalid/no-provider and guarded modes deny
+  fields/writes; capture cancels older pressed write intent. No FOV/roll import.
+- Nine UI-only compiled fingerprints, zero compiler diagnostics, changed-range
+  format/diff-check and direct parent review; no independent/clean-LSP/tidy or
+  human/all-layout/Hammer claim. The known preference rename passed THIS full run,
+  not a fix; retained failures stay open. Core/reader/serializer/shader/flags are
+  unchanged: retain A531 Model312 and corpus38/35+same3 reasons/38, not fresh runs.
+- Whole portable/native smoke and clean installed-loader evidence are separate
+  delivery records. No original data or old profiles/kits are overwritten.
+
+Full Source remains incomplete; see pending small owner check in lextest.md.
+
+## Retained A5.31 — independent per-vertex XYZ offsets
 
 - Tests-only actual inspector compiles0/no diagnostics and runtime RED follows64
   acting legacy distance/alpha/init/history assertions: missing offset Apply.

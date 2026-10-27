@@ -33,7 +33,13 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.31 candidate:** native displacement per-vertex XYZ offsets and explicit
+- **A5.32 candidate:** current3D-view eye/look capture into a LIVE camera draft,
+  not an automatic native write or viewport/FOV/roll change. Owned provider and
+  existing scoped Add/Apply/history; active2D/invalid/guarded modes refuse.
+  UI175/3, full UI64/App50 pass on9compiled UI fingerprints; intermittent preference
+  rename passed this run, not fixed. Retain unchanged A531 Model312/corpus and A527
+  GPU boundaries, not re-dated. Human/Hammer/all-layout/full Source pending.
+- **Retained A5.31 candidate:** native displacement per-vertex XYZ offsets and explicit
   absent-table initialization, production history/Save As and independent distance/
   alpha. Partial/empty/case-aliased data stays protected; alpha aliases also now deny
   typed authoring without flattening. Offset Model449/3 and actual UI116/1 pass;

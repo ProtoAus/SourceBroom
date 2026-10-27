@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.31 — native displacement XYZ offsets
+# Try Windows SourceBroom A5.32 — capture a 3D camera draft
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,25 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.31: edit a native displacement vertex's XYZ offset
+## A5.32: read the current 3D view before explicitly writing a camera
+
+On a COPY, activate a 3D viewport, then use the Map inspector's LIVE native cameras
+**Read current 3D view into draft**. Eye/look fields fill from that window's current
+perspective pose; look is an absolute target64 units along its heading. No record
+or active choice changes until you explicitly Add/Apply. The view itself does not
+move. A currently active2D pane is refused rather than guessing a different pane.
+No projection/FOV/roll capture. Unsupported/opaque/read-only/non-native guards stay.
+
+Native-camera UI175/3, full UI64/64 and App50 pass; the known intermittent preference
+rename passed this run, not fixed. Model312 and corpus38/35+same3/38 are retained
+unchanged A5.31 core boundaries, not rerun/re-dated. Nine UI-only fingerprints and
+direct parent review are not human/Hammer/all-layout/full Source acceptance.
+
+**Small owner check (pending):** aim a3D view, read its camera draft, then Apply
+and Undo on a copied VMF. Fields should fill without moving the view or changing
+the map until Apply. See [lextest](../../lextest.md). Keep whole A5.31/A5.30/A5.25.
+
+## Retained A5.31: edit a native displacement vertex's XYZ offset
 
 On a COPY with a native displacement, select its single base face and use the
 face inspector's displacement row/column controls. **Offset X/Y/Z** are stored

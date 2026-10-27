@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.31 native displacement XYZ offset authoring:
+**Status:** Windows A5.32 active-3D-view camera draft capture:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,18 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.31 adds independent **Offset X/Y/Z** fields and **Apply XYZ offset** to the
+A5.32 adds **Read current 3D view into draft** to LIVE native cameras. It reads
+this window's active perspective eye and a look target64 units along its heading;
+explicit Add/Apply is still required to write. Capture does not move the viewport,
+create a record, change active choice, dirty the map or consume pending redo.
+2D/invalid/no-provider and guarded modes cannot overwrite the draft or gain writes.
+Projection/FOV/roll are not imported. Native-camera UI175/3, full UI64 and App50
+pass on nine compiled UI-only fingerprints; the intermittent preference rename
+passed THIS run, not a claimed fix. Model312/corpus38/35+same3/38 are retained A5.31
+unchanged-core boundaries, not fresh runs. Full Source/human/Hammer acceptance
+remains pending; use the whole A5.32 kit on copies and keep whole A5.31/A5.30/A5.25.
+
+Retained A5.31 adds independent **Offset X/Y/Z** fields and **Apply XYZ offset** to the
 selected displacement-vertex inspector. Complete native tables edit surgically;
 genuinely absent tables need explicit **Initialize zero offset rows** first.
 Distance, alpha, base UV positions and triangle layout stay independent. Geometry,

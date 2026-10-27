@@ -4,6 +4,18 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.32 current3D camera draft — pending small owner check
+
+No new owner observation. Whole A5.32 on copies; retain A5.31/A5.30/A5.25 recovery.
+Native UI175, full UI64/App50 and retained core/corpus results are not human or
+matching-Hammer acceptance. No FOV/projection/roll import.
+
+- [ ] Aim an active3D view on a COPY, then Map inspector -> LIVE native cameras ->
+  Read current3D view into draft. Eye/look should fill without moving the viewport
+  or dirtying the map. Explicit Apply should write; Undo should restore metadata.
+
+Pending only; no general layout, SDK/branch, performance or full Source acceptance.
+
 ## A5.31 displacement XYZ offsets — pending small owner check
 
 Whole A5.31 on a COPY; keep whole A5.30/A5.29 and owner-confirmed A5.25 recovery.

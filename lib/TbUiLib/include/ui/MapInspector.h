@@ -20,6 +20,7 @@
 #pragma once
 
 #include "base/NotifierConnection.h"
+#include "ui/NativeCameraCapture.h"
 #include "ui/TabBook.h"
 
 #include "vm/bbox.h"
@@ -45,11 +46,12 @@ private:
   CollapsibleTitledPanel* m_modEditor = nullptr;
 
 public:
-  explicit MapInspector(MapDocument& document, QWidget* parent = nullptr);
+  explicit MapInspector(
+    MapDocument& document, QWidget* parent = nullptr, NativeCameraCapture capture = {});
   ~MapInspector() override;
 
 private:
-  void createGui(MapDocument& document);
+  void createGui(MapDocument& document, NativeCameraCapture capture);
   QWidget* createLayerEditor(MapDocument& document);
   CollapsibleTitledPanel* createMapPropertiesEditor(MapDocument& document);
   CollapsibleTitledPanel* createModEditor(MapDocument& document);

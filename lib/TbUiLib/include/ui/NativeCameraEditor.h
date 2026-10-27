@@ -7,6 +7,7 @@
 
 #include "base/NotifierConnection.h"
 #include "mdl/NativeCameras.h"
+#include "ui/NativeCameraCapture.h"
 
 #include <functional>
 class QComboBox;
@@ -20,6 +21,7 @@ class NativeCameraEditor : public QWidget
 {
 private:
   MapDocument& m_document;
+  NativeCameraCapture m_capture;
   NotifierConnection m_connections;
   mdl::NativeCameraSnapshot m_snapshot;
   uint64_t m_rowRevision = 0;
@@ -30,6 +32,7 @@ private:
   QLineEdit* m_eye;
   QLineEdit* m_look;
   QLabel* m_status;
+  QPushButton* m_captureView;
   QPushButton* m_add;
   QPushButton* m_applyPose;
   QPushButton* m_delete;
@@ -40,6 +43,7 @@ private:
   void dispatch(const mdl::NativeCameraRequest& request);
 
 public:
-  explicit NativeCameraEditor(MapDocument& document, QWidget* parent = nullptr);
+  explicit NativeCameraEditor(
+    MapDocument& document, QWidget* parent = nullptr, NativeCameraCapture capture = {});
 };
 } // namespace tb::ui

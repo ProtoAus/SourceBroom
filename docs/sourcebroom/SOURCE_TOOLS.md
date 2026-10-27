@@ -5,7 +5,26 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Native displacement XYZ offset authoring — A5.31
+## Read the active3D view into a camera draft — A5.32
+
+The LIVE native camera panel can read this MapWindow's current perspective eye
+and an absolute look target64 units along its heading into the editable draft.
+Values convert to double before target addition. Explicit Add/Apply retains all
+scoped/history/save write authority; capture does not create records, change active
+choice, modify the map/redo or move the viewport. It cancels a previously pressed
+write intent. Active2D/invalid/no-provider or guarded modes do not replace fields
+or gain authoring. Projection/FOV/roll are not captured.
+
+An owned provider passes through existing Inspector/MapInspector construction;
+there is no global active-window lookup or native ID in draft values. Existing
+constructor call forms remain valid. Saved Source Tools stays a saved snapshot.
+
+Native-camera UI175/3, full UI64 and App50 pass; preference rename passed this run,
+not fixed. Nine UI-only fingerprints/direct parent review, not human/Hammer or
+all-layout acceptance. Model312 and corpus38/35+same3/38 are retained A5.31
+unchanged-core boundaries, not fresh runs. See pending [owner check](../../lextest.md).
+
+## Retained native displacement XYZ offset authoring — A5.31
 
 Select one native displacement face, then choose its grid row/column in the face
 inspector. **Offset X/Y/Z** are native world-axis vectors, independent of stored

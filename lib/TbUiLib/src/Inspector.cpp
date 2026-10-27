@@ -35,13 +35,17 @@
 
 namespace tb::ui
 {
-Inspector::Inspector(AppController& appController, MapDocument& document, QWidget* parent)
+Inspector::Inspector(
+  AppController& appController,
+  MapDocument& document,
+  QWidget* parent,
+  NativeCameraCapture capture)
   : QWidget{parent}
 {
   m_tabBook = new TabBook{};
   m_tabBook->setObjectName("Inspector_TabBook");
 
-  m_mapInspector = new MapInspector{document};
+  m_mapInspector = new MapInspector{document, nullptr, std::move(capture)};
   m_entityInspector = new EntityInspector{appController, document};
   m_faceInspector = new FaceInspector{appController, document};
 

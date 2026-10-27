@@ -40,6 +40,7 @@
 #include <QtGlobal>
 
 #include "base/PreferenceManager.h"
+#include "gl/Camera.h"
 #include "gl/GlManager.h"
 #include "gl/ResourceManager.h"
 #include "mdl/Autosaver.h"
@@ -97,6 +98,7 @@
 #include "ui/MapViewBase.h"
 #include "ui/MapViewToolBox.h"
 #include "ui/MapWindowManager.h"
+#include "ui/NativeCameraCapture.h"
 #include "ui/ObjExportDialog.h"
 #include "ui/QPathUtils.h"
 #include "ui/QStringUtils.h"
@@ -463,7 +465,17 @@ void MapWindow::createGui()
   // SwitchableMapViewContainer should have constructed a MapViewBase
   contract_assert(m_currentMapView);
 
-  m_inspector = new Inspector{m_appController, document()};
+  m_inspector = new Inspector{
+    m_appController, document(), nullptr, [this]() -> std::optional<NativeCameraDraft> {
+      const auto& camera = currentMapViewBase()->camera();
+      if (!camera.perspectiveProjection())
+      {
+        return std::nullopt;
+      }
+      const auto eye = vm::vec3d{camera.position()};
+      const auto direction = vm::vec3d{camera.direction()};
+      return NativeCameraDraft{eye, eye + 64.0 * direction};
+    }};
   m_inspector->setObjectName("Inspector");
 
   m_mapView->connectTopWidgets(m_inspector);

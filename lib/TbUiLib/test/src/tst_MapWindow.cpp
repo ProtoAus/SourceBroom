@@ -95,6 +95,7 @@
 #include "ui/MapViewToolBox.h"
 #include "ui/MapWindow.h"
 #include "ui/MaterialCollectionEditor.h"
+#include "ui/NativeCameraEditor.h"
 #include "ui/NativeVisgroupEditor.h"
 #include "ui/QPathUtils.h"
 #include "ui/SourceBuild.h"
@@ -233,6 +234,84 @@ TEST_CASE("NativeCamera UI actual MapWindow live authoring and history")
     std::string{
       std::istreambuf_iterator<char>{original}, std::istreambuf_iterator<char>{}}
     == source);
+  auto* capture = panel->findChild<QPushButton*>("nativeCameraCapture");
+  REQUIRE(capture); // Acting native-camera/history controls precede missing workflow.
+  REQUIRE(capture->isEnabled());
+  auto* perspectiveView = static_cast<MapViewBase*>(nullptr);
+  auto* orthographicView = static_cast<MapViewBase*>(nullptr);
+  for (auto* view : window.findChildren<MapViewBase*>())
+  {
+    if (view->camera().perspectiveProjection())
+    {
+      perspectiveView = view;
+    }
+    else
+    {
+      orthographicView = view;
+    }
+  }
+  REQUIRE(perspectiveView);
+  auto& camera = perspectiveView->camera();
+  camera.moveTo({11, 22, 33});
+  camera.setDirection({0, 1, 0}, {0, 0, 1});
+  qApp->focusChanged(
+    nullptr, perspectiveView); // Exercise the owning window's focus route.
+  const auto bytesBeforeCapture = map.vmfScene()->serialize(map.worldNode());
+  const auto countBeforeCapture = map.modificationCount();
+  const auto redoBeforeCapture = map.redoCommandName();
+  auto* look = panel->findChild<QLineEdit*>("nativeCameraLook");
+  REQUIRE(look);
+  capture->click();
+  CHECK(eye->text() == "11 22 33");
+  CHECK(look->text() == "11 86 33"); // Absolute target64 units along the active view.
+  CHECK(eye->isModified());
+  CHECK(look->isModified());
+  CHECK(map.modificationCount() == countBeforeCapture);
+  CHECK(map.redoCommandName() == redoBeforeCapture);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == bytesBeforeCapture);
+  CHECK(camera.position() == vm::vec3f{11, 22, 33});
+  CHECK(camera.direction() == vm::vec3f{0, 1, 0});
+  apply->click(); // Draft capture is not itself a native write; this explicit action is.
+  CHECK(map.vmfScene()->cameras().records[0].eye == vm::vec3d{11, 22, 33});
+  CHECK(map.vmfScene()->cameras().records[0].look == vm::vec3d{11, 86, 33});
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == bytesBeforeCapture);
+  eye->setText("77 88 99");
+  eye->setModified(true);
+  REQUIRE(QMetaObject::invokeMethod(apply, "pressed"));
+  capture->click(); // Reading a new draft cancels an older pressed write intent.
+  REQUIRE(QMetaObject::invokeMethod(apply, "clicked"));
+  CHECK(map.modificationCount() == countBeforeCapture);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == bytesBeforeCapture);
+  REQUIRE(orthographicView);
+  qApp->focusChanged(nullptr, orthographicView);
+  eye->setText("8 8 8");
+  capture->click();
+  CHECK(eye->text() == "8 8 8"); // Do not guess another pane when2D is active.
+  CHECK(map.modificationCount() == countBeforeCapture);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == bytesBeforeCapture);
+  qApp->focusChanged(nullptr, perspectiveView);
+  {
+    auto standalone = NativeCameraEditor{window.document()};
+    auto* disabled = standalone.findChild<QPushButton*>("nativeCameraCapture");
+    REQUIRE(disabled);
+    CHECK_FALSE(disabled->isEnabled());
+  }
+  {
+    auto invalid = NativeCameraEditor{
+      window.document(), nullptr, [] {
+        return std::optional<NativeCameraDraft>{NativeCameraDraft{{1, 2, 3}, {1, 2, 3}}};
+      }};
+    auto* invalidEye = invalid.findChild<QLineEdit*>("nativeCameraEye");
+    auto* invalidCapture = invalid.findChild<QPushButton*>("nativeCameraCapture");
+    REQUIRE(invalidEye);
+    REQUIRE(invalidCapture);
+    const auto unchangedDraft = invalidEye->text();
+    invalidCapture->click();
+    CHECK(invalidEye->text() == unchangedDraft);
+    CHECK(map.modificationCount() == countBeforeCapture);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == bytesBeforeCapture);
+  }
 }
 
 TEST_CASE("NativeCamera UI freezes field intent and rejects stale row releases")
@@ -376,7 +455,8 @@ TEST_CASE("NativeCamera UI readonly unsupported and nonnative modes deny authori
     CHECK(panel->isHidden());
   }
   for (const auto* name :
-       {"nativeCameraAdd",
+       {"nativeCameraCapture",
+        "nativeCameraAdd",
         "nativeCameraApply",
         "nativeCameraDelete",
         "nativeCameraApplyActive",

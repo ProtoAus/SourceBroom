@@ -21,6 +21,8 @@
 
 #include <QWidget>
 
+#include "ui/NativeCameraCapture.h"
+
 namespace tb::ui
 {
 class AppController;
@@ -52,7 +54,10 @@ private:
 
 public:
   Inspector(
-    AppController& appController, MapDocument& document, QWidget* parent = nullptr);
+    AppController& appController,
+    MapDocument& document,
+    QWidget* parent = nullptr,
+    NativeCameraCapture capture = {});
   ~Inspector() override;
 
   void connectTopWidgets(MapViewBar* mapViewBar);
