@@ -100,6 +100,7 @@ private:
   QAbstractButton* m_applyDisplacement = nullptr;
   QDoubleSpinBox* m_displacementAlpha = nullptr;
   QAbstractButton* m_applyDisplacementAlpha = nullptr;
+  QAbstractButton* m_initializeDisplacementAlpha = nullptr;
   QLabel* m_displacementAlphaStatus = nullptr;
   SignalDelayer* m_updateControlsSignalDelayer = nullptr;
 

@@ -35,6 +35,7 @@ class SwapNodeContentsCommand : public UpdateLinkedGroupsCommandBase
 protected:
   std::vector<std::pair<Node*, NodeContents>> m_nodes;
   bool m_nativeClip = false;
+  bool m_collatable = true;
   bool m_clipRegistered = false;
   bool m_retryableClipRefusal = false;
 
@@ -42,7 +43,8 @@ public:
   SwapNodeContentsCommand(
     std::string name,
     std::vector<std::pair<Node*, NodeContents>> nodes,
-    bool nativeClip = false);
+    bool nativeClip = false,
+    bool collatable = true);
   ~SwapNodeContentsCommand() override;
 
   bool performDo(Map& map) override;

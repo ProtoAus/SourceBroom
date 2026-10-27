@@ -5,15 +5,32 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Brush upload correction — A5.25
+## Explicit absent terrain alpha table — A5.26
+
+On one supported displacement face whose native `alphas` table is entirely
+absent, the face inspector offers **Initialize zero alpha rows**. This deliberate
+command creates a complete zero table before ordinary **Apply alpha** edits a
+sample. Height drafts are not applied. Initialization is its own undo step,
+separate from neighboring height/alpha changes; undo removes the table exactly.
+Save As a new copy and reopen retain the weights without moving terrain.
+
+Present empty/partial/unknown tables are not repaired. Read-only, frame/cache/
+opaque/reference, displacement clone and topology guards remain. This is not
+painting, sculpting or full shader compatibility. Full Model298/UI59/App50/
+Render28/GL21 and the actual seven-target build pass with no new compiler warnings.
+New control/Hammer acceptance is pending in [lextest](../../lextest.md). Keep the
+whole owner-confirmed A5.25 kit as recovery; use copies and avoid broken A5.24.
+
+## Retained brush upload correction — A5.25
 
 A5.24 is known broken: an owner load produced scattered geometry. The brush cache
 had a36-byte vertex, while the renderer holder still copied/drew32-byte vertices.
 A5.25 shares the cache type through upload/attribute setup and uses typed copying;
 production byte/attribute checks141 and packed real-GPU checks2597 pass. This does
 not alter native geometry/UVs, IDs, edit permissions or preserving saves. Use the
-whole A5.25 kit with copied VMFs; keep A5.23 as recovery. Whole-map owner appearance
-remains pending; the earlier direct shader checks did not test this upload path.
+whole A5.25 kit with copied VMFs. The owner confirmed the requested same-map
+geometry/edges view works, not other editing/maps/performance or Hammer behavior.
+The earlier direct shader checks did not test this upload path.
 
 ## Retained basic terrain material blending — A5.24
 
@@ -42,8 +59,10 @@ inspector shows the native grid row/column, independent distance and **Alpha
 one stored weight, including fractional values; it does not move/rebuild terrain,
 change picking/bounds or apply a drafted distance. Same parsed value is a no-op.
 
-Only complete original alpha tables are editable; missing/partial rows remain
-preserved and alpha-disabled, without disabling otherwise valid distance editing.
+At A5.23 only complete original alpha tables were editable; missing/partial rows
+stayed preserved and alpha-disabled without disabling valid distance editing.
+A5.26 separately adds the explicit absent-table path above; present partial data
+still cannot initialize.
 Read-only preview remains non-authoring. Current-mesh index checks cover both
 sample getters during queued selection changes. Native save/reopen and exact
 undo/redo retain original bindings and all untouched number spelling/source.

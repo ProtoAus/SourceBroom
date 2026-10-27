@@ -65,12 +65,15 @@ private:
   std::vector<Row> m_offsetNormalRows;
   bool m_normalsBound = false;
   bool m_rotationSupported = true;
+  bool m_alphaTableMissing = false;
+  bool m_alphaRowsInitialized = false;
   std::vector<vm::vec3d> m_positions;
   std::vector<vm::vec3d> m_basePositions;
   std::vector<vm::vec3d> m_normals;
   std::vector<uint32_t> m_indices;
   vm::bbox3d m_bounds;
 
+  bool hasUnboundAlphaRows() const;
   void rebuild();
   SourceDisplacement similarityTransformed(
     const vm::mat4x4d& transform, double scale) const;
@@ -103,6 +106,8 @@ public:
   double alpha(size_t row, size_t column) const;
   bool canEditDistances() const;
   bool canEditAlphas() const;
+  bool canInitializeAlphas() const;
+  void initializeAlphas();
   void setDistance(size_t row, size_t column, double distance);
   void setAlpha(size_t row, size_t column, double alpha);
   SourceDisplacement translated(const vm::vec3d& delta) const;
@@ -117,6 +122,8 @@ public:
 
   /** Changed samples replace only their numeric tokens, not untouched row spelling. */
   std::vector<VmfValueEdit> editsFrom(const SourceDisplacement& before) const;
+  std::vector<VmfValueEdit> editsFrom(
+    const SourceDisplacement& before, std::vector<VmfStructuralEdit>& structure) const;
   bool operator==(const SourceDisplacement&) const = default;
   friend std::ostream& operator<<(std::ostream&, const SourceDisplacement&);
 };

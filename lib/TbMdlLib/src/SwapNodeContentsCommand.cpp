@@ -132,10 +132,12 @@ void swapNodeContentsAndNotify(
 SwapNodeContentsCommand::SwapNodeContentsCommand(
   std::string name,
   std::vector<std::pair<Node*, NodeContents>> nodes,
-  const bool nativeClip)
+  const bool nativeClip,
+  const bool collatable)
   : UpdateLinkedGroupsCommandBase{std::move(name), true}
   , m_nodes{std::move(nodes)}
   , m_nativeClip{nativeClip}
+  , m_collatable{collatable}
 {
 }
 
@@ -208,13 +210,13 @@ bool SwapNodeContentsCommand::doPerformUndo(Map& map)
 
 bool SwapNodeContentsCommand::doCollateWith(UndoableCommand& command)
 {
-  if (m_nativeClip)
+  if (m_nativeClip || !m_collatable)
   {
     return false;
   }
   if (auto* other = dynamic_cast<SwapNodeContentsCommand*>(&command))
   {
-    if (other->m_nativeClip)
+    if (other->m_nativeClip || !other->m_collatable)
     {
       return false;
     }

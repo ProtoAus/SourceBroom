@@ -33,12 +33,21 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.25 correction:** owner-confirmed A5.24 scrambled vertices traced to the
+- **A5.26 candidate:** explicit initialization of an entirely absent native
+  displacement alpha table, then existing per-sample editing. No automatic
+  repair of present partial/empty/unknown data or wider geometry authority.
+  Initialization is a separate undo boundary; save/reopen, unchanged geometry,
+  normal alpha collation and original bytes have acted controls. Actual full
+  Model298/UI59/App50/Render28/GL21 and seven-target build pass without new
+  compiler warnings. Parent review only; new control/Hammer checks pending.
+  Keep whole A5.25 as recovery; full A6/Source support is not complete.
+- **Retained A5.25 correction:** owner-confirmed A5.24 scrambled vertices traced to the
   real cache36-byte/upload-holder32-byte mismatch. Shared complete vertex type
   and typed production copy fix that boundary without changing native geometry,
   source bytes or edit/save authority. Production upload141 and packed real-GPU
   checks2597 pass. Previous shader/draw-count controls missed the upload seam.
-  Whole-map owner visual confirmation remains pending; avoid A5.24, keep A5.23.
+  The owner confirmed the same-map geometry/edges view works. Other editing,
+  performance/maps and Hammer acceptance were not confirmed. Avoid A5.24.
 - **A5.24 known-broken candidate, superseded by A5.25:** basic WorldVertexTransition brush/terrain preview loads
   two mounted VTF layers under one retained-byte budget. Native alpha0..255 is a
   separate vertex blend weight; opacity and editor fade remain independent.

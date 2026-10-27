@@ -4353,7 +4353,7 @@ void VmfScene::nodeEdits(
           refuse(side, "displacement structure changed");
         }
         const auto displacementEdits =
-          g.sourceDisplacement()->editsFrom(*f.sourceDisplacement());
+          g.sourceDisplacement()->editsFrom(*f.sourceDisplacement(), structural);
         edits.insert(edits.end(), displacementEdits.begin(), displacementEdits.end());
       }
       if (f.points() != g.points())

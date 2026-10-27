@@ -353,6 +353,7 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
     result.m_offsetNormals.assign(total, vm::vec3d{});
     result.m_offsetNormalRows.assign(result.m_size, Row{});
   }
+  result.m_alphaTableMissing = !member(document, *block, "alphas", true);
   readRows(
     "alphas",
     1,
@@ -470,8 +471,34 @@ double SourceDisplacement::alpha(const size_t row, const size_t column) const
   }
   return m_alphas[row * m_size + column];
 }
+bool SourceDisplacement::hasUnboundAlphaRows() const
+{
+  return m_size > 0 && m_alphaRows.size() == m_size && m_alphas.size() == m_size * m_size
+         && std::all_of(m_alphaRows.begin(), m_alphaRows.end(), [](const auto& row) {
+              return !row.entry && row.text.empty() && row.spans.empty();
+            });
+}
+bool SourceDisplacement::canInitializeAlphas() const
+{
+  return m_alphaTableMissing && !m_alphaRowsInitialized && hasUnboundAlphaRows()
+         && std::all_of(m_alphas.begin(), m_alphas.end(), [](const double value) {
+              return value == 0;
+            });
+}
+void SourceDisplacement::initializeAlphas()
+{
+  if (!canInitializeAlphas())
+  {
+    invalid(m_entry, "alpha initialization requires a genuinely absent native table");
+  }
+  m_alphaRowsInitialized = true;
+}
 bool SourceDisplacement::canEditAlphas() const
 {
+  if (m_alphaRowsInitialized)
+  {
+    return m_alphaTableMissing && hasUnboundAlphaRows();
+  }
   return m_alphaRows.size() == m_size && m_alphas.size() == m_size * m_size
          && std::all_of(m_alphaRows.begin(), m_alphaRows.end(), [this](const auto& row) {
               return row.entry && row.spans.size() == m_size;
@@ -737,12 +764,27 @@ std::optional<double> SourceDisplacement::intersect(const vm::ray3d& ray) const
 std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   const SourceDisplacement& before) const
 {
+  auto structure = std::vector<VmfStructuralEdit>{};
+  auto values = editsFrom(before, structure);
+  if (!structure.empty())
+  {
+    invalid(m_entry, "alpha initialization requires the structural emitter");
+  }
+  return values;
+}
+std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
+  const SourceDisplacement& before, std::vector<VmfStructuralEdit>& structure) const
+{
   const auto transform = baseTransformFrom(before);
   if (
     !transform || m_entry != before.m_entry || m_power != before.m_power
     || m_size != before.m_size || m_elevationRow != before.m_elevationRow
     || m_startRow != before.m_startRow || m_worldBounds != before.m_worldBounds
     || m_normalsBound != before.m_normalsBound
+    || m_alphaTableMissing != before.m_alphaTableMissing
+    || (m_alphaRowsInitialized && !m_alphaTableMissing)
+    || (m_alphaTableMissing && !m_alphaRowsInitialized
+        && std::any_of(m_alphas.begin(), m_alphas.end(), [](const double value) { return value != 0; }))
     || m_rotationSupported != before.m_rotationSupported
     || m_alphas.size() != before.m_alphas.size()
     || m_directionRows != before.m_directionRows
@@ -752,10 +794,13 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   {
     invalid(m_entry, "unsupported displacement structure or provenance edit");
   }
-  if (m_alphas != before.m_alphas)
+  if (
+    m_alphas != before.m_alphas
+    || m_alphaRowsInitialized != before.m_alphaRowsInitialized)
   {
     if (
-      !canEditAlphas() || !before.canEditAlphas()
+      !(canEditAlphas() || canInitializeAlphas())
+      || !(before.canEditAlphas() || before.canInitializeAlphas())
       || std::any_of(m_alphas.begin(), m_alphas.end(), [](const double value) {
            return !std::isfinite(value) || value < 0 || value > 255;
          }))
@@ -833,10 +878,13 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
       before.m_distanceRows[y],
       std::span{before.m_distances}.subspan(y * m_size, m_size),
       std::span{m_distances}.subspan(y * m_size, m_size));
-    editRow(
-      before.m_alphaRows[y],
-      std::span{before.m_alphas}.subspan(y * m_size, m_size),
-      std::span{m_alphas}.subspan(y * m_size, m_size));
+    if (!m_alphaTableMissing)
+    {
+      editRow(
+        before.m_alphaRows[y],
+        std::span{before.m_alphas}.subspan(y * m_size, m_size),
+        std::span{m_alphas}.subspan(y * m_size, m_size));
+    }
   }
   const auto editVectors =
     [&](const auto& rows, const auto& oldValues, const auto& newValues) {
@@ -863,6 +911,25 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
   editVectors(before.m_directionRows, before.m_directions, m_directions);
   editVectors(before.m_offsetRows, before.m_offsets, m_offsets);
   editVectors(before.m_offsetNormalRows, before.m_offsetNormals, m_offsetNormals);
+  if (m_alphaRowsInitialized)
+  {
+    auto text = std::string{"\nalphas\n{\n"};
+    for (size_t y = 0; y < m_size; ++y)
+    {
+      text += "\"row" + std::to_string(y) + "\" \"";
+      for (size_t x = 0; x < m_size; ++x)
+      {
+        if (x != 0)
+        {
+          text += " ";
+        }
+        text += numberText(m_alphas[y * m_size + x]);
+      }
+      text += "\"\n";
+    }
+    text += "}\n";
+    structure.push_back({VmfStructuralEdit::Type::Append, m_entry, std::move(text)});
+  }
   return edits;
 }
 std::ostream& operator<<(std::ostream& stream, const SourceDisplacement& displacement)

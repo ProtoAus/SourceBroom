@@ -1,11 +1,41 @@
-# SourceBroom validation — A5.25 brush upload correction
+# SourceBroom validation — A5.26 explicit absent terrain alpha
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.25 — actual packed vertex upload
+## A5.26 — explicit table creation without geometry widening
+
+- Actual partial wiring: Core80 passes; Map54/55 and UI45/47 fail at explicit
+  initialization while distance controls act. Passing the existing structural
+  sink advances Map72/73 and UI61/62. The UI exposes same-node command collation;
+  the Map clone-positive oracle incorrectly assumed existing displacement clone
+  support. Source/documented clone guards were inspected and kept unchanged.
+- A stored default-true collation option lets only initialization opt out in
+  both directions. Normal scalar edits still collate. The corrected clone arm
+  proves a plain native clone acts and displacement clone refuses before/after.
+  No native identity/geometry/opaque/reference authority was relaxed.
+- Final actual focused **Core80 / Map124 / UI64 assertions** pass. A wrong Core
+  regex previously selected no tests and was caught; only the corrected exact
+  title with --no-tests=error counts. Failed green-named logs are not green proof.
+- Actual seven-target product/checker/test build has zero compiler warning/error
+  lines. Full **Model298/298, UI59/59, App50/50, Render28/28, GL21/21** pass on
+  the same15-code-file fingerprints. Prior intermittent preference rename failure
+  remains unfixed/not erased. Full direct parent review and changed-range UTF8
+  format/diff checks are not independent review or a clean clang-tidy claim.
+- Absent power2..6 tables initialize; complete/present empty/partial/unknown data
+  does not. Source bytes, fractional weight, Save As/reopen, separate undo/redo,
+  original inputs, positions/base positions/normals/indices/bounds/picking and
+  subsequent native translation have acted controls. Read-only, ordinary/multiple
+  faces and stale selection stay guarded. No painting/sculpt/topology/duplication.
+
+A5.25 upload141/GPU2597 remain valid unchanged-boundary evidence, not new A5.26
+runs. Installed package/corpus/portable checks are separate real-boundary records.
+The owner confirmed A5.25's same-map view; A5.26 controls and Hammer semantics
+remain pending in ../../lextest.md. Full Source support is not complete.
+
+## Retained A5.25 — actual packed vertex upload
 
 Owner observation: A5.24 scattered vertices and the map was not usable. Root
 cause is verified at the production boundary: cached vertices36bytes, holder/
@@ -24,8 +54,9 @@ coverage, not newly measured A5.25 runs. Native source/geometry/edit/save guards
 remain unchanged. A hash-verified
 copy of the supplied map loads strictly; the original and copy are unchanged.
 
-Whole-map owner visual confirmation is pending in ../../lextest.md. Do not infer
-it from corpus or shader counts; A5.24 stays a failed candidate, not a fallback.
+The owner confirmed the requested A5.25 same-map geometry/edges view in
+../../lextest.md. That observation does not confirm other editing, performance,
+maps or Hammer behavior. A5.24 stays a failed candidate, not a fallback.
 
 ## Retained A5.24 — bounded two-layer terrain preview (known broken upload)
 

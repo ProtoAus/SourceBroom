@@ -69,6 +69,105 @@ std::string alphaFixture()
 }
 } // namespace
 
+TEST_CASE("SourceDisplacement explicitly initializes only absent alpha tables")
+{
+  const auto source = displacementFixture();
+  const auto document = VmfDocument::parse(source);
+  const auto original = loadDisplacement(source);
+  REQUIRE(original.canInitializeAlphas());
+  REQUIRE_FALSE(original.canEditAlphas());
+  auto control = original;
+  control.setDistance(2, 2, 24);
+  CHECK(document.serialize(control.editsFrom(original)) != source);
+  control.setDistance(2, 2, 16);
+  CHECK(document.serialize(control.editsFrom(original)) == source);
+  CHECK_THROWS(original.editsFrom(loadDisplacement(alphaFixture())));
+  auto edited = original;
+  CHECK_THROWS(edited.setAlpha(2, 2, 17.5));
+  CHECK(edited == original);
+
+  SECTION("explicit zero table then fractional edit round trips without geometry changes")
+  {
+    edited.initializeAlphas();
+    CHECK(edited.canEditAlphas());
+    CHECK_FALSE(edited.canInitializeAlphas());
+    CHECK_THROWS(edited.initializeAlphas());
+    CHECK(edited.alphas() == std::vector<double>(25, 0));
+    CHECK_THROWS(
+      edited.editsFrom(original)); // The value-only caller must not drop creation.
+    auto structure = std::vector<VmfStructuralEdit>{};
+    const auto values = edited.editsFrom(original, structure);
+    REQUIRE(values.empty());
+    REQUIRE(structure.size() == 1);
+    CHECK(structure.front().type == VmfStructuralEdit::Type::Append);
+    const auto initialized = document.serialize(values, structure);
+    const auto reloaded = loadDisplacement(initialized);
+    CHECK(reloaded.canEditAlphas());
+    CHECK_FALSE(reloaded.canInitializeAlphas());
+    CHECK(reloaded.alphas() == std::vector<double>(25, 0));
+    edited.setAlpha(2, 2, 17.5);
+    CHECK_THROWS(edited.setAlpha(0, 0, -1));
+    CHECK_THROWS(edited.setAlpha(0, 0, 256));
+    CHECK_THROWS(edited.setAlpha(0, 0, std::numeric_limits<double>::quiet_NaN()));
+    structure.clear();
+    const auto editedValues = edited.editsFrom(original, structure);
+    const auto output = document.serialize(editedValues, structure);
+    const auto roundTrip = loadDisplacement(output);
+    CHECK(roundTrip.alpha(2, 2) == 17.5);
+    CHECK(roundTrip.positions() == original.positions());
+    CHECK(roundTrip.basePositions() == original.basePositions());
+    CHECK(roundTrip.normals() == original.normals());
+    CHECK(roundTrip.indices() == original.indices());
+    CHECK(roundTrip.bounds() == original.bounds());
+    CHECK(output.find("// keep these spellings") != std::string::npos);
+    CHECK(output.find("future { key \"opaque\" }") != std::string::npos);
+    CHECK(output.find("triangle_tags { row0 \"0 0 0 0 0 0 0 0\" }") != std::string::npos);
+    CHECK(VmfDocument::parse(output).serialize(roundTrip.editsFrom(roundTrip)) == output);
+    edited = original;
+    structure.clear();
+    CHECK(document.serialize(edited.editsFrom(original, structure), structure) == source);
+    CHECK(structure.empty());
+  }
+  SECTION("present empty partial and complete tables are never overwritten")
+  {
+    for (const auto& candidate : std::vector<std::string>{
+           replaceOnce(source, "triangle_tags {", "alphas {} triangle_tags {"),
+           replaceOnce(
+             source, "triangle_tags {", "alphas { row0 \"0 0 0 0 0\" } triangle_tags {"),
+           alphaFixture()})
+    {
+      auto mesh = loadDisplacement(candidate);
+      const auto before = mesh;
+      CHECK_FALSE(mesh.canInitializeAlphas());
+      CHECK_THROWS(mesh.initializeAlphas());
+      CHECK(mesh == before);
+      CHECK(VmfDocument::parse(candidate).serialize(mesh.editsFrom(before)) == candidate);
+    }
+  }
+  SECTION("existing maximum power is bounded and serializes all zero samples")
+  {
+    const auto input =
+      std::string{"side { dispinfo { power 6 startposition \"[0 0 0]\" } }"};
+    auto mesh = loadDisplacement(input);
+    REQUIRE(mesh.size() == 65);
+    REQUIRE(mesh.canInitializeAlphas());
+    mesh.initializeAlphas();
+    auto structure = std::vector<VmfStructuralEdit>{};
+    const auto values = mesh.editsFrom(loadDisplacement(input), structure);
+    const auto result =
+      loadDisplacement(VmfDocument::parse(input).serialize(values, structure));
+    CHECK(result.alphas() == std::vector<double>(65 * 65, 0));
+    CHECK(result.positions() == mesh.positions());
+  }
+  SECTION("foreign present-table provenance cannot become missing-table authority")
+  {
+    edited.initializeAlphas();
+    auto structure = std::vector<VmfStructuralEdit>{};
+    CHECK_THROWS(edited.editsFrom(loadDisplacement(alphaFixture()), structure));
+    CHECK(structure.empty());
+  }
+}
+
 TEST_CASE("SourceDisplacement alpha samples preserve geometry and numeric provenance")
 {
   const auto source = alphaFixture();

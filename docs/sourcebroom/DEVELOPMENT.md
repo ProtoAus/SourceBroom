@@ -21,7 +21,43 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Brush vertex producer/consumer boundary — A5.25
+## Explicit absent displacement alpha tables — A5.26
+
+SourceDisplacement records immutable absence of the native `alphas` member and
+separate explicit-initialization intent. Only an originally absent, unbound,
+zero-valued table can initialize. Present empty/partial/unknown payload is not
+repaired. The structural-emitter overload appends only this table beneath the
+original dispinfo; value-only emission refuses to discard structural intent.
+Original numeric/row provenance, frames, geometry and opaque/reference guards
+remain. Reopened authored rows use the ordinary bound-value path.
+
+Map/Qt expose an explicit Initialize action; distance and scalar alpha actions
+stay independent. The existing same-node swap/transaction collation ignores
+command labels, and MapFixture normally disables it while the real UI enables
+it. A stored optional-default-true collatable flag now lets initialization opt
+out in BOTH directions without global history/time/name policy. Acted controls
+show distance -> init -> TWO normally collated scalar edits, then separate undo
+and exact redo; the real UI also verifies the button returns after undo.
+
+Partial native-sink wiring produced Core80 passes, Map54/55 and UI45/47. Wiring
+the existing structural vector advanced Map72/73 and UI61/62. The latter UI failure
+exposed real collation; the Map clone-positive oracle was invalid: existing
+validateDuplication explicitly refuses displacement attachments. Its corrected
+control proves ordinary native clone works and displacement clone refuses before
+AND after initialization, with no authority widening. Initialization/translation/
+save/reopen/history now pass. Failed green-named attempt logs remain failures.
+An incorrect Core regex selected no tests; the wrapper caught it, then exact
+source-read title plus --no-tests=error ran Core80. No pass is credited to silence.
+
+Final focused Core80/Map124/UI64 pass, actual seven-target build has no compiler
+warning/error lines, full Model298/UI59/App50/Render28/GL21 pass. All15 code paths
+match compiled fingerprints/changed-range UTF8 format and complete direct parent
+review; no independent-review/clean-tidy claim. A5.25 upload141/GPU2597 remain
+unchanged-boundary evidence, not newly measured A5.26 results. Original/corpus
+writes and displacement duplication/topology are not enabled. Package evidence
+and owner/Hammer acceptance are separate; the new control is pending in lextest.
+
+## Retained brush vertex producer/consumer boundary — A5.25
 
 The owner observed an unusable scattered-vertex view in A5.24. The cache had
 P3/N/UV0/UV1 (36bytes), but BrushVertexArray still used P3NT2 (32bytes), and
@@ -45,8 +81,10 @@ VBO-lifetime cleanup contract, so no clean RED counts are invented. Bounds probi
 was made nonfatal/safe and pending VBOs explicitly freed after holder destruction.
 After the production fix, upload141 and GPU2597 assertions pass with normal exit0.
 The actual supplied VMF copy strictly loads; original/copy hashes remain unchanged.
-Owner whole-map visual acceptance stays pending; A5.24's observed failure is not
-converted into a pass by these controls. Do not ship A5.24 as a safe fallback.
+The owner confirmed the A5.25 same-map geometry/edges view works. This actual
+observation, not the automated controls, confirms that view only; other editing,
+maps/performance and Hammer checks remain unconfirmed. Do not ship A5.24 as a
+safe fallback.
 
 ## Retained basic WorldVertexTransition preview — A5.24
 

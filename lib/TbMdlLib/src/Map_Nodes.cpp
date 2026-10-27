@@ -811,7 +811,8 @@ bool updateNodeContents(
   Map& map,
   const std::string& commandName,
   std::vector<std::pair<Node*, NodeContents>> nodesToSwap,
-  std::vector<GroupNode*> changedLinkedGroups)
+  std::vector<GroupNode*> changedLinkedGroups,
+  const bool collatable)
 {
 
   if (!checkLinkedGroupsToUpdate(changedLinkedGroups))
@@ -821,7 +822,8 @@ bool updateNodeContents(
 
   auto transaction = Transaction{map};
   if (!map.executeAndStore(
-        std::make_unique<SwapNodeContentsCommand>(commandName, std::move(nodesToSwap))))
+        std::make_unique<SwapNodeContentsCommand>(
+          commandName, std::move(nodesToSwap), false, collatable)))
   {
     transaction.cancel();
     return false;

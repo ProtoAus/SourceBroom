@@ -156,7 +156,8 @@ bool applyAndSwap(
   Map& map,
   const std::string& commandName,
   const std::vector<BrushFaceHandle>& faces,
-  L lambda)
+  L lambda,
+  const bool collatable = true)
 {
   if (faces.empty())
   {
@@ -191,7 +192,7 @@ bool applyAndSwap(
   auto changedLinkedGroups =
     collectContainingGroups(newNodes | std::views::keys | kdl::ranges::to<std::vector>());
   return updateNodeContents(
-    map, commandName, std::move(newNodes), std::move(changedLinkedGroups));
+    map, commandName, std::move(newNodes), std::move(changedLinkedGroups), collatable);
 }
 
 } // namespace tb::mdl

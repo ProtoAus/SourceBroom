@@ -248,6 +248,39 @@ bool setSourceDisplacementDistance(
   });
 }
 
+bool initializeSourceDisplacementAlphas(Map& map)
+{
+  const auto faces = map.selection().allBrushFaces();
+  if (!map.vmfScene() || faces.size() != 1 || !faces[0].face().sourceDisplacement())
+  {
+    return false;
+  }
+  if (!faces[0].face().sourceDisplacement()->canInitializeAlphas())
+  {
+    return false;
+  }
+  return applyAndSwap(
+    map,
+    "Initialize Displacement Alpha",
+    faces,
+    [&](auto& face) {
+      try
+      {
+        auto mesh = *face.sourceDisplacement();
+        mesh.initializeAlphas();
+        face.setSourceDisplacement(std::move(mesh));
+        return true;
+      }
+      catch (const std::exception& error)
+      {
+        map.logger().error() << "Could not initialize displacement alpha: "
+                             << error.what();
+        return false;
+      }
+    },
+    false); // Keep explicit row creation separate from surrounding scalar edits.
+}
+
 bool setSourceDisplacementAlpha(
   Map& map, const size_t row, const size_t column, const double alpha)
 {

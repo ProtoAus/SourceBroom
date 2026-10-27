@@ -632,6 +632,8 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   m_displacementAlpha->setDecimals(6);
   m_applyDisplacementAlpha = new QPushButton{tr("Apply alpha")};
   m_applyDisplacementAlpha->setObjectName("sourceDisplacementAlphaApply");
+  m_initializeDisplacementAlpha = new QPushButton{tr("Initialize zero alpha rows")};
+  m_initializeDisplacementAlpha->setObjectName("sourceDisplacementAlphaInitialize");
   m_displacementAlphaStatus = new QLabel{};
   m_displacementAlphaStatus->setObjectName("sourceDisplacementAlphaStatus");
   m_displacementAlphaStatus->setWordWrap(true);
@@ -645,7 +647,8 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   displacementLayout->addWidget(new QLabel{tr("Alpha (0..255)")}, 3, 0);
   displacementLayout->addWidget(m_displacementAlpha, 3, 1, 1, 2);
   displacementLayout->addWidget(m_applyDisplacementAlpha, 3, 3);
-  displacementLayout->addWidget(m_displacementAlphaStatus, 4, 0, 1, 4);
+  displacementLayout->addWidget(m_initializeDisplacementAlpha, 4, 0, 1, 4);
+  displacementLayout->addWidget(m_displacementAlphaStatus, 5, 0, 1, 4);
   faceAttribsLayout->addWidget(m_displacementEditor, r, 0, 1, 4);
   connect(m_displacementRow, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
     updateDisplacementSample();
@@ -667,6 +670,10 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
       static_cast<size_t>(m_displacementRow->value()),
       static_cast<size_t>(m_displacementColumn->value()),
       m_displacementAlpha->value());
+    updateControls();
+  });
+  connect(m_initializeDisplacementAlpha, &QAbstractButton::clicked, this, [this] {
+    mdl::initializeSourceDisplacementAlphas(m_document.map());
     updateControls();
   });
   faceAttribsLayout->setColumnStretch(1, 1);
@@ -872,12 +879,15 @@ void FaceAttribsEditor::updateControls()
   m_applyDisplacement->setEnabled(distanceEditable);
   m_displacementAlpha->setEnabled(alphaEditable);
   m_applyDisplacementAlpha->setEnabled(alphaEditable);
+  const auto canInitialize = displacement && displacement->canInitializeAlphas();
+  m_initializeDisplacementAlpha->setVisible(canInitialize);
+  m_initializeDisplacementAlpha->setEnabled(writable && canInitialize);
   m_displacementAlphaStatus->setText(
-    !displacement ? tr("No native displacement selected.")
+    !displacement   ? tr("No native displacement selected.")
+    : !writable     ? tr("Read-only native preview; alpha weights are preserved.")
+    : canInitialize ? tr("No alpha table. Initialize zero rows to edit blend weights.")
     : !alphaRows
-      ? tr("Alpha source rows are unavailable; distance editing is independent.")
-    : !writable
-      ? tr("Read-only native preview; alpha weights are preserved.")
+      ? tr("Incomplete alpha rows are preserved; distance editing is independent.")
       : tr("Stored blend weight. Basic WorldVertexTransition preview; no paint tools."));
   if (displacement)
   {

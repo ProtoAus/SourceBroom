@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.25 vertex-upload fix
+# Try Windows SourceBroom A5.26 — explicit missing terrain alpha
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,29 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.25: restore correct brush positions
+## A5.26: initialize an absent displacement alpha table
+
+On a COPY, select one supported displacement face. If the native `alphas` table
+is entirely absent, **Displacement vertex** offers **Initialize zero alpha rows**.
+Press it deliberately to create a complete zero-weight table; normal **Apply
+alpha** then edits individual samples. Height drafts are not applied by either
+alpha action. Initialization is a separate undo step even with normal command
+collation, and undo removes the newly created table exactly.
+
+Present empty, partial, unknown or malformed tables are not repaired or replaced.
+Existing read-only, frame, geometry/cache, opaque/reference and topology guards
+remain. Geometry, picking and supported translation are unchanged; displacement
+cloning is still refused. This is not painting, sculpting or Source shader
+parity. Current full Model298/UI59/App50/Render28/GL21 and seven-target build pass
+with no new compiler warnings. Parent review is not independent/Hammer or human
+acceptance. Keep the whole owner-confirmed A5.25 kit as recovery.
+
+**Small optional owner check (pending):** on a copied face offering the button,
+initialize, set one sample to128, undo alpha then initialization, and confirm the
+controls make those separate steps clear. Save As a NEW file only. No owner
+observation of this new control has been received; see [lextest](../../lextest.md).
+
+## Retained A5.25: restore correct brush positions
 
 **Do not use A5.24:** the owner observed scattered vertices and an unusable large
 VMF view. Its cached vertices were36 bytes but the renderer's holder/copy/stride
@@ -29,9 +51,10 @@ with typed copying. Native geometry, preservation and save guards do not change.
 The actual copied input loads strictly and both original/copy hashes stay unchanged.
 
 Production upload checks141 and the real packed-VBO GPU case2597 pass; earlier
-shader/draw-count tests did not cover this boundary. Whole-map visual confirmation
-is still pending. Open a COPY in the whole A5.25 kit and check the main viewport
-and edges before testing edits. Keep the whole A5.23 kit as fallback, not A5.24.
+shader/draw-count tests did not cover this boundary. The owner confirmed the
+requested A5.25 same-map geometry/edges view works ("yep, works"). Saving, terrain
+alpha, performance, other maps and Hammer behavior were not separately confirmed.
+This is A5.25 view acceptance, not human acceptance of new A5.26 controls.
 
 ## Retained A5.24 feature: preview basic two-texture terrain blending
 
@@ -637,9 +660,10 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current A5.22 **292 Model / 59 UI** cases pass; A5.21 **50 App / 28 Render**
-  are retained unchanged evidence, not rerun RGB-suite claims. Earlier preference
-  rename failures are retained/unfixed, not erased by a passing current run.
+- Current A5.26 full **298 Model / 59 UI / 50 App / 28 Render / 21 GL** cases
+  pass. Earlier preference rename failures are retained/unfixed, not erased by
+  a passing current run. A5.25 upload141/GPU2597 are retained unchanged-boundary
+  evidence, not newly measured A5.26 counts.
   Installed-package evidence belongs to the matching receipt; source/build results
   alone are not installation, manual appearance or full Source acceptance.
 - Historical A5.14/A5.11 evidence (not current suite totals): **201 model** and

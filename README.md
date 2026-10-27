@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.25 brush vertex-upload regression fix:
+**Status:** Windows A5.26 explicit absent terrain alpha:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,13 +39,25 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.25 fixes **scrambled brush geometry introduced by A5.24**: the cache gained a
+A5.26 adds **Initialize zero alpha rows** for a supported displacement whose
+native `alphas` table is entirely absent. This deliberate action enables normal
+per-sample editing without moving terrain. Present empty/partial/unknown data
+is not repaired. Initialization is a separate undo step from surrounding height
+and alpha edits; Save As/reopen and exact history preserve geometry and source.
+Displacement clone/topology/paint permissions are not widened. Actual seven-target
+build has zero compiler warning/error lines; full Model298/UI59/App50/Render28/
+GL21 pass. Prior intermittent preference failures remain unfixed. Parent review
+is not independent/Hammer or human acceptance. Use whole A5.26 on copies; keep
+the owner-confirmed whole A5.25 kit as recovery. Full Source support is ongoing.
+
+Retained A5.25 fixes **scrambled brush geometry introduced by A5.24**: the cache gained a
 terrain-weight component but the upload holder still used the old32-byte vertex.
 The holder now uses the cache's full36-byte type, and typed copying makes future
 producer/consumer mismatches a compile error. Actual production upload141 and real
 packed-VBO GPU2597 checks pass. The owner's unusable A5.24 view is a confirmed
 failed observation; **avoid A5.24**, keep A5.23 as recovery, and use copied VMFs.
-A5.25 whole-map visual confirmation is pending; prior draw-count/shader checks
+The owner confirmed A5.25's requested same-map geometry/edges view works, not
+other editing, maps/performance or Hammer behavior. Prior draw-count/shader checks
 missed this byte-layout boundary. Native data/edit/save guards are unchanged.
 
 Retained A5.24 adds **basic WorldVertexTransition terrain blending**. Mounted VMTs can

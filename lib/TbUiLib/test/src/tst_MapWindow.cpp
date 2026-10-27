@@ -725,7 +725,11 @@ TEST_CASE(
   auto settings = NativeGroupSettingsScope{env.dir()};
   auto fixture = AppControllerFixture{};
   auto& appController = fixture.appController();
-  const auto solid = [](const size_t id, const size_t power, const bool withAlphas) {
+  const auto solid = [](
+                       const size_t id,
+                       const size_t power,
+                       const bool withAlphas,
+                       const bool partial = false) {
     const auto planes = std::array<std::string, 6>{
       "(0 0 0) (0 64 0) (0 0 64)",
       "(64 0 0) (64 0 64) (64 64 0)",
@@ -766,7 +770,7 @@ TEST_CASE(
         if (withAlphas)
         {
           text += "alphas {\n";
-          for (size_t row = 0; row < size; ++row)
+          for (size_t row = 0; row < (partial ? size_t{1} : size); ++row)
           {
             text += "row" + std::to_string(row) + " \"";
             for (size_t column = 0; column < size; ++column)
@@ -786,7 +790,7 @@ TEST_CASE(
   env.createFile(
     "displacement.vmf",
     "world { id 1 classname worldspawn\n" + solid(2, 6, true) + solid(20, 2, true)
-      + solid(40, 2, false) + "}\n");
+      + solid(40, 2, false) + solid(60, 2, true, true) + "}\n");
   auto loaded = MapDocument::loadDocument(
     appController.environmentConfig(),
     mdl::QuakeGameInfo,
@@ -800,16 +804,20 @@ TEST_CASE(
   auto editor = FaceAttribsEditor{appController, *document};
   auto& map = document->map();
   const auto nodes = map.worldNode().defaultLayer()->children();
-  REQUIRE(nodes.size() == 3);
+  REQUIRE(nodes.size() == 4);
   auto* large = dynamic_cast<mdl::BrushNode*>(nodes[0]);
   auto* small = dynamic_cast<mdl::BrushNode*>(nodes[1]);
   auto* sparse = dynamic_cast<mdl::BrushNode*>(nodes[2]);
+  auto* partial = dynamic_cast<mdl::BrushNode*>(nodes[3]);
+  REQUIRE(partial);
   REQUIRE(large);
   REQUIRE(small);
   REQUIRE(sparse);
   const auto largeFace = large->brush().findFace(vm::vec3d{0, 0, 1});
   const auto smallFace = small->brush().findFace(vm::vec3d{0, 0, 1});
   const auto sparseFace = sparse->brush().findFace(vm::vec3d{0, 0, 1});
+  const auto partialFace = partial->brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(partialFace);
   REQUIRE(largeFace);
   REQUIRE(smallFace);
   REQUIRE(sparseFace);
@@ -851,6 +859,10 @@ TEST_CASE(
   auto* applyAlpha = editor.findChild<QPushButton*>("sourceDisplacementAlphaApply");
   REQUIRE(alpha);
   REQUIRE(applyAlpha);
+  auto* initializeAlpha =
+    editor.findChild<QPushButton*>("sourceDisplacementAlphaInitialize");
+  REQUIRE(initializeAlpha);
+  CHECK(initializeAlpha->isHidden());
   CHECK(alpha->value() == 128);
   REQUIRE(applyAlpha->isEnabled());
   const auto geometry = small->brush().face(*smallFace).sourceDisplacement()->positions();
@@ -880,6 +892,48 @@ TEST_CASE(
   distance->setValue(24);
   apply->click();
   CHECK(sparse->brush().face(*sparseFace).sourceDisplacement()->distance(2, 2) == 24);
+  // Existing scalar controls ACT before the structural initialization boundary.
+  REQUIRE_FALSE(initializeAlpha->isHidden());
+  REQUIRE(initializeAlpha->isEnabled());
+  const auto sparseGeometry =
+    sparse->brush().face(*sparseFace).sourceDisplacement()->positions();
+  const auto initializeCount = map.modificationCount();
+  initializeAlpha->click();
+  CHECK(map.modificationCount() == initializeCount + 1);
+  REQUIRE(sparse->brush().face(*sparseFace).sourceDisplacement()->canEditAlphas());
+  CHECK(initializeAlpha->isHidden());
+  REQUIRE(applyAlpha->isEnabled());
+  CHECK(alpha->value() == 0);
+  alpha->setValue(17.5);
+  applyAlpha->click();
+  CHECK(sparse->brush().face(*sparseFace).sourceDisplacement()->alpha(2, 2) == 17.5);
+  CHECK(
+    sparse->brush().face(*sparseFace).sourceDisplacement()->positions()
+    == sparseGeometry);
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(alpha->value() == 0);
+  CHECK(sparse->brush().face(*sparseFace).sourceDisplacement()->canEditAlphas());
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(sparse->brush().face(*sparseFace).sourceDisplacement()->canInitializeAlphas());
+  CHECK_FALSE(initializeAlpha->isHidden());
+  CHECK_FALSE(applyAlpha->isEnabled());
+  map.redoCommand();
+  map.redoCommand();
+  QApplication::processEvents();
+  CHECK(alpha->value() == 17.5);
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*partial, *partialFace}});
+  QApplication::processEvents();
+  CHECK(initializeAlpha->isHidden());
+  CHECK_FALSE(initializeAlpha->isEnabled());
+  CHECK_FALSE(alpha->isEnabled());
+  CHECK_FALSE(applyAlpha->isEnabled());
+  CHECK(distance->isEnabled());
+  const auto partialCount = map.modificationCount();
+  initializeAlpha->click();
+  CHECK(map.modificationCount() == partialCount);
 }
 
 TEST_CASE("Source material settings group game mounts without changing the catalog")

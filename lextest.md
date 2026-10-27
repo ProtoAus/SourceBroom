@@ -4,19 +4,39 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
-## A5.25 brush vertex upload — pending owner confirmation
+## A5.26 explicit missing terrain alpha — pending control/Hammer check
+
+Use the whole A5.26 kit on a COPY; keep whole owner-confirmed A5.25 as recovery.
+Automated Core80/Map124/UI64 and full Model298/UI59/App50/Render28/GL21 do not
+confirm layout/feel or native Hammer interpretation. No A5.26 owner observation
+has been received.
+
+- [ ] On one copied terrain face that offers **Initialize zero alpha rows**, press
+  it, set one sample Alpha128, then undo alpha and initialization separately.
+  Confirm the controls distinguish table creation from height/alpha changes.
+- [ ] If convenient, Save As a NEW file, reopen and inspect that weight in the
+  matching Hammer++ branch. Never replace an original or strip present partial
+  native data to force eligibility. Existing duplication/topology guards remain.
+
+All pending. This is not painting, measured performance or all-map/shader/branch
+acceptance. A5.25's confirmed view is not a manual pass for these new controls.
+
+## A5.25 brush vertex upload — owner-confirmed same-map view
 
 A5.24 owner observation is FAILED: loading the supplied large VMF scattered
 vertices and made the view unusable. A5.25 fixes the actual36/32-byte cache/upload
 mismatch; automated production-upload141 and packed-GPU2597 checks do not replace
 this human check. Use the whole A5.25 kit and a COPY; A5.23 is fallback, not A5.24.
 
-- [ ] Reopen the same copied VMF and confirm brush geometry and edges stay in place
-  and the viewport is usable. Check selection/editing only after it looks correct.
+- [x] Reopen the same copied VMF and confirm brush geometry and edges stay in place
+  and the viewport is usable. The owner replied “yep, works” to the A5.25 same-map
+  geometry/edges check. This confirms the observed view, not unrelated editing.
 - [ ] If convenient, check one supported terrain alpha change/undo separately.
 
-No A5.25 owner visual confirmation received yet. Original VMFs must not be changed
-for this check; no broad performance, all-map or Hammer/compiler pass is implied.
+The owner confirmed the requested A5.25 view check and asked to continue
+development. Terrain alpha/undo, saving, performance, other maps and Hammer/compiler
+acceptance were not separately confirmed. Original VMFs must not be changed for
+these checks; no broader pass is implied.
 
 ## A5.24 basic terrain blend preview — FAILED owner load, superseded
 

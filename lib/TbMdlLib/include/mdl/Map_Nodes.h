@@ -88,7 +88,8 @@ bool updateNodeContents(
   Map& map,
   const std::string& commandName,
   std::vector<std::pair<Node*, NodeContents>> nodesToSwap,
-  std::vector<GroupNode*> changedLinkedGroups);
+  std::vector<GroupNode*> changedLinkedGroups,
+  bool collatable = true);
 bool updateNodeContents(
   Map& map,
   const std::string& commandName,
