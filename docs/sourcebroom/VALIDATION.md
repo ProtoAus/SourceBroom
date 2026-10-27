@@ -1,11 +1,38 @@
-# SourceBroom validation — A5.21 live native manual visgroups
+# SourceBroom validation — A5.22 explicit native visgroup RGB
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.21 — manual visgroups, native visibility and replay
+## A5.22 — own-record RGB without implicit defaults
+
+- API/tests compiled BEFORE product wiring, zero new compiler diagnostics. Actual
+  ModelRGB **169 assertions / 123 controls pass / 46 desired failures** and actual
+  UI **6 / 5 / 1** retained: existing rename/save/undo acted before desired RGB.
+- First wired3Model+1UI cases pass. Current full **Model292/292**, **UI59/59** and
+  actual client/checker/test4target build pass with0new compiler diagnostics.
+  A5.21 **App50/Render28** are retained history, not rerun/current RGB claims.
+- Tested6-file source/executable fingerprints and complete721-line parent review
+  delta identify the cut. This was direct parent review, not independent review.
+  All6 sources match clang-format with explicit UTF8; the earlier mixed cp1252
+  preview changed no source. Fresh LSP has no C++ errors; prior tidy/self-test
+  limitations are not a clean-LSP claim.
+- Controls exercise parsed noncanonical no-op, known/absent/new-draft color,
+  own/moved-root/retained-child emission, stable save/reopen and exact undo/redo.
+  Malformed/repeated scalar color blocks ONLY RGB while acted rename preserves
+  raw bytes and an independent sibling accepts RGB. Invalid channels, foreign/
+  deleted target and forged expected state refuse before publish.
+- Actual UI verifies current RGB, separate explicit Set, name edits not applying
+  draft values, missing field not silently becoming white, one-command history,
+  Save As/reopen and press-time stale-row refusal. No member editor.color,
+  visibility, geometry ownership, automatic classification or policy widening.
+
+Portable/installed corpus receipts are separate from source validation; refresh
+at that real boundary. Original corpus remains read-only. Owner/Hammer checks in
+../../lextest.md are pending; RGB authoring is not object tint/full Source support.
+
+## Retained A5.21 — manual visgroups, native visibility and replay
 
 Current final post-review production:
 

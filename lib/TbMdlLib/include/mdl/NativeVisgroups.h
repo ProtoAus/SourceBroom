@@ -6,6 +6,7 @@
 
 #include "mdl/VmfDocument.h"
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -61,6 +62,7 @@ enum class NativeVisgroupMemberKind
   Group,
   Unsupported
 };
+using NativeVisgroupColor = std::array<int, 3>;
 struct NativeVisgroupRecord
 {
   NativeVisgroupId id;
@@ -68,6 +70,9 @@ struct NativeVisgroupRecord
   std::string nativeId;
   std::string name;
   std::string refusalReason;
+  std::optional<NativeVisgroupColor> color;
+  // Color-only protection; unrelated edits still preserve unfamiliar scalar bytes.
+  std::string colorRefusalReason;
   bool operator==(const NativeVisgroupRecord&) const = default;
 };
 struct NativeVisgroupMember
@@ -139,12 +144,18 @@ struct NativeVisgroupManualAction
   std::vector<NativeVisgroupTarget> roots;
   bool shown = true;
 };
+struct NativeVisgroupColorAction
+{
+  NativeVisgroupTarget visgroup;
+  NativeVisgroupColor color;
+};
 struct NativeVisgroupRequest
 {
   NativeVisgroupSnapshot expected;
   std::vector<NativeVisgroupDesiredRecord> records;
   std::vector<NativeVisgroupMembershipAction> memberships;
   std::optional<NativeVisgroupManualAction> manual;
+  std::optional<NativeVisgroupColorAction> color;
   explicit NativeVisgroupRequest(const NativeVisgroupSnapshot& snapshot);
 };
 enum class NativeVisgroupDirection

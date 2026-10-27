@@ -5,7 +5,28 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## LIVE native manual visgroups — A5.21
+## Explicit native visgroup RGB — A5.22
+
+Select a supported record in **Map → LIVE native manual visgroups**. The RGB
+column, three channels and state explanation are current UNSAVED metadata. Press
+**Set RGB on this visgroup only** to author its own native `color`. Name/reparent
+never applies drafted channels; there is no propagation or member `editor.color`,
+brush/material tint or saved-Hammer-checkbox change.
+
+A supported scalar is exactly3 decimal integer channels0..255. Same parsed RGB is
+a true no-op retaining original spelling. An absent field is **not stored**: white
+is a draft, written only by explicit Set. Unknown/repeated scalar colors remain
+preserved and disable/refuse only RGB authoring; ordinary rename/tree behavior
+and general protected-record guards remain. Removal is not authored; undo can
+restore an originally absent field exactly.
+
+Known/absent/new/moved records use the existing scoped request/history and both
+native emission paths, including local edits inside moved source subtrees. Use
+Save As on a copy; compare actual record RGB in matching Hammer++. FullModel292/
+UI59 and current product/checker builds pass0new diagnostics; human acceptance is
+pending in [lextest](../../lextest.md).
+
+## LIVE native manual visgroups — retained A5.21 controls
 
 In the **Map** inspector, scroll to **LIVE native manual visgroups**. Unlike the
 saved-file dialog, this is current UNSAVED native state. Supported loaded/new
@@ -31,8 +52,9 @@ live reference order across save/reopen. Session-only hiding saves without
 changing native flags. Actual Both clip undo/redo checks the expected relevant
 metadata and Front operation authority before changing selection or the tree.
 
-RGB editing, wrapper/automatic flag authoring, automatic group predicates and
-arbitrary opaque/cached geometry remain outside this boundary. Use Save As on a
+A5.22 adds only explicit own-record RGB above. Wrapper/automatic flag authoring,
+automatic group predicates and arbitrary opaque/cached geometry remain outside
+this boundary. Use Save As on a
 copy and keep the previous whole kit. Model/UI/render/runtime checks are not
 independent Hammer or human appearance acceptance; see [lextest](../../lextest.md).
 
@@ -444,8 +466,9 @@ animation, bodygroup or universal FGD/SDK parity.
 ## Still outside this candidate
 
 Basic plain-object authoring and A5.21 manual-visgroup controls do not imply
-arbitrary topology, automatic/wrapper visibility or RGB authoring, layers, linked
-instances, complete displacement/overlay authoring, full Source material rendering
+arbitrary topology, automatic/wrapper visibility, complete per-object editor
+metadata, layers, linked instances, complete displacement/overlay authoring,
+full Source material rendering
 or all-branch performance. Common unsupported operations are gated;
 some upstream actions can remain visible, but unsupported content changes must
 refuse before mutation and preserving-save remains the final backstop. Never ignore an error or assume an

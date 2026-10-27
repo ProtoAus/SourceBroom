@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.21 live native-visgroup candidate
+# Try the Windows SourceBroom A5.22 native-visgroup RGB candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,35 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.21: live manual visgroups without converting the VMF
+## A5.22: explicitly edit a native visgroup's RGB
+
+In **Map → LIVE native manual visgroups**, select a supported record, edit its
+three bounded RGB channels, then press **Set RGB on this visgroup only**. The RGB
+column and controls show current UNSAVED state. Name/reparent controls do not
+silently apply drafted RGB. An absent field is labelled **not stored**; the white
+controls are only a draft until explicit Set. This edits the record's native
+`color`, not member `editor.color`, material tint or brush rendering, and does not
+propagate to descendants or members.
+
+Supported scalar colors are three decimal integers in0..255. Same parsed RGB is
+a true no-op, preserving original spelling. Unsupported or repeated scalar color
+is preserved and refuses ONLY RGB authoring; independent ordinary rename/tree
+operations keep their previous behavior. General protected-record guards still
+apply. Save/reopen, new/moved subtrees, undo/redo and press-time scoped action
+identity use the existing native preservation/history path; color removal is not
+an authored operation.
+
+Current full **Model292 / UI59** and actual product/checker builds pass with zero
+new compiler diagnostics. A5.21 App50/Render28 remain retained evidence, not new
+RGB suite results. Parent reviewed the complete six-file scalar delta; no new
+independent-review or human/Hammer acceptance claim.
+
+**Quick owner check (pending):** use the whole A5.22 kit and a copied VMF. Pick a
+manual visgroup, set17/128/255, undo/redo, Save As a new VMF and reopen in matching
+Hammer++. Confirm the record's RGB, not a promised object tint or checkbox. Keep
+the whole A5.21 kit as recovery and never overwrite an original to test refusal.
+
+## Retained A5.21: live manual visgroups without converting the VMF
 
 In the **Map** inspector, scroll to **LIVE native manual visgroups**. This shows
 current UNSAVED state, separately from the saved-file metadata dialog. Create,
@@ -536,7 +564,8 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current **289 Model / 58 UI / 50 App / 28 Render** cases pass. Earlier preference
+- Current A5.22 **292 Model / 59 UI** cases pass; A5.21 **50 App / 28 Render**
+  are retained unchanged evidence, not rerun RGB-suite claims. Earlier preference
   rename failures are retained/unfixed, not erased by a passing current run.
   Installed-package evidence belongs to the matching receipt; source/build results
   alone are not installation, manual appearance or full Source acceptance.
@@ -560,7 +589,7 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   targeted passes are not an all-UI-green or manual/Hammer acceptance claim. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep the whole A5.20 kit and prior A5.19/A5.18/A5.17/A5.16/A5.15/A5.14/
+  Keep the whole A5.21/A5.20 kits and prior A5.19/A5.18/A5.17/A5.16/A5.15/A5.14/
   A5.13/A5.12/A5.11/A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery
   packages; do not merge DLL sets.
 

@@ -4,6 +4,25 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.22 explicit visgroup RGB — pending owner/Hammer check
+
+Use the whole A5.22 kit and a copied VMF; keep the whole A5.21 kit as recovery.
+Automated Model292/UI59 and source/build checks do not confirm these observations.
+No A5.22 owner observation has been received.
+
+- [ ] Select a supported record in **Map → LIVE native manual visgroups**. Change
+  R/G/B to17/128/255, press **Set RGB on this visgroup only**, then undo/redo.
+  Confirm the RGB column/controls and record identity remain understandable.
+- [ ] Save As a NEW VMF, reopen and inspect that record's RGB in matching Hammer++.
+  This is own-record metadata, not promised member/object tint or propagation.
+- [ ] If testing a new/colorless record, confirm **not stored** remains true until
+  explicit Set; white controls are a draft, and name/reparent must not store it.
+  Unsupported/repeated scalar color should preserve bytes/refuse only RGB, with
+  general protected-record restrictions still explicit. Do not overwrite originals.
+
+All pending. Visual approval confirms only the actual observed case, not full
+Source branch/renderer/performance compatibility or data-integrity measurements.
+
 ## A5.21 live manual visgroups — pending owner/Hammer check
 
 Use a **copied editable** CSS/Momentum VMF in the whole A5.21 kit. Keep the whole

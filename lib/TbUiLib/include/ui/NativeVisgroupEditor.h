@@ -9,12 +9,14 @@
 #include "base/NotifierConnection.h"
 #include "mdl/Map_NativeVisgroups.h"
 
+#include <array>
 #include <functional>
 
 class QComboBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QSpinBox;
 class QTreeWidget;
 
 namespace tb::ui
@@ -34,10 +36,13 @@ private:
   QTreeWidget* m_members;
   QComboBox* m_parent;
   QLineEdit* m_name;
+  std::array<QSpinBox*, 3> m_color;
+  QLabel* m_colorState;
   QLabel* m_summary;
   QLabel* m_status;
   QPushButton* m_create;
   QPushButton* m_apply;
+  QPushButton* m_setColor;
   QPushButton* m_delete;
   QPushButton* m_show;
   QPushButton* m_hide;

@@ -21,7 +21,41 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Live native manual visgroups — A5.21
+## Explicit own-record visgroup RGB — A5.22
+
+NativeVisgroupRecord now owns optional parsed RGB plus a COLOR-ONLY refusal
+reason. One explicit scoped loaded/draft target + three int channels extends the
+existing request; the complete desired tree does not silently author color.
+Exactly3 ASCII decimal components0..255 are parsed without token-sized allocation;
+leading zeros/whitespace remain source text unless an actual value change is
+requested. Digit accumulation is bounded at255 before the next multiply.
+
+Unfamiliar/repeated scalar color preserves prior independent rename/tree/manual
+behavior. Only RGB authoring refuses it; legacy malformed blocks/general record
+protection stay unchanged. Existing complete-record equality covers expected
+snapshots and VmfScene referenced-definition replay. No epoch/lifetime/retry
+policy, visibility, member editor.color or geometry admission change.
+
+Private original color entry provenance drives BOTH retained/global scalar edits
+and moved-subtree-local emission. Absent fields append only on explicit intent;
+new records without intent remain colorless. Same value is no-op, full undo exact,
+and removal is intentionally not authored. UI RGB column/three bounded controls/
+separate Set capture existing press-time intent; white for an absent field is a
+labelled draft, not a stored/default claim. Name/reparent never applies it.
+
+Actual compiled pre-wiring ModelRGB169 assertions/123controls/46desiredfails and
+UI6/5/1 precede the implementation. New3Model/1UI cases then pass; current full
+Model292/UI59 and actual4target client/checker/tests build pass0newMSVCdiagnostics.
+Six-file full delta parent-reviewed; no independent RGB review claim. All6 files
+match clang-format using explicit UTF8. A mixed Python cp1252 preview was corrected
+in the preview only, not treated as source corruption. Existing tidy/self-test
+limitations remain. A521 App50/Render28 are retained, not new RGB results.
+
+Installed corpus/portable receipts are a separate dependency-boundary gate; owner
+RGB/Hammer observation remains pending in ../../lextest.md. No material tint,
+member-color propagation, automatic visibility or full Source claim.
+
+## Retained live native manual visgroups — A5.21
 
 NativeVisgroups owns separate scene-scoped record/member handles, request-local
 creation keys, immutable contextual identity/admission and complete desired tree

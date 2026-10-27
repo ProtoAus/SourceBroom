@@ -11,6 +11,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 
 namespace tb::mdl
 {
@@ -46,6 +47,44 @@ std::string quote(const std::string& value)
     out += c;
   }
   return out + '"';
+}
+std::optional<NativeVisgroupColor> parseColor(const std::string_view text)
+{
+  const auto space = [](const char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+  };
+  auto result = NativeVisgroupColor{};
+  size_t position = 0;
+  for (auto& channel : result)
+  {
+    while (position < text.size() && space(text[position]))
+    {
+      ++position;
+    }
+    const auto start = position;
+    while (position < text.size() && text[position] >= '0' && text[position] <= '9')
+    {
+      channel = channel * 10 + text[position++] - '0';
+      if (channel > 255)
+      {
+        return std::nullopt;
+      }
+    }
+    if (position == start)
+    {
+      return std::nullopt;
+    }
+  }
+  while (position < text.size() && space(text[position]))
+  {
+    ++position;
+  }
+  return position == text.size() ? std::optional{result} : std::nullopt;
+}
+std::string colorText(const NativeVisgroupColor& color)
+{
+  return std::to_string(color[0]) + " " + std::to_string(color[1]) + " "
+         + std::to_string(color[2]);
 }
 std::optional<std::string> decimal(const std::string& value)
 {
@@ -162,6 +201,7 @@ struct NativeVisgroups::Impl
   {
     VmfEntryId entry;
     std::optional<VmfEntryId> name;
+    std::optional<VmfEntryId> color;
   };
   struct MemberSource
   {
@@ -287,12 +327,12 @@ NativeVisgroups::NativeVisgroups(const VmfDocument& d)
   for (const auto& row : metadata.visgroups)
   {
     auto r = NativeVisgroupRecord{
-      ids.at(row.entry), {}, row.nativeId.value_or(""), row.name, {}};
+      ids.at(row.entry), {}, row.nativeId.value_or(""), row.name, {}, {}, {}};
     if (row.parent)
     {
       r.parent = ids.at(*row.parent);
     }
-    auto p = Impl::TreeSource{row.entry, {}};
+    auto p = Impl::TreeSource{row.entry, {}, {}};
     auto idCount = size_t{0};
     for (const auto child : d.entries()[row.entry].children)
     {
@@ -311,6 +351,20 @@ NativeVisgroups::NativeVisgroups(const VmfDocument& d)
       }
       else if (k == "color" && d.entries()[child].value)
       {
+        if (p.color)
+        {
+          r.color.reset();
+          r.colorRefusalReason = "repeated color fields are preserved, not overwritten";
+        }
+        else
+        {
+          p.color = child;
+          r.color = parseColor(d.tokenContents(*d.entries()[child].value));
+          if (!r.color)
+          {
+            r.colorRefusalReason = "color is not three decimal RGB channels in 0..255";
+          }
+        }
       }
       else
       {
@@ -742,6 +796,23 @@ std::optional<PreparedNativeVisgroupChange> NativeVisgroups::prepare(
       reject("retained siblings must keep order; new/moved siblings append");
     }
     last = pos;
+  }
+  if (request.color)
+  {
+    spend();
+    auto& target = *std::ranges::find(
+      after.records, resolve(request.color->visgroup), &NativeVisgroupRecord::id);
+    if (!target.refusalReason.empty() || !target.colorRefusalReason.empty())
+    {
+      reject("protected RGB target: " + target.refusalReason + target.colorRefusalReason);
+    }
+    if (std::ranges::any_of(request.color->color, [](const int channel) {
+          return channel < 0 || channel > 255;
+        }))
+    {
+      reject("RGB channels must be in 0..255");
+    }
+    target.color = request.color->color;
   }
   auto memberIndex = std::map<uint64_t, size_t>{};
   auto contexts = std::map<uint64_t, const NativeVisgroupMemberContext*>{};
@@ -1348,6 +1419,22 @@ void NativeVisgroups::emitTreeEdits(
         append[p.entry] += "\"name\" " + quote(now->name) + "\n";
       }
     }
+    if (now && now->color != old.color)
+    {
+      if (!now->color)
+      {
+        reject("RGB removal is not an authored operation");
+      }
+      const auto& p = s.trees.at(old.id.m_serial);
+      if (p.color)
+      {
+        localValues.push_back({*p.color, quote(colorText(*now->color))});
+      }
+      else
+      {
+        append[p.entry] += "\"color\" " + quote(colorText(*now->color)) + "\n";
+      }
+    }
   }
   // A moved source root uses subtree-local surgical edits. Retained children
   // stay in place, even when their values change; no remove/reappend reordering.
@@ -1357,6 +1444,10 @@ void NativeVisgroups::emitTreeEdits(
     {
       auto result = "visgroup\n{\n\"name\" " + quote(r.name) + "\n\"visgroupid\" "
                     + quote(r.nativeId) + "\n";
+      if (r.color)
+      {
+        result += "\"color\" " + quote(colorText(*r.color)) + "\n";
+      }
       for (const auto& child : s.live.records)
       {
         if (child.parent == std::optional<NativeVisgroupId>{r.id})
@@ -1381,6 +1472,21 @@ void NativeVisgroups::emitTreeEdits(
         else
         {
           added += "\"name\" " + quote(row.name) + "\n";
+        }
+      }
+      if (previous->color != row.color)
+      {
+        if (!row.color)
+        {
+          reject("RGB removal is not an authored operation");
+        }
+        if (p.color)
+        {
+          v.push_back({*p.color, quote(colorText(*row.color))});
+        }
+        else
+        {
+          added += "\"color\" " + quote(colorText(*row.color)) + "\n";
         }
       }
       for (const auto& child : s.base.records)

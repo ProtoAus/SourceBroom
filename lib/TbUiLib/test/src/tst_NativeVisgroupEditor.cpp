@@ -7,6 +7,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTest>
 #include <QTreeWidget>
 
@@ -218,6 +219,102 @@ void parentChoice(QWidget& editor, const std::string& nativeId)
   FAIL("Missing visgroup parent " << nativeId);
 }
 } // namespace
+TEST_CASE("NativeVisgroup UI explicit RGB dispatch and exact history", "[vmf][visgroups]")
+{
+  auto env = fs::TestEnvironment{};
+  auto settings = VisgroupSettingsScope{env.dir()};
+  const auto original = familySource();
+  write(env.dir() / "rgb.vmf", original);
+  auto fixture = MapDocumentFixture{};
+  auto& document = fixture.load(env.dir() / "rgb.vmf", config);
+  auto& map = document.map();
+  auto editor = NativeVisgroupEditor{document};
+  // An actual existing UI action controls the absent-new-controls RED.
+  edit(editor, "RGB control acted");
+  click(editor, "visgroupApply");
+  CHECK(mdl::nativeVisgroups(map).records[0].name == "RGB control acted");
+  CHECK(serialize(map).find("color \"1 2 3\"") != std::string::npos);
+  map.undoCommand();
+  CHECK(serialize(map) == original);
+  auto* red = child<QSpinBox>(editor, "visgroupRed");
+  auto* green = child<QSpinBox>(editor, "visgroupGreen");
+  auto* blue = child<QSpinBox>(editor, "visgroupBlue");
+  auto* set = child<QPushButton>(editor, "visgroupSetColor");
+  CHECK(red->value() == 1);
+  CHECK(green->value() == 2);
+  CHECK(blue->value() == 3);
+  CHECK(row(editor, "Root")->text(2) == "1 2 3");
+  const auto count = map.modificationCount();
+  SECTION("name edits do not author draft RGB; explicit Set saves and replays")
+  {
+    red->setValue(17);
+    green->setValue(0);
+    blue->setValue(255);
+    edit(editor, "Name only");
+    click(editor, "visgroupApply");
+    CHECK(
+      mdl::nativeVisgroups(map).records[0].color == mdl::NativeVisgroupColor{1, 2, 3});
+    CHECK(serialize(map).find("color \"1 2 3\"") != std::string::npos);
+    map.undoCommand();
+    CHECK(serialize(map) == original);
+    red->setValue(17);
+    green->setValue(0);
+    blue->setValue(255);
+    set->click();
+    CHECK(
+      mdl::nativeVisgroups(map).records[0].color == mdl::NativeVisgroupColor{17, 0, 255});
+    CHECK(map.modificationCount() == count + 1);
+    CHECK(row(editor, "Root")->text(2) == "17 0 255");
+    const auto saved = serialize(map);
+    CHECK(saved != original);
+    REQUIRE(map.saveAs(env.dir() / "rgb-saved.vmf").is_success());
+    auto reopenedFixture = MapDocumentFixture{};
+    auto& reopened = reopenedFixture.load(env.dir() / "rgb-saved.vmf", config);
+    CHECK(serialize(reopened.map()) == saved);
+    CHECK(
+      mdl::nativeVisgroups(reopened.map()).records[0].color
+      == mdl::NativeVisgroupColor{17, 0, 255});
+    map.undoCommand();
+    CHECK(serialize(map) == original);
+    map.redoCommand();
+    CHECK(serialize(map) == saved);
+    CHECK(red->value() == 17);
+  }
+  SECTION("new record has no invented RGB until explicit Set")
+  {
+    click(editor, "visgroupCreate");
+    choose(editor, "New visgroup");
+    CHECK_FALSE(mdl::nativeVisgroups(map).records.back().color);
+    CHECK(child<QLabel>(editor, "visgroupColorState")->text().contains("not stored"));
+    CHECK(red->value() == 255);
+    CHECK(green->value() == 255);
+    CHECK(blue->value() == 255);
+    const auto created = serialize(map);
+    click(editor, "visgroupApply");
+    CHECK(serialize(map) == created);
+    CHECK_FALSE(mdl::nativeVisgroups(map).records.back().color);
+    set->click();
+    CHECK(
+      mdl::nativeVisgroups(map).records.back().color
+      == mdl::NativeVisgroupColor{255, 255, 255});
+    CHECK(serialize(map) != created);
+    map.undoCommand();
+    CHECK(serialize(map) == created);
+    map.undoCommand();
+    CHECK(serialize(map) == original);
+  }
+  SECTION("press-time color action cannot retarget another row")
+  {
+    red->setValue(99);
+    Q_EMIT set->pressed();
+    choose(editor, "Overlap");
+    Q_EMIT set->clicked();
+    CHECK(serialize(map) == original);
+    CHECK(map.modificationCount() == count);
+    CHECK(child<QLabel>(editor, "visgroupStatus")->text().contains("Stale"));
+  }
+}
+
 TEST_CASE("NativeVisgroup UI early child moves behind retained roots", "[vmf][visgroups]")
 {
   auto env = fs::TestEnvironment{};

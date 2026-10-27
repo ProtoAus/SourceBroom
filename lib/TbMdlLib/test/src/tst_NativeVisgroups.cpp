@@ -133,6 +133,207 @@ TEST_CASE("NativeVisgroups loaded state and acted manual membership emission")
   CHECK(serialized(d, model) == output);
 }
 
+TEST_CASE("NativeVisgroups explicit RGB preserves lexical no-op and both tree emitters")
+{
+  const auto bytes = std::string{
+    "// synthetic RGB; original numeric text is authoritative\r\n"
+    "visgroups { visgroup { name Parent visgroupid 007 color \"001 002 003\"\r\n"
+    "visgroup { name Child visgroupid 8 color \"004 005 006\" } }\r\n"
+    "visgroup { name Sibling visgroupid 9 } }\r\n"
+    "world { id 1 classname worldspawn }\r\n"
+    "entity { id 0002 classname info_target editor { color \"17 18 19\" } }\r\n"
+    "opaque { token \"001.250\" token \"-002\" }\r\n"};
+  const auto d = VmfDocument::parse(bytes);
+  auto model = NativeVisgroups{d};
+  const auto context = NativeVisgroupContext{};
+  const auto initial = model.snapshot(context);
+  REQUIRE(initial.records.size() == 3);
+  CHECK(initial.records[0].color == NativeVisgroupColor{1, 2, 3});
+  CHECK(initial.records[1].color == NativeVisgroupColor{4, 5, 6});
+  CHECK_FALSE(initial.records[2].color);
+
+  // Acted ordinary-authoring control before every scalar arm.
+  auto control = NativeVisgroupRequest{initial};
+  control.records[2].name = "Control acted";
+  auto controlled = model.prepare(control, context);
+  REQUIRE(controlled);
+  model.apply(*controlled, NativeVisgroupDirection::Forward, context);
+  CHECK(serialized(d, model).find("Control acted") != std::string::npos);
+  model.apply(*controlled, NativeVisgroupDirection::Backward, context);
+  CHECK(serialized(d, model) == bytes);
+  auto request = NativeVisgroupRequest{model.snapshot(context)};
+
+  SECTION("same parsed value is a true lexical no-op")
+  {
+    request.color = NativeVisgroupColorAction{initial.records[0].id, {1, 2, 3}};
+    const auto revision = model.snapshot().revision;
+    CHECK_FALSE(model.prepare(request, context));
+    CHECK(model.snapshot().revision == revision);
+    CHECK(serialized(d, model) == bytes);
+  }
+  SECTION("retained known field changes and replays")
+  {
+    const auto index = GENERATE(size_t{0}, size_t{1});
+    request.color = NativeVisgroupColorAction{initial.records[index].id, {17, 0, 255}};
+    auto change = model.prepare(request, context);
+    REQUIRE(change);
+    model.apply(*change, NativeVisgroupDirection::Forward, context);
+    CHECK(model.snapshot().records[index].color == NativeVisgroupColor{17, 0, 255});
+    const auto saved = serialized(d, model);
+    CHECK(saved != bytes);
+    const auto reopened = NativeVisgroups{VmfDocument::parse(saved)};
+    CHECK(reopened.snapshot().records[index].color == NativeVisgroupColor{17, 0, 255});
+    CHECK(saved.find("visgroupid 007") != std::string::npos);
+    CHECK(saved.find("color \"17 18 19\"") != std::string::npos);
+    CHECK(saved.find("token \"001.250\" token \"-002\"") != std::string::npos);
+    CHECK(serialized(d, model) == saved);
+    model.apply(*change, NativeVisgroupDirection::Backward, context);
+    CHECK(serialized(d, model) == bytes);
+    model.apply(*change, NativeVisgroupDirection::Forward, context);
+    CHECK(serialized(d, model) == saved);
+  }
+  SECTION("missing field requires an explicit write")
+  {
+    request.color = NativeVisgroupColorAction{initial.records[2].id, {255, 128, 0}};
+    auto change = model.prepare(request, context);
+    REQUIRE(change);
+    model.apply(*change, NativeVisgroupDirection::Forward, context);
+    const auto saved = serialized(d, model);
+    CHECK(saved != bytes);
+    CHECK(
+      NativeVisgroups{VmfDocument::parse(saved)}.snapshot().records[2].color
+      == NativeVisgroupColor{255, 128, 0});
+    model.apply(*change, NativeVisgroupDirection::Backward, context);
+    CHECK(serialized(d, model) == bytes);
+  }
+  SECTION("request-local new record may receive explicit RGB")
+  {
+    const auto draft = NativeVisgroupDraftKey{1};
+    request.records.push_back({draft, initial.records[0].id, "Draft RGB"});
+    request.color = NativeVisgroupColorAction{draft, {0, 255, 127}};
+    auto change = model.prepare(request, context);
+    REQUIRE(change);
+    model.apply(*change, NativeVisgroupDirection::Forward, context);
+    const auto saved = serialized(d, model);
+    const auto reopened = NativeVisgroups{VmfDocument::parse(saved)}.snapshot();
+    const auto found =
+      std::ranges::find(reopened.records, "Draft RGB", &NativeVisgroupRecord::name);
+    REQUIRE(found != reopened.records.end());
+    CHECK(found->color == NativeVisgroupColor{0, 255, 127});
+    model.apply(*change, NativeVisgroupDirection::Backward, context);
+    CHECK(serialized(d, model) == bytes);
+  }
+  SECTION("moved source subtree patches its own or retained child RGB locally")
+  {
+    const auto index = GENERATE(size_t{0}, size_t{1});
+    auto parent = request.records[0];
+    parent.parent = initial.records[2].id;
+    request.records.erase(request.records.begin());
+    request.records.push_back(std::move(parent));
+    request.color = NativeVisgroupColorAction{initial.records[index].id, {20, 30, 40}};
+    auto change = model.prepare(request, context);
+    REQUIRE(change);
+    model.apply(*change, NativeVisgroupDirection::Forward, context);
+    const auto saved = serialized(d, model);
+    const auto reopened = NativeVisgroups{VmfDocument::parse(saved)}.snapshot();
+    REQUIRE(reopened.records.size() == 3);
+    CHECK(reopened.records[0].name == "Sibling");
+    CHECK(reopened.records[1].name == "Parent");
+    CHECK(reopened.records[index + 1].color == NativeVisgroupColor{20, 30, 40});
+    CHECK(serialized(d, model) == saved);
+    model.apply(*change, NativeVisgroupDirection::Backward, context);
+    CHECK(serialized(d, model) == bytes);
+  }
+}
+
+TEST_CASE("NativeVisgroups unfamiliar RGB is color-only protection")
+{
+  const auto field = GENERATE(
+    "color \"1.0 2 3\"",
+    "color \"-1 2 3\"",
+    "color \"256 2 3\"",
+    "color \"1 2\"",
+    "color \"1 2 3 4\"",
+    "color \"1 2 x\"",
+    "color \"1 2 3\" color \"4 5 6\"");
+  const auto bytes =
+    "visgroups { visgroup { name Bad visgroupid 7 " + std::string{field}
+    + " } visgroup { name Good visgroupid 8 } }\nworld { id 1 classname worldspawn }\n";
+  const auto d = VmfDocument::parse(bytes);
+  auto model = NativeVisgroups{d};
+  const auto context = NativeVisgroupContext{};
+  const auto initial = model.snapshot(context);
+  REQUIRE(initial.records.size() == 2);
+  CHECK(initial.records[0].refusalReason.empty());
+  CHECK_FALSE(initial.records[0].colorRefusalReason.empty());
+  auto rename = NativeVisgroupRequest{initial};
+  rename.records[0].name = "Control acted";
+  auto control = model.prepare(rename, context);
+  REQUIRE(control);
+  model.apply(*control, NativeVisgroupDirection::Forward, context);
+  CHECK(serialized(d, model).find(field) != std::string::npos);
+  CHECK(serialized(d, model).find("Control acted") != std::string::npos);
+  model.apply(*control, NativeVisgroupDirection::Backward, context);
+  CHECK(serialized(d, model) == bytes);
+  const auto state = model.snapshot(context);
+  auto request = NativeVisgroupRequest{state};
+  request.color = NativeVisgroupColorAction{state.records[0].id, {1, 2, 3}};
+  CHECK_THROWS_AS(model.prepare(request, context), std::invalid_argument);
+  CHECK(model.snapshot().revision == state.revision);
+  CHECK(serialized(d, model) == bytes);
+  request.color = NativeVisgroupColorAction{state.records[1].id, {17, 18, 19}};
+  auto independent = model.prepare(request, context);
+  REQUIRE(independent);
+  model.apply(*independent, NativeVisgroupDirection::Forward, context);
+  CHECK(model.snapshot().records[1].color == NativeVisgroupColor{17, 18, 19});
+  CHECK(serialized(d, model).find(field) != std::string::npos);
+}
+
+TEST_CASE("NativeVisgroups RGB rejects invalid scope and channel values before publish")
+{
+  const auto d = VmfDocument::parse("visgroups { visgroup { name RGB visgroupid 7 } }");
+  auto model = NativeVisgroups{d};
+  const auto context = NativeVisgroupContext{};
+  const auto initial = model.snapshot(context);
+  const auto unchanged = serialized(d, model);
+  SECTION("channel bounds")
+  {
+    const auto color = GENERATE(
+      NativeVisgroupColor{-1, 2, 3},
+      NativeVisgroupColor{256, 2, 3},
+      NativeVisgroupColor{1, -1, 3},
+      NativeVisgroupColor{1, 256, 3},
+      NativeVisgroupColor{1, 2, -1},
+      NativeVisgroupColor{1, 2, 256});
+    auto request = NativeVisgroupRequest{initial};
+    request.color = NativeVisgroupColorAction{initial.records[0].id, color};
+    CHECK_THROWS_AS(model.prepare(request, context), std::invalid_argument);
+  }
+  SECTION("foreign target")
+  {
+    auto foreign = NativeVisgroups{d};
+    auto request = NativeVisgroupRequest{initial};
+    request.color =
+      NativeVisgroupColorAction{foreign.snapshot().records[0].id, {1, 2, 3}};
+    CHECK_THROWS_AS(model.prepare(request, context), std::invalid_argument);
+  }
+  SECTION("deleted target")
+  {
+    auto request = NativeVisgroupRequest{initial};
+    request.records.clear();
+    request.color = NativeVisgroupColorAction{initial.records[0].id, {1, 2, 3}};
+    CHECK_THROWS_AS(model.prepare(request, context), std::invalid_argument);
+  }
+  SECTION("forged expected RGB is not authority")
+  {
+    auto request = NativeVisgroupRequest{initial};
+    request.expected.records[0].color = NativeVisgroupColor{1, 2, 3};
+    CHECK_THROWS_AS(model.prepare(request, context), std::invalid_argument);
+  }
+  CHECK(model.snapshot().revision == initial.revision);
+  CHECK(serialized(d, model) == unchanged);
+}
+
 TEST_CASE("NativeVisgroups reintroduced direct references persist in live order")
 {
   const auto d = VmfDocument::parse(source);

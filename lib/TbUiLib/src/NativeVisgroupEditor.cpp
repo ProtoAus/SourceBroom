@@ -6,11 +6,13 @@
 
 #include <QComboBox>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -52,6 +54,20 @@ QString flagText(const std::optional<bool> flag)
   return !flag   ? QObject::tr("not set")
          : *flag ? QObject::tr("shown")
                  : QObject::tr("hidden");
+}
+QString rgbText(const mdl::NativeVisgroupRecord& record)
+{
+  if (!record.colorRefusalReason.empty())
+  {
+    return QObject::tr("preserved / unsupported");
+  }
+  if (!record.color)
+  {
+    return QObject::tr("not stored");
+  }
+  const auto& color = *record.color;
+  return QString::number(color[0]) + " " + QString::number(color[1]) + " "
+         + QString::number(color[2]);
 }
 std::string decimalKey(const std::string& id)
 {
@@ -95,13 +111,31 @@ NativeVisgroupEditor::NativeVisgroupEditor(MapDocument& document, QWidget* paren
   layout->addWidget(title);
   m_tree = new QTreeWidget{};
   m_tree->setObjectName("visgroupTree");
-  m_tree->setHeaderLabels({tr("Visgroup"), tr("Native ID / protection")});
+  m_tree->setHeaderLabels({tr("Visgroup"), tr("Native ID / protection"), tr("RGB")});
   m_tree->setMinimumHeight(100);
   layout->addWidget(m_tree);
   auto* form = new QFormLayout{};
   m_name = new QLineEdit{};
   m_name->setObjectName("visgroupName");
   form->addRow(tr("Name (explicit edits only)"), m_name);
+  auto* rgb = new QWidget{};
+  auto* channels = new QHBoxLayout{rgb};
+  channels->setContentsMargins(0, 0, 0, 0);
+  const auto names = std::array{"visgroupRed", "visgroupGreen", "visgroupBlue"};
+  const auto labels = std::array{tr("R"), tr("G"), tr("B")};
+  for (size_t i = 0; i < m_color.size(); ++i)
+  {
+    m_color[i] = new QSpinBox{};
+    m_color[i]->setObjectName(names[i]);
+    m_color[i]->setRange(0, 255);
+    channels->addWidget(new QLabel{labels[i]});
+    channels->addWidget(m_color[i]);
+  }
+  form->addRow(tr("RGB (explicit Set only)"), rgb);
+  m_colorState = new QLabel{};
+  m_colorState->setObjectName("visgroupColorState");
+  m_colorState->setWordWrap(true);
+  form->addRow(m_colorState);
   m_parent = new QComboBox{};
   m_parent->setObjectName("visgroupParent");
   m_parent->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
@@ -116,6 +150,7 @@ NativeVisgroupEditor::NativeVisgroupEditor(MapDocument& document, QWidget* paren
   };
   m_create = button("visgroupCreate", tr("Create visgroup (under chosen parent)"));
   m_apply = button("visgroupApply", tr("Apply name / reparent"));
+  m_setColor = button("visgroupSetColor", tr("Set RGB on this visgroup only"));
   m_delete = button("visgroupDelete", tr("Delete subtree and its supported references"));
   m_show = button("visgroupShow", tr("Show members"));
   m_hide = button("visgroupHide", tr("Hide members"));
@@ -197,7 +232,8 @@ void NativeVisgroupEditor::refresh()
       QString::fromUtf8(record.name),
       QString::fromStdString(
         record.nativeId
-        + (record.refusalReason.empty() ? "" : " — " + record.refusalReason))}};
+        + (record.refusalReason.empty() ? "" : " — " + record.refusalReason)),
+      rgbText(record)}};
     item->setData(0, Qt::UserRole, int(i));
     items.push_back(item);
     treeIndices.emplace(record.id, i);
@@ -328,6 +364,23 @@ void NativeVisgroupEditor::showRows()
   }
   m_parent->setCurrentIndex(parentIndex);
   m_name->setEnabled(editable);
+  const auto* selectedRecord = valid ? &snapshot.records[size_t(index)] : nullptr;
+  const auto colorEditable = editable && selectedRecord->colorRefusalReason.empty();
+  for (size_t i = 0; i < m_color.size(); ++i)
+  {
+    const QSignalBlocker colorBlock{m_color[i]};
+    m_color[i]->setValue(
+      selectedRecord && selectedRecord->color ? (*selectedRecord->color)[i] : 255);
+    m_color[i]->setEnabled(colorEditable);
+  }
+  m_setColor->setEnabled(colorEditable);
+  m_colorState->setText(
+    !selectedRecord ? tr("No visgroup selected.")
+    : !selectedRecord->colorRefusalReason.empty()
+      ? QString::fromStdString(selectedRecord->colorRefusalReason)
+    : selectedRecord->color
+      ? tr("Stored RGB; only Set RGB authors these values.")
+      : tr("RGB not stored. White is a draft only; Set RGB explicitly writes it."));
   m_parent->setEnabled(available);
   m_create->setEnabled(available);
   for (auto* button :
@@ -529,6 +582,16 @@ void NativeVisgroupEditor::showRows()
     {
       request.records[size_t(index)] = std::move(record);
     }
+    return true;
+  });
+  bind(m_setColor, [this, index, valid, state](auto& request) {
+    if (!valid)
+    {
+      return false;
+    }
+    request.color = mdl::NativeVisgroupColorAction{
+      state->records[size_t(index)].id,
+      {m_color[0]->value(), m_color[1]->value(), m_color[2]->value()}};
     return true;
   });
   bind(m_delete, [index, valid, state, treeChildren](auto& request) {

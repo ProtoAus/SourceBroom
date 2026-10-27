@@ -33,7 +33,16 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.21 candidate:** loaded/new manual-visgroup tree CRUD, ordered direct
+- **A5.22 candidate:** explicit own-record native visgroup RGB authoring through
+  the existing scoped request/history. Three bounded channels and separate Set
+  in the LIVE inspector; absent RGB is not an invented default, same-value is
+  lexical no-op, and unsupported/repeated scalar color is color-only protection.
+  Retained and moved-subtree emission, new drafts, save/reopen, exact undo/redo
+  and stale-row refusal are covered. Actual preimplementation RGB REDs retained;
+  current fullModel292/UI59 and product/checker builds0 new diagnostics. No
+  member editor.color/tint/propagation/color removal or new geometry authority.
+  Parent reviewed the six-file delta; owner/Hammer RGB acceptance pending.
+- **Retained A5.21 candidate:** loaded/new manual-visgroup tree CRUD, ordered direct
   assignment/unassignment and explicit manual Show/Hide through owning scoped
   snapshots and the LIVE UNSAVED Map inspector. Native wrapper/manual/automatic
   causes remain independent of ordinary session visibility; native-hidden bodies
@@ -304,8 +313,9 @@ Ordinary native groups now have bounded scene Group/Ungroup authoring (A5.15).
 The saved-file metadata inspector stays read-only. A5.16 separately admits live
 ordinary cordon authoring in map properties. A5.21 separately adds manual-visgroup
 hierarchy/direct membership and explicit manual visibility intent, without
-wrapper/automatic flag authoring, RGB editing, automatic classification or a
-reconstructed Hammer checkbox. The saved-file inspector is still read-only and
+wrapper/automatic flag authoring, automatic classification or a reconstructed
+Hammer checkbox. A5.22 separately adds explicit own-record visgroup RGB only,
+not member editor.color, object tint or color propagation. The saved-file inspector is still read-only and
 a camera action moves the eye only.
 Custom dependency discovery is incomplete and writes an explicitly reviewed
 new distribution ZIP, not a BSP pak lump. Generic Source remains configurable
