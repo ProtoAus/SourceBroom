@@ -49,12 +49,149 @@
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <string>
 #include <unordered_set>
 
 #include <catch2/catch_test_macros.hpp>
 
 namespace tb::mdl
 {
+TEST_CASE("Source translucent opacity is explicit bounded and demanded")
+{
+  SECTION("only deliberate basic translucent previews admit a scalar opacity")
+  {
+    for (const auto* shader : {"LightmappedGeneric", "UnlitGeneric", "VertexLitGeneric"})
+    {
+      const auto parse = [&](const std::string& flags) {
+        return sourceMaterial(
+          std::string{shader} + " { $basetexture test/pixel " + flags + " }",
+          SourceMaterialMode::BaseTexturePreview);
+      };
+      const auto ordinary = parse("$translucent 1");
+      REQUIRE(ordinary.is_success());
+      CHECK((ordinary | kdl::value()).opacity == 1.0f);
+      CHECK((ordinary | kdl::value()).alphaDomain == img::ImageAlphaDomain::Graduated);
+      for (const auto* token : {"0", "0.25", "1", "+0.375", "1e-1"})
+      {
+        CAPTURE(shader, token);
+        const auto result =
+          parse(std::string{"$translucent 1 $alpha \" "} + token + " \"");
+        CHECK(result.is_success());
+        if (result.is_success())
+        {
+          const auto info = result | kdl::value();
+          CHECK(info.opacity == std::stof(token));
+          CHECK(info.alphaDomain == img::ImageAlphaDomain::Graduated);
+          CHECK_FALSE(info.secondaryBaseTexture);
+        }
+      }
+      for (const auto* invalid :
+           {"-0.1",
+            "1.01",
+            "nan",
+            "inf",
+            "1e999",
+            "nope",
+            "\"\"",
+            "\"0.25 trailing\"",
+            "\"[0.25]\"",
+            "{}",
+            "0.25 $Alpha 0.75"})
+      {
+        CAPTURE(shader, invalid);
+        CHECK(parse(std::string{"$translucent 1 $alpha "} + invalid).is_error());
+      }
+      CHECK(parse("$alpha 0.25").is_error());
+      CHECK(parse("$translucent 0 $alpha 0.25").is_error());
+      CHECK(parse("$translucent 1 $alphatest 1 $alpha 0.25").is_error());
+      CHECK(parse("$translucent 1 $alpha 0.25 Proxies {}").is_error());
+      CHECK(
+        sourceMaterial(
+          std::string{shader} + " { $basetexture test/pixel $translucent 1 $alpha 0.25 }",
+          SourceMaterialMode::Strict)
+          .is_error());
+    }
+    CHECK(sourceMaterial(
+            "WorldVertexTransition { $basetexture a $basetexture2 b $translucent 1 "
+            "$alpha 0.25 }",
+            SourceMaterialMode::TerrainBlendPreview)
+            .is_error());
+  }
+  SECTION(
+    "Patch inheritance reaches demanded pixels without changing image bytes or budget")
+  {
+    auto env = fs::TestEnvironment{};
+    env.createDirectory("materials/test");
+    env.createFile(
+      "gameinfo.txt",
+      "GameInfo { FileSystem { SearchPaths { Game |gameinfo_path|. } } }");
+    auto data = std::string(84, '\0');
+    const auto put =
+      [&](const size_t offset, const uint32_t value, const size_t bytes = 4) {
+        for (size_t i = 0; i < bytes; ++i)
+        {
+          data[offset + i] = static_cast<char>(value >> (i * 8));
+        }
+      };
+    put(0, 0x00465456);
+    put(4, 7);
+    put(8, 2);
+    put(12, 80);
+    put(16, 1, 2);
+    put(18, 1, 2);
+    put(24, 1, 2);
+    put(52, 0);
+    put(56, 1, 1);
+    put(63, 1, 2);
+    data[80] = static_cast<char>(255);
+    data[83] = static_cast<char>(128);
+    env.createFile("materials/test/pixel.vtf", data);
+    const auto vmt = std::string{
+      "LightmappedGeneric { $basetexture test/pixel $translucent 1 $alpha 0.25 }"};
+    env.createFile("materials/test/base.vmt", vmt);
+    env.createFile(
+      "materials/test/patch.vmt",
+      "Patch { include materials/test/base.vmt replace { $alpha 0.5 } }");
+    auto fs = GameFileSystem{};
+    auto logger = NullLogger{};
+    REQUIRE(fs.initializeSource(env.dir(), logger).is_success());
+    const auto control =
+      loadTexture("materials/test/pixel.vtf", "raw", fs, std::nullopt, 4);
+    REQUIRE(control.is_success());
+    CHECK(control.value().buffersIfLoaded()[0].data()[3] == 128);
+    for (const auto* material : {"base", "patch"})
+    {
+      const auto result = loadTexture(
+        std::string{"materials/test/"} + material + ".vmt",
+        material,
+        fs,
+        std::nullopt,
+        4);
+      CHECK(result.is_success());
+      if (result.is_success())
+      {
+        const auto& texture = result.value();
+        CHECK(texture.alphaDomain() == img::ImageAlphaDomain::Graduated);
+        CHECK(texture.buffersIfLoaded()[0].size() == 4);
+        CHECK(texture.buffersIfLoaded()[0].data()[3] == 128);
+        const auto* hints =
+          std::get_if<gl::SourceEmbeddedDefaults>(&texture.embeddedDefaults());
+        REQUIRE(hints);
+        CHECK(hints->opacity == (std::string_view{material} == "base" ? 0.25f : 0.5f));
+      }
+      CHECK(loadTexture(
+              std::string{"materials/test/"} + material + ".vmt",
+              material,
+              fs,
+              std::nullopt,
+              3)
+              .is_error());
+    }
+    const auto unchanged = fs.openFile("materials/test/base.vmt") | kdl::value();
+    CHECK(unchanged->reader().readString(unchanged->size()) == vmt);
+  }
+}
+
 TEST_CASE("Source terrain material requires an explicit bounded blend preview mode")
 {
   const auto ordinary = sourceMaterial(

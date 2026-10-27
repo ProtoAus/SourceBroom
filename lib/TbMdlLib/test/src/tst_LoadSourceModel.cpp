@@ -598,14 +598,17 @@ TEST_CASE("loadSourceModel")
 }
 TEST_CASE("Source VMT alpha and culling control brush and prop render policy")
 {
-  const auto modes = std::vector<std::pair<std::string, img::ImageAlphaDomain>>{
-    {"", img::ImageAlphaDomain::Opaque},
-    {"$selfillum 1", img::ImageAlphaDomain::Opaque},
-    {"$translucent 0", img::ImageAlphaDomain::Opaque},
-    {"$alphatest 0", img::ImageAlphaDomain::Opaque},
-    {"$translucent 1", img::ImageAlphaDomain::Graduated},
-    {"$alphatest 1", img::ImageAlphaDomain::Binary},
-    {"$translucent 1 $alphatest 1", img::ImageAlphaDomain::Binary},
+  const auto modes = std::vector<std::tuple<std::string, img::ImageAlphaDomain, float>>{
+    {"", img::ImageAlphaDomain::Opaque, 1.0f},
+    {"$selfillum 1", img::ImageAlphaDomain::Opaque, 1.0f},
+    {"$translucent 0", img::ImageAlphaDomain::Opaque, 1.0f},
+    {"$alphatest 0", img::ImageAlphaDomain::Opaque, 1.0f},
+    {"$translucent 1", img::ImageAlphaDomain::Graduated, 1.0f},
+    {"$alphatest 1", img::ImageAlphaDomain::Binary, 1.0f},
+    {"$translucent 1 $alphatest 1", img::ImageAlphaDomain::Binary, 1.0f},
+    {"$translucent 1 $alpha 0", img::ImageAlphaDomain::Graduated, 0.0f},
+    {"$translucent 1 $alpha 0.25", img::ImageAlphaDomain::Graduated, 0.25f},
+    {"$translucent 1 $alpha 1", img::ImageAlphaDomain::Graduated, 1.0f},
   };
   auto taskManager = kdl::task_manager{2};
   auto logger = NullLogger{};
@@ -625,9 +628,9 @@ TEST_CASE("Source VMT alpha and culling control brush and prop render policy")
   {
     for (const auto reference : {0.5f, 0.25f, 0.75f})
     {
-      for (const auto& [parameters, expected] : modes)
+      for (const auto& [parameters, expected, opacity] : modes)
       {
-        CAPTURE(flags, parameters, patched, noCull, reference);
+        CAPTURE(flags, parameters, patched, noCull, reference, opacity);
         auto fs = modelFileSystem(
           withMaterialSkins(test::SyntheticProp{}),
           true,
@@ -682,7 +685,8 @@ TEST_CASE("Source VMT alpha and culling control brush and prop render policy")
           CHECK(material->texture()->alphaDomain() == expected);
           CHECK(
             material->texture()->embeddedDefaults()
-            == gl::EmbeddedDefaults{gl::SourceEmbeddedDefaults{noCull, reference}});
+            == gl::EmbeddedDefaults{
+              gl::SourceEmbeddedDefaults{noCull, reference, opacity}});
           CHECK(material->culling() == gl::MaterialCulling::Default);
           CHECK(
             material->effectiveCulling()

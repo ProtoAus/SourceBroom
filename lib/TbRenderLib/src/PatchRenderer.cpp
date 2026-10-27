@@ -414,7 +414,7 @@ struct RenderFunc : public gl::MaterialRenderFunc
                              && material->effectiveBlendFunc().enable
                                   == gl::MaterialBlendFunc::Enable::UseFactors;
 
-    gl::setAlphaFuncUniforms(shader, material);
+    gl::setAlphaFuncUniforms(shader, material, applyMaterial);
 
     // A material with real per-pixel blending renders with its own true alpha,
     // independent of the whole-batch X-ray/hidden-patch fade.

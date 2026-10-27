@@ -73,9 +73,12 @@ public:
  * material's effectiveAlphaFunc(), so the shader's alpha-test cutout matches the
  * material's derived or overridden alpha-test state. Also sets IgnoreTextureAlpha
  * for Source opaque/cutout pixels after the cutout test, preserving editor fades without
- * blending a shader mask as opacity. material may be null.
+ * blending a shader mask as opacity. Sets demanded Source MaterialOpacity too;
+ * untextured draws can disable that multiplier without changing legacy cutout rules.
+ * material may be null; missing/disabled opacity resets to 1.
  */
-void setAlphaFuncUniforms(ActiveShader& shader, const Material* material);
+void setAlphaFuncUniforms(
+  ActiveShader& shader, const Material* material, bool applyOpacity = true);
 
 /**
  * Like DefaultMaterialRenderFunc, but also sets the alpha-test uniforms via

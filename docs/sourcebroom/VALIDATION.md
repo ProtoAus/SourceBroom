@@ -1,11 +1,40 @@
-# SourceBroom validation — A5.26 explicit absent terrain alpha
+# SourceBroom validation — A5.27 explicit translucent material opacity
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.26 — explicit table creation without geometry widening
+## A5.27 — bounded scalar opacity in demanded material rendering
+
+- Before semantics, only defaulted schema fields/tests: actual Model64/81,17
+  expected scalar-admission failures with ordinary translucency/raw-image controls
+  acting. Native desktop packed production cache/holder/VBO GPU2661/2693: exactly32
+  new red/blue failures for ignored0/.25; factor1 and prior controls pass. This is
+  not client-array/stub proof. First test API copy error and offscreen-plugin GL
+  creation failure are retained infrastructure attempts, NOT product RED.
+- After wiring, material136, brush/prop10224 (flags, Patch, skin, no-cull, reference
+  and opacity permutations), and native desktop GPU2693 assertions pass. Pixels
+  exercise0/.25/1 with alpha255/128; blend/depth-mask restoration and null/plain
+  following-state reset act. Existing five fragment programs and real packed
+  production Face path remain covered; not full native prop vertex-stage proof.
+- All13 C++/shader fingerprints match tested source. Seven-target actual build
+  has zero compiler warning/error lines. Full Model299/UI59/App50/Render28/GL21
+  pass. Prior intermittent Windows preference failure remains unfixed. UTF8
+  changed-range format/diff checks and complete direct parent review are not
+  independent review, clean clang-tidy or human/Hammer acceptance.
+- Explicit translucent basic preview only; strict/nontranslucent/cutout/terrain/
+  malformed/repeated/block/proxy policies remain. Scalar0 is not cutoff sentinel0
+  or terrain blend weight. Raw decoded bytes and image budgets remain unchanged;
+  no catalog decode, native geometry/save authority or performance claim.
+
+Standalone upload141 and A5.26 VMF38/35+same3/38 original-preservation evidence
+remain unchanged-boundary controls, not new/re-dated A5.27 measurements. The current
+checker relink differs in bytes; no identical-binary assertion. Current portable
+installation and new owner view/Hammer observations are separate real boundaries.
+Full Source support remains in progress; pending human checks are in lextest.md.
+
+## Retained A5.26 — explicit table creation without geometry widening
 
 - Actual partial wiring: Core80 passes; Map54/55 and UI45/47 fail at explicit
   initialization while distance controls act. Passing the existing structural

@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.26 — explicit missing terrain alpha
+# Try Windows SourceBroom A5.27 — explicit translucent material opacity
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,33 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.26: initialize an absent displacement alpha table
+## A5.27: basic translucent VMT scalar opacity
+
+Supported basic `LightmappedGeneric`, `UnlitGeneric` and `VertexLitGeneric`
+previews now accept finite scalar `$alpha`0..1 when `$translucent 1` is explicit
+and cutout is absent/disabled. Patch inheritance reaches demanded brush and prop
+pixels. The scalar multiplies texture opacity, not terrain blend weight or an
+editor fade;0 is invisible and1 preserves the old appearance. No image bytes,
+retained-byte budgets, catalog loading policy or native geometry are changed.
+
+This deliberately does NOT admit strict mode, missing/disabled translucency,
+alpha-tested or WorldVertexTransition combinations, malformed/repeated/block
+values, proxies or arbitrary shader effects. Those still report refusal. Full
+Source shader/branch parity is not claimed. Alpha-test-reference0 is still a
+separate unsupported sentinel, not authorized by accepting scalar opacity0.
+
+Current full Model299/UI59/App50/Render28/GL21 and seven-target build pass with
+no compiler warning/error lines. Native desktop OpenGL packed production VBO
+pixels2693 pass, alongside material136 and brush/prop metadata10224 controls.
+Parent review is not independent/Hammer or new human acceptance. Keep the whole
+A5.26 kit and owner-confirmed A5.25 as recovery; avoid A5.24.
+
+**Small optional owner view check (pending):** if a known copied map has a basic
+translucent `$alpha` material, open it in the whole A5.27 kit and report whether
+the surface/prop looks sensible rather than falling back. No edit/save is needed;
+do not strip unsupported parameters just to force a preview. See [lextest](../../lextest.md).
+
+## Retained A5.26: initialize an absent displacement alpha table
 
 On a COPY, select one supported displacement face. If the native `alphas` table
 is entirely absent, **Displacement vertex** offers **Initialize zero alpha rows**.
@@ -660,10 +686,11 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current A5.26 full **298 Model / 59 UI / 50 App / 28 Render / 21 GL** cases
+- Current A5.27 full **299 Model / 59 UI / 50 App / 28 Render / 21 GL** cases
   pass. Earlier preference rename failures are retained/unfixed, not erased by
-  a passing current run. A5.25 upload141/GPU2597 are retained unchanged-boundary
-  evidence, not newly measured A5.26 counts.
+  a passing current run. Packed production GPU2693 is current A5.27; standalone
+  upload141 and A5.26 VMF corpus38/35+same3/38 are retained unchanged-boundary
+  evidence, not newly measured A5.27 counts.
   Installed-package evidence belongs to the matching receipt; source/build results
   alone are not installation, manual appearance or full Source acceptance.
 - Historical A5.14/A5.11 evidence (not current suite totals): **201 model** and

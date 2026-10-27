@@ -196,7 +196,7 @@ void FaceRenderer::render(RenderContext& context)
                                && material->effectiveBlendFunc().enable
                                     == gl::MaterialBlendFunc::Enable::UseFactors;
 
-      gl::setAlphaFuncUniforms(shader, material);
+      gl::setAlphaFuncUniforms(shader, material, applyMaterial);
       // A material with real per-pixel blending renders with its own true alpha,
       // independent of the whole-batch X-ray/hidden-brush fade.
       shader.set("Alpha", isRealBlend ? 1.0f : m_alpha);

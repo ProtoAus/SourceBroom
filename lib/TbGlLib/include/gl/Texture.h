@@ -53,7 +53,8 @@ struct SourceEmbeddedDefaults
 {
   bool noCull = false;
   float alphaTestReference = 0.5f;
-  kdl_reflect_decl(SourceEmbeddedDefaults, noCull, alphaTestReference);
+  float opacity = 1.0f;
+  kdl_reflect_decl(SourceEmbeddedDefaults, noCull, alphaTestReference, opacity);
 };
 
 using EmbeddedDefaults =

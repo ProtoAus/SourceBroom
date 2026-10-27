@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.26 explicit absent terrain alpha:
+**Status:** Windows A5.27 explicit translucent material opacity:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,21 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.26 adds **Initialize zero alpha rows** for a supported displacement whose
+A5.27 previews finite scalar VMT `$alpha`0..1 on supported basic shaders with
+explicit `$translucent 1` and no cutout/terrain layers. The multiplier travels
+with demanded brush and prop pixels, including inherited Patch values; image
+bytes/budgets and native geometry/save permissions stay unchanged. Strict mode,
+missing translucency, cutout/terrain combinations, invalid/repeated/block values
+and proxies still refuse. Zero really is invisible; this is not the unsupported
+zero alpha-test-reference sentinel or terrain blend weight.
+
+Actual seven-target build has no compiler warning/error lines; focused material136,
+brush/prop10224 and native packed production GPU2693 assertions pass. Full
+Model299/UI59/App50/Render28/GL21 pass. Parent review is not independent/Hammer,
+new human or full shader acceptance. Use the whole A5.27 kit on copies, keep
+whole A5.26 and owner-confirmed A5.25 as recovery; full Source support is ongoing.
+
+Retained A5.26 adds **Initialize zero alpha rows** for a supported displacement whose
 native `alphas` table is entirely absent. This deliberate action enables normal
 per-sample editing without moving terrain. Present empty/partial/unknown data
 is not repaired. Initialization is a separate undo step from surrounding height

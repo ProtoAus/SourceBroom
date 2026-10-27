@@ -127,12 +127,16 @@ void SourceBlendMaterialRenderFunc::after(Gl& gl, const Material* material)
   m_previousActiveTexture.reset();
 }
 
-void setAlphaFuncUniforms(ActiveShader& shader, const Material* material)
+void setAlphaFuncUniforms(
+  ActiveShader& shader, const Material* material, const bool applyOpacity)
 {
   const auto alphaFunc =
     material ? material->effectiveAlphaFunc() : std::optional<MaterialAlphaFunc>{};
   shader.set("EnableMasked", alphaFunc.has_value());
   const auto* texture = material ? material->texture() : nullptr;
+  const auto* defaults =
+    texture ? std::get_if<SourceEmbeddedDefaults>(&texture->embeddedDefaults()) : nullptr;
+  shader.set("MaterialOpacity", applyOpacity && defaults ? defaults->opacity : 1.0f);
   shader.set(
     "IgnoreTextureAlpha",
     texture && texture->alphaDomain() != img::ImageAlphaDomain::Graduated

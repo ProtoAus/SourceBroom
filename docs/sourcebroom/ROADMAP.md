@@ -33,7 +33,15 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.26 candidate:** explicit initialization of an entirely absent native
+- **A5.27 candidate:** finite scalar VMT opacity0..1 only for explicit
+  translucent, noncutout basic previews. Both brush/prop demanded metadata and
+  Patch inheritance act; strict/nontranslucent/cutout/terrain/invalid/proxy paths
+  remain refused. Native packed production GPU2693, material136 and brush/prop10224
+  assertions pass. Seven-target build has no compiler warning/error lines; full
+  Model299/UI59/App50/Render28/GL21 pass. Parent review only, new human/Hammer
+  acceptance pending. No catalog decode, image-budget/native-geometry authority,
+  full shader compatibility or performance claim. Keep whole A5.26/A5.25 recovery.
+- **Retained A5.26 candidate:** explicit initialization of an entirely absent native
   displacement alpha table, then existing per-sample editing. No automatic
   repair of present partial/empty/unknown data or wider geometry authority.
   Initialization is a separate undo boundary; save/reopen, unchanged geometry,
@@ -195,7 +203,9 @@ compatible merely because they also use VMF.
   gave overall A5.6 visual approval; specific surface/Hammer gates stay pending.
   A5.7 honors explicit supported nonzero `$alphatestreference` through demanded
   brush/prop/Patch previews; absent0.5 remains an editor fallback, not certified
-  branch defaults. Scalar$alpha and zero/sentinel semantics are not guessed.
+  branch defaults. That candidate did not admit scalar$alpha. A5.27's
+  narrow explicit-translucent path above is separate; zero/sentinel cutoff
+  semantics are still not guessed.
   [Validation](VALIDATION.md) records current Fs20/Gl21/Mdl175/Ui43 passes,
   focused Gl990/Mdl7654 and GPU2539 assertions. The earlier intermittent Windows
   preference rename failure remains unfixed despite the current passing run.
@@ -376,7 +386,9 @@ reported before a misleading successful build.
 ### A6 — Advanced native Source features
 
 The current foundation admits bounded native meshes, distance samples, selected
-proper similarity transforms and separately stored alpha samples (A5.23). It
+proper similarity transforms and separately stored alpha samples (A5.23).
+A5.26 adds explicit absent-alpha-table initialization. A5.27's bounded scalar VMT
+opacity is distinct from displacement weights or shader parity. This foundation
 does not complete A6: stored blend-weight editing is not full shader blending,
 paint/smoothing or topology/power/sew, and independent native acceptance remains
 pending. The remaining feature/exit requirements below still apply.

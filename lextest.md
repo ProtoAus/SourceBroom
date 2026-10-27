@@ -4,6 +4,24 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.27 translucent scalar material opacity — pending small owner view check
+
+Use whole A5.27 on a COPY; keep whole A5.26 and owner-confirmed A5.25 as recovery.
+No A5.27 owner observation has been received. Automated material136, brush/prop
+metadata10224, native packed GPU2693 and full Model299/UI59/App50/Render28/GL21
+are not human/Hammer/full-shader acceptance.
+
+- [ ] If a known copied map uses a basic VMT with explicit `$translucent 1` and
+  scalar `$alpha`, open it and report whether the brush/prop surface looks sensible
+  rather than falling back. No edit/save is needed; no need to hunt for a case.
+- [ ] If convenient, compare that same material in matching Hammer/the game.
+  Do not strip unsupported parameters, alter original VMTs or overwrite originals
+  just to force eligibility. Cutout/terrain/proxy combinations remain unsupported.
+
+All pending. Zero means invisible in this bounded scalar path, not the separately
+unsupported alpha-test-reference sentinel0 or terrain weight. No measured speed,
+all-map/branch or full native prop GPU-pipeline claim.
+
 ## A5.26 explicit missing terrain alpha — pending control/Hammer check
 
 Use the whole A5.26 kit on a COPY; keep whole owner-confirmed A5.25 as recovery.

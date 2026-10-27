@@ -381,7 +381,7 @@ Result<SourceMaterialInfo> parseMaterial(
             || entry.key == "$halflambert" || entry.key == "$nodecal"
             || entry.key == "$vertexcolor" || entry.key == "$vertexalpha"
             || entry.key == "$translucent" || entry.key == "$alphatest"
-            || entry.key == "$alphatestreference" || entry.key == "$roughnessmap"
+            || entry.key == "$alphatestreference" || entry.key == "$alpha" || entry.key == "$roughnessmap"
             || entry.key == "$ambientocclusionmap" || entry.key == "$notint"
             || entry.key == "$treesway" || entry.key == "$tintmasktexture"
             || entry.key == "$blendtintbybasealpha" || entry.key == "$envmaplightscale"
@@ -504,6 +504,41 @@ Result<SourceMaterialInfo> parseMaterial(
           "most 1"};
       }
     }
+    auto opacity = 1.0f;
+    if (std::ranges::count(shader.children, std::string{"$alpha"}, &Entry::key) > 1)
+    {
+      return Error{"Repeated Source $alpha requires explicit resolution"};
+    }
+    if (const auto* entry = child(shader.children, "$alpha"))
+    {
+      if (terrainBlend || !translucent || alphaTest)
+      {
+        return Error{
+          "Source $alpha preview requires explicit translucency without cutout or "
+          "terrain layers"};
+      }
+      auto value = std::string_view{entry->value};
+      while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())))
+      {
+        value.remove_prefix(1);
+      }
+      while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())))
+      {
+        value.remove_suffix(1);
+      }
+      if (!value.empty() && value.front() == '+')
+      {
+        value.remove_prefix(1);
+      }
+      const auto parsed =
+        std::from_chars(value.data(), value.data() + value.size(), opacity);
+      if (
+        parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()
+        || !std::isfinite(opacity) || opacity < 0.0f || opacity > 1.0f)
+      {
+        return Error{"Unsupported Source $alpha: expected finite opacity from 0 to 1"};
+      }
+    }
     return SourceMaterialInfo{
       primaryPath | kdl::value(),
       alphaTest     ? img::ImageAlphaDomain::Binary
@@ -511,7 +546,8 @@ Result<SourceMaterialInfo> parseMaterial(
                     : img::ImageAlphaDomain::Opaque,
       noCull,
       alphaTestReference,
-      std::move(secondaryPath)};
+      std::move(secondaryPath),
+      opacity};
   }
   catch (const std::runtime_error& e)
   {

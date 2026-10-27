@@ -5,7 +5,24 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Explicit absent terrain alpha table — A5.26
+## Explicit translucent material opacity — A5.27
+
+Basic LightmappedGeneric/UnlitGeneric/VertexLitGeneric previews admit finite VMT
+`$alpha`0..1 only with explicit `$translucent 1` and no alpha test/terrain layers.
+Patch inheritance and demanded brush/prop pixels carry it; raw image bytes,
+budgets, catalog loading, geometry and native save permissions are unchanged.
+The scalar multiplies texture opacity, not displacement blend weight or editor
+fade. Zero is invisible, not the unsupported zero alpha-test-reference sentinel.
+
+Strict mode and nontranslucent/cutout/WorldVertexTransition/invalid/repeated/block/
+proxy combinations still refuse rather than guessing. This is not full shader
+parity. Actual material136/brush-prop10224/native packed GPU2693 and full
+Model299/UI59/App50/Render28/GL21 pass with no compiler warning/error lines.
+Parent review is not independent/Hammer or new human acceptance. If a known
+copied map uses such a translucent material, a small owner view check needs no
+edit/save; see [lextest](../../lextest.md). Keep whole A5.26/A5.25 recovery kits.
+
+## Retained explicit absent terrain alpha table — A5.26
 
 On one supported displacement face whose native `alphas` table is entirely
 absent, the face inspector offers **Initialize zero alpha rows**. This deliberate

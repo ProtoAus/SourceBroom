@@ -21,7 +21,45 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Explicit absent displacement alpha tables — A5.26
+## Explicit translucent material opacity — A5.27
+
+Admit finite scalar `$alpha`0..1 only on supported basic preview shaders with
+explicit translucency and no alpha test/terrain layers. Strict/default policy,
+nontranslucent/cutout/terrain/block/proxy/duplicate/invalid refusals remain. Zero
+is opacity, not alphatestreference0 or stored terrain weight. Public SDK constant
+modulation blending was read as a behavioral reference; no SDK source copied.
+
+Opacity defaults to1 in SourceMaterialInfo/SourceEmbeddedDefaults and travels
+with demanded brush AND prop pixels/Patch inheritance. No catalog read/new image
+bytes/budget/geometry/native-file permission. Existing common material uniforms
+set it per draw, including null/plain reset; untextured Face/Patch draws disable
+only this multiplier without changing legacy cutout rules. Shared fragment logic
+multiplies it after the existing raw cutoff/mask rule and before editor fade.
+
+Actual defaulted-schema-only partial build: Model64/81 (17 scalar-admission
+failures while ordinary translucent controls act). Actual native packed cache ->
+holder -> VBO production GL arm:2661/2693, precisely32 new red/blue pixel failures
+for ignored0/.25, while factor1 and all prior controls pass. Source/parser/loader/
+binding/shader semantics were withheld. First compile used a value adaptor that
+copies move-only Texture; borrowing value()const& fixed only the test API, not
+KdLib. Initial Qt offscreen plugin could not create GL context (1/2, process42):
+infrastructure, NOT product RED. Native GPU requires QT_QPA_PLATFORM=windows and
+QT_OPENGL=desktop here; CPU suites use offscreen. Failed attempts remain retained.
+
+After wiring, material136, strengthened brush/prop10224 and the same packed real
+GPU2693 pass. All13 C++/shader paths match compiled fingerprints and changed-range
+UTF8/diff checks. Actual seven-target build has zero compiler warning/error lines;
+full Model299/UI59/App50/Render28/GL21 pass. Complete direct parent review is not
+independent review, a clean-tidy assertion or new human/Hammer acceptance. Existing
+Windows preference issue is not established fixed. Standalone upload141 and A5.26
+VMF document38/strict35+same3/preview38 are retained unchanged-boundary evidence,
+not newly run/re-dated A5.27 claims; no VMF reader/save files changed. Current
+checker relink bytes differ, so do not call that an identical binary.
+
+Portable/current-source installation and owner view checks are separate. Keep the
+whole A5.26 and owner-confirmed A5.25 recovery kits; full Source support continues.
+
+## Retained explicit absent displacement alpha tables — A5.26
 
 SourceDisplacement records immutable absence of the native `alphas` member and
 separate explicit-initialization intent. Only an originally absent, unbound,

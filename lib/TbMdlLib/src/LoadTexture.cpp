@@ -68,7 +68,8 @@ Result<gl::Texture> loadTexture(
                // VTF alpha can be a shader mask, not transparency or terrain weight.
                texture.setAlphaDomain(info.alphaDomain);
                texture.setEmbeddedDefaults(
-                 gl::SourceEmbeddedDefaults{info.noCull, info.alphaTestReference});
+                 gl::SourceEmbeddedDefaults{
+                   info.noCull, info.alphaTestReference, info.opacity});
                if (info.secondaryBaseTexture)
                {
                  auto retained = size_t{0};

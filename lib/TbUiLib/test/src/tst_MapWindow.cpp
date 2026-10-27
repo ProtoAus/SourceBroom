@@ -1570,6 +1570,74 @@ void main() {
           CHECK(pixel[2] <= 2);
         }
         blend.after(gl, &material);
+        // Scalar opacity must act through this same REAL packed production upload.
+        gl.pushAttrib(GL_POLYGON_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        gl.disable(GL_DEPTH_TEST);
+        for (const auto alpha : {uint8_t{255}, uint8_t{128}})
+        {
+          for (const auto opacity : {1.0f, 0.25f, 0.0f})
+          {
+            CAPTURE(alpha, opacity);
+            auto buffer = gl::TextureBuffer{4};
+            const auto rgba = std::array<uint8_t, 4>{255, 0, 0, alpha};
+            std::copy(rgba.begin(), rgba.end(), buffer.data());
+            auto translucent = gl::Texture{
+              1,
+              1,
+              Color{RgbaF{1, 0, 0, 1}},
+              GL_RGBA,
+              gl::SourceEmbeddedDefaults{true, 0.5f, opacity},
+              std::move(buffer)};
+            translucent.setAlphaDomain(img::ImageAlphaDomain::Graduated);
+            auto pixels = gl::createTextureResource(std::move(translucent));
+            pixels->uploadSync(gl);
+            auto subject = gl::Material{"scalar opacity", pixels};
+            subject.setRelativePath("scalar.vmt");
+            shader.set("Alpha", 1.0f);
+            gl::setAlphaFuncUniforms(shader, &subject);
+            gl.enable(GL_BLEND);
+            gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            gl.depthMask(GL_TRUE);
+            blend.before(gl, &subject);
+            auto depth = GLboolean{};
+            gl.getBooleanv(GL_DEPTH_WRITEMASK, &depth);
+            CHECK(depth == GL_FALSE);
+            gl.clearColor(0, 0, 1, 1);
+            gl.clear(GL_COLOR_BUFFER_BIT);
+            gl.drawArrays(GL_TRIANGLE_STRIP, static_cast<GLint>(allocation->pos), 4);
+            const auto expected = static_cast<int>(std::lround(alpha * opacity));
+            for (const auto point :
+                 {vm::vec2i{2, 2}, vm::vec2i{5, 2}, vm::vec2i{2, 5}, vm::vec2i{5, 5}})
+            {
+              auto pixel = std::array<uint8_t, 4>{};
+              functions->glReadPixels(
+                point.x(), point.y(), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+              CHECK(std::abs(int(pixel[0]) - expected) <= 2);
+              CHECK(pixel[1] <= 2);
+              CHECK(std::abs(int(pixel[2]) - (255 - expected)) <= 2);
+            }
+            blend.after(gl, &subject);
+            gl.getBooleanv(GL_DEPTH_WRITEMASK, &depth);
+            CHECK(depth == GL_TRUE);
+            CHECK(functions->glIsEnabled(GL_BLEND) == GL_TRUE);
+            pixels->dropSync(gl);
+          }
+        }
+        // The last scalar was zero: both null and ordinary following bindings reset it.
+        for (const auto useNull : {true, false})
+        {
+          gl::setAlphaFuncUniforms(shader, useNull ? nullptr : &plain);
+          blend.before(gl, &plain);
+          gl.clearColor(0, 0, 1, 1);
+          gl.clear(GL_COLOR_BUFFER_BIT);
+          gl.drawArrays(GL_TRIANGLE_STRIP, static_cast<GLint>(allocation->pos), 4);
+          const auto pixel = readPixel();
+          CHECK(pixel[0] >= 253);
+          CHECK(pixel[1] <= 2);
+          CHECK(pixel[2] <= 2);
+          blend.after(gl, &plain);
+        }
+        gl.popAttrib();
         vertices.cleanup(gl, shader.program());
         auto clientUnit = GLint{};
         gl.getIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &clientUnit);

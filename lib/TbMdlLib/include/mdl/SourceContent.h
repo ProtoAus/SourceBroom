@@ -53,6 +53,7 @@ struct SourceMaterialInfo
   bool noCull = false;
   float alphaTestReference = 0.5f;
   std::optional<std::filesystem::path> secondaryBaseTexture = std::nullopt;
+  float opacity = 1.0f; // Explicit translucent preview, not terrain blend weight.
 };
 Result<SourceMaterialInfo> sourceMaterial(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);
