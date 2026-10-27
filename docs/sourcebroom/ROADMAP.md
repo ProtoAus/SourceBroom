@@ -33,7 +33,17 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.23 candidate:** explicit per-sample stored displacement alpha0..255 through
+- **A5.24 candidate:** basic WorldVertexTransition brush/terrain preview loads
+  two mounted VTF layers under one retained-byte budget. Native alpha0..255 is a
+  separate vertex blend weight; opacity and editor fade remain independent.
+  Existing scalar Apply/undo/redo invalidates the real node cache, with no native
+  geometry/save-authority change. Default strict/base-only material modes remain
+  strict; masks, independent transforms and proxies still refuse. Bump/detail/
+  specular rendering, paint/smoothing and full shader parity are not implemented.
+  Current Model296/GL21/UI59/App50/Render28 and real GPU2580 assertions pass; seven
+  targets build with zero warnings/errors. The old intermittent preference issue
+  is not proven fixed. Parent review only; owner appearance/Hammer check pending.
+- **Retained A5.23 candidate:** explicit per-sample stored displacement alpha0..255 through
   the face inspector and normal native Map preflight/history. Complete original
   alpha rows only; no-op/surgical save/reopen/exact undo/redo preserve source and
   geometry. Missing alpha does not disable valid height editing. This is not

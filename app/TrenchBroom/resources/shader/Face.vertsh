@@ -26,6 +26,7 @@ varying vec4 modelCoordinates;
 varying vec3 modelNormal;
 varying vec4 faceColor;
 varying vec3 viewVector;
+varying float sourceBlendWeight;
 
 void main(void)
 {
@@ -35,4 +36,5 @@ void main(void)
   modelNormal = gl_Normal;
   faceColor = Color;
   viewVector = CameraPosition - gl_Vertex.xyz;
+  sourceBlendWeight = gl_MultiTexCoord1.x;
 }

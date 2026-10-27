@@ -43,14 +43,12 @@ namespace tb::render
 namespace
 {
 
-class RenderFunc : public gl::MaterialRenderFunc
+class RenderFunc : public gl::SourceBlendMaterialRenderFunc
 {
 private:
   gl::ActiveShader& m_shader;
   bool m_applyMaterial;
   Color m_defaultColor;
-  int m_minFilter;
-  int m_magFilter;
 
 public:
   RenderFunc(
@@ -59,19 +57,18 @@ public:
     Color defaultColor,
     const int minFilter,
     const int magFilter)
-    : m_shader{shader}
+    : SourceBlendMaterialRenderFunc{shader, applyMaterial, minFilter, magFilter}
+    , m_shader{shader}
     , m_applyMaterial{applyMaterial}
     , m_defaultColor{std::move(defaultColor)}
-    , m_minFilter{minFilter}
-    , m_magFilter{magFilter}
   {
   }
 
   void before(gl::Gl& gl, const gl::Material* material) override
   {
+    SourceBlendMaterialRenderFunc::before(gl, material);
     if (const auto* texture = gl::getTexture(material))
     {
-      material->activate(gl, m_minFilter, m_magFilter);
       m_shader.set("ApplyMaterial", m_applyMaterial);
       m_shader.set("Color", texture->averageColor());
     }
@@ -84,10 +81,7 @@ public:
 
   void after(gl::Gl& gl, const gl::Material* material) override
   {
-    if (material)
-    {
-      material->deactivate(gl);
-    }
+    SourceBlendMaterialRenderFunc::after(gl, material);
   }
 };
 

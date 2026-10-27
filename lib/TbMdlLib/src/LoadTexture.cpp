@@ -39,6 +39,7 @@
 #include <fmt/format.h>
 #include <fmt/std.h>
 
+#include <algorithm>
 #include <string>
 
 namespace tb::mdl
@@ -48,28 +49,53 @@ Result<gl::Texture> loadTexture(
   const std::filesystem::path& path,
   const std::string& name,
   const fs::FileSystem& fs,
-  const std::optional<Palette>& palette)
+  const std::optional<Palette>& palette,
+  const std::optional<size_t> vtfDecodedByteBudget)
 {
   if (kdl::path_to_lower(path.extension()) == ".vmt")
   {
-    return loadSourceMaterial(path, fs, SourceMaterialMode::BaseTexturePreview)
-           | kdl::and_then([&](auto info) {
-               return loadTexture(info.baseTexture, name, fs, palette)
-                      | kdl::transform([&](auto texture) {
-                          // VTF alpha can be a shader mask, not transparency.
-                          texture.setAlphaDomain(info.alphaDomain);
-                          texture.setEmbeddedDefaults(
-                            gl::SourceEmbeddedDefaults{
-                              info.noCull, info.alphaTestReference});
-                          return texture;
-                        });
+    constexpr auto MaxSourceMaterialBytes = size_t{256} * 1024 * 1024;
+    const auto budget = std::min(
+      vtfDecodedByteBudget.value_or(MaxSourceMaterialBytes), MaxSourceMaterialBytes);
+    return loadSourceMaterial(path, fs, SourceMaterialMode::TerrainBlendPreview)
+           | kdl::and_then([&](auto info) -> Result<gl::Texture> {
+               auto primary = loadTexture(info.baseTexture, name, fs, palette, budget);
+               if (primary.is_error())
+               {
+                 return std::get<Error>(primary.error());
+               }
+               auto texture = std::move(primary) | kdl::value();
+               // VTF alpha can be a shader mask, not transparency or terrain weight.
+               texture.setAlphaDomain(info.alphaDomain);
+               texture.setEmbeddedDefaults(
+                 gl::SourceEmbeddedDefaults{info.noCull, info.alphaTestReference});
+               if (info.secondaryBaseTexture)
+               {
+                 auto retained = size_t{0};
+                 for (const auto& buffer : texture.buffersIfLoaded())
+                 {
+                   if (buffer.size() > budget - retained)
+                   {
+                     return Error{"Source material exceeds retained image budget"};
+                   }
+                   retained += buffer.size();
+                 }
+                 auto second = loadTexture(
+                   *info.secondaryBaseTexture, name, fs, palette, budget - retained);
+                 if (second.is_error())
+                 {
+                   return std::get<Error>(second.error());
+                 }
+                 texture.setSourceBlendTexture(std::move(second) | kdl::value());
+               }
+               return texture;
              });
   }
   if (isVtfTexture(path))
   {
     return fs.openFile(path) | kdl::and_then([&](auto file) {
              auto reader = file->reader().buffer();
-             return loadVtfTexture(reader);
+             return loadVtfTexture(reader, vtfDecodedByteBudget);
            });
   }
   if (isIdMipTexture(path))

@@ -32,6 +32,7 @@
 #include "mdl/GameFileSystem.h"
 #include "mdl/GameInfo.h"
 #include "mdl/LoadMaterialCollections.h"
+#include "mdl/LoadTexture.h"
 #include "mdl/Map.h"
 #include "mdl/MapFormat.h"
 #include "mdl/Map_Assets.h"
@@ -54,6 +55,142 @@
 
 namespace tb::mdl
 {
+TEST_CASE("Source terrain material requires an explicit bounded blend preview mode")
+{
+  const auto ordinary = sourceMaterial(
+    R"(LightmappedGeneric { $basetexture ground/low $nocull 1 })",
+    SourceMaterialMode::BaseTexturePreview);
+  REQUIRE(ordinary.is_success());
+  const auto one = ordinary | kdl::value();
+  CHECK(one.baseTexture == "materials/ground/low.vtf");
+  CHECK(one.noCull);
+  CHECK_FALSE(one.secondaryBaseTexture.has_value());
+  const auto text = std::string{
+    R"(WorldVertexTransition { $basetexture ground/low $basetexture2 ground/high })"};
+  CHECK(sourceMaterial(text, SourceMaterialMode::Strict).is_error());
+  CHECK(sourceMaterial(text, SourceMaterialMode::BaseTexturePreview).is_error());
+  const auto result = sourceMaterial(text, SourceMaterialMode::TerrainBlendPreview);
+  REQUIRE(result.is_success());
+  const auto info = result | kdl::value();
+  CHECK(info.baseTexture == "materials/ground/low.vtf");
+  REQUIRE(info.secondaryBaseTexture.has_value());
+  CHECK(*info.secondaryBaseTexture == "materials/ground/high.vtf");
+  CHECK(info.alphaDomain == img::ImageAlphaDomain::Opaque);
+  CHECK(sourceMaterial(
+          R"(LightmappedGeneric { $basetexture ground/low $nocull 1 })",
+          SourceMaterialMode::TerrainBlendPreview)
+          .is_success());
+  for (
+    const auto* invalid :
+    {R"(WorldVertexTransition { $basetexture ground/low })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 "" })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 a $basetexture2 b })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 ../outside })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 C:/outside })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 { nested yes } })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 a $blendmodulatetexture mask })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 a $basetexturetransform2 "center 0 0" })",
+     R"(WorldVertexTransition { $basetexture ground/low $basetexture2 a Proxies {} })",
+     R"(LightmappedGeneric { $basetexture ground/low $basetexture2 a })"})
+  {
+    CAPTURE(invalid);
+    CHECK(sourceMaterial(invalid, SourceMaterialMode::TerrainBlendPreview).is_error());
+  }
+}
+
+TEST_CASE("Source terrain demand owns two VTF layers within one retained budget")
+{
+  auto env = fs::TestEnvironment{};
+  env.createDirectory("materials/ground");
+  env.createFile(
+    "gameinfo.txt", "GameInfo { FileSystem { SearchPaths { Game |gameinfo_path|. } } }");
+  const auto vtf = [](
+                     const unsigned char r,
+                     const unsigned char g,
+                     const unsigned char b,
+                     const unsigned char a) {
+    auto data = std::string(84, '\0');
+    const auto put =
+      [&](const size_t offset, const uint32_t value, const size_t bytes = 4) {
+        for (size_t i = 0; i < bytes; ++i)
+        {
+          data[offset + i] = static_cast<char>(value >> (i * 8));
+        }
+      };
+    put(0, 0x00465456);
+    put(4, 7);
+    put(8, 2);
+    put(12, 80);
+    put(16, 1, 2);
+    put(18, 1, 2);
+    put(20, 0x2000);
+    put(24, 1, 2);
+    put(52, 0);
+    put(56, 1, 1);
+    put(63, 1, 2);
+    data[80] = static_cast<char>(r);
+    data[81] = static_cast<char>(g);
+    data[82] = static_cast<char>(b);
+    data[83] = static_cast<char>(a);
+    return data;
+  };
+  env.createFile("materials/ground/low.vtf", vtf(255, 0, 0, 255));
+  env.createFile("materials/ground/high.vtf", vtf(0, 255, 0, 17));
+  env.createFile(
+    "materials/ordinary.vmt", "LightmappedGeneric { $basetexture ground/low }");
+  const auto source = std::string{R"(WorldVertexTransition {
+    $basetexture ground/low $basetexture2 ground/high $surfaceprop2 dirt
+  })"};
+  env.createFile("materials/terrain.vmt", source);
+  env.createFile("materials/patch.vmt", R"(Patch {
+    include materials/terrain.vmt replace { $basetexture2 ground/low }
+  })");
+  auto fs = GameFileSystem{};
+  auto logger = NullLogger{};
+  REQUIRE(fs.initializeSource(env.dir(), logger).is_success());
+  const auto beforeFile = fs.openFile("materials/terrain.vmt") | kdl::value();
+  const auto before = beforeFile->reader().readString(beforeFile->size());
+  auto single = loadTexture("materials/ordinary.vmt", "ordinary", fs, std::nullopt, 4);
+  REQUIRE(single.is_success());
+  const auto one = std::move(single) | kdl::value();
+  CHECK(one.buffersIfLoaded()[0].data()[0] == 255);
+  CHECK(one.sourceBlendTexture() == nullptr);
+  auto raw = loadTexture("materials/ground/high.vtf", "high", fs, std::nullopt, 4);
+  REQUIRE(raw.is_success());
+  const auto rawTexture = std::move(raw) | kdl::value();
+  CHECK(rawTexture.alphaDomain() == img::ImageAlphaDomain::Graduated);
+  auto result = loadTexture("materials/terrain.vmt", "terrain", fs, std::nullopt, 8);
+  INFO((result.is_error() ? std::get<Error>(result.error()).msg : "success"));
+  REQUIRE(result.is_success());
+  const auto texture = std::move(result) | kdl::value();
+  REQUIRE(texture.sourceBlendTexture());
+  REQUIRE(texture.buffersIfLoaded().size() == 1);
+  REQUIRE(texture.sourceBlendTexture()->buffersIfLoaded().size() == 1);
+  CHECK(texture.buffersIfLoaded()[0].size() == 4);
+  CHECK(texture.sourceBlendTexture()->buffersIfLoaded()[0].size() == 4);
+  CHECK(texture.buffersIfLoaded()[0].data()[0] == 255);
+  CHECK(texture.sourceBlendTexture()->buffersIfLoaded()[0].data()[1] == 255);
+  CHECK(texture.sourceBlendTexture()->buffersIfLoaded()[0].data()[3] == 17);
+  CHECK(texture.alphaDomain() == img::ImageAlphaDomain::Opaque);
+  CHECK(texture.sourceBlendTexture()->alphaDomain() == img::ImageAlphaDomain::Opaque);
+  for (const auto budget : {4u, 7u})
+  {
+    const auto rejected =
+      loadTexture("materials/terrain.vmt", "terrain", fs, std::nullopt, budget);
+    REQUIRE(rejected.is_error());
+    CHECK(
+      std::get<Error>(rejected.error()).msg
+      == "VTF exceeds remaining decoded image budget");
+  }
+  auto inherited = loadTexture("materials/patch.vmt", "patch", fs, std::nullopt, 8);
+  REQUIRE(inherited.is_success());
+  const auto patched = std::move(inherited) | kdl::value();
+  REQUIRE(patched.sourceBlendTexture());
+  CHECK(patched.sourceBlendTexture()->buffersIfLoaded()[0].data()[0] == 255);
+  const auto original = fs.openFile("materials/terrain.vmt") | kdl::value();
+  CHECK(original->reader().readString(original->size()) == before);
+}
+
 // Explicit opt-in uses installed content read-only, never a public asset fixture.
 TEST_CASE("Source content catalog profiling opt-in", "[.][source][profiling]")
 {

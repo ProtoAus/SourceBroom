@@ -19,6 +19,8 @@
 
 #pragma once
 
+#include <optional>
+
 namespace tb::gl
 {
 class ActiveShader;
@@ -42,6 +44,26 @@ private:
 public:
   DefaultMaterialRenderFunc(int minFilter, int magFilter);
 
+  void before(Gl& gl, const Material* material) override;
+  void after(Gl& gl, const Material* material) override;
+};
+
+// Face-only two-layer preview. Owns unit0 draw activation and restores the caller's
+// active texture unit and previous unit1 binding in after(). Requires Face uniforms.
+class SourceBlendMaterialRenderFunc : public DefaultMaterialRenderFunc
+{
+private:
+  ActiveShader& m_shader;
+  bool m_applyMaterial;
+  int m_minFilter;
+  int m_magFilter;
+  bool m_materialActivated = false;
+  std::optional<int> m_previousActiveTexture;
+  std::optional<int> m_previousSecondaryTexture;
+
+public:
+  SourceBlendMaterialRenderFunc(
+    ActiveShader& shader, bool applyMaterial, int minFilter, int magFilter);
   void before(Gl& gl, const Material* material) override;
   void after(Gl& gl, const Material* material) override;
 };

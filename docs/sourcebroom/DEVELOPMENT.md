@@ -21,7 +21,55 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Stored displacement alpha samples — A5.23
+## Basic WorldVertexTransition preview — A5.24
+
+TerrainBlendPreview is a separate opt-in material mode. Only brush loadTexture
+uses it: default Strict and BaseTexturePreview still reject WorldVertexTransition.
+The final Patch-resolved material requires one safe base path per layer, preserving
+existing block/feature/alpha validation. Missing/repeated/unsafe second images,
+blend modulation, independent transforms and proxies remain unsupported. Optional
+bump/detail/specular parameters are omitted by preview, not rendered.
+
+Both VTFs share the caller's retained-byte allowance, capped at256MiB; the second
+receives only the bytes left after the first. Texture privately owns at most one
+loaded, unnested child through upload/drop, exposes only const observation, and
+keeps Source render hints. Ready requires both images; neither image is a new
+independent catalog resource. Ordinary single-image behavior remains covered.
+
+The real brush VertexSpec adds a fixed-function UV1 scalar: ordinary vertices0,
+native displacement alphas/255. Existing node invalidation refreshes a scalar edit,
+undo and redo even with identical geometry. Face-only SourceBlendMaterialRenderFunc
+checks linked uniforms before GL state, preserves the old non-null lazy-demand
+activation, binds the second sampler, and pairs material activation/restores the
+caller active unit plus unit1 binding. UV1 cleanup restores client unit0. Face and
+Patch configs share the real Face vertex/fragment stages; only Face's callback
+sets the new uniforms, leaving the other shader callers unchanged.
+
+The Face shader interpolates both layers with shared UV0 before the existing
+cutoff/opacity/fade/shading/tint/fog pipeline; grid shade choice uses the same blend.
+No model, lightmap, bump/detail/specular, blend-mask or full Source shader parity.
+Native frame/cache/provenance/world/ownership and preserving-save guards do not
+change. The inspector now labels basic WorldVertexTransition/no-paint scope.
+
+Actual CPU parser22/demand25, child-lifecycle76 and native cache/history117 controls
+pass. Actual compiled PARTIAL GPU wiring has loader/child/VBO/helper/tests present
+but old Face host/stages:2545 controls pass before the missing new uniform produces
+two nested contract failures (observed process42). This is not a stub/compile RED;
+an earlier missing test include and an overly narrow expected-exit1 wrapper check
+are preserved separately, not credited as product failures. After real host/stage
+wiring, the same native GPU case passes2580 assertions, including real vertex-stage
+pixels,0/.5/1 blend, raw child alpha17, separate fade, following plain material and
+server/unit1/client cleanup. No inactive-uniform guard was weakened.
+
+All20 code files use explicit-UTF8 changed-range formatting and direct full parent
+review, not independent review. Actual seven-target build has no warning/error
+lines. Current full Model296/GL21/UI59/App50/Render28 pass. The prior intermittent
+Windows preference rename failure remains unfixed despite this UI pass. Existing
+modernize hints are not a clean clang-tidy claim. Portable/corpus receipts are
+separate execution-boundary evidence; human/branch/Hammer checks in ../../lextest.md
+remain pending. This is progress toward Source support, not overall completion.
+
+## Retained stored displacement alpha samples — A5.23
 
 The existing bounded row reader now owns alpha entry/text/numeric-span bindings.
 Complete original rows are required; absent/partial tables are not authored.

@@ -23,6 +23,8 @@ uniform float Brightness;
 uniform float Alpha;
 uniform bool ApplyMaterial;
 uniform sampler2D Material;
+uniform bool ApplySourceBlend;
+uniform sampler2D SourceBlendMaterial;
 uniform bool ApplyTinting;
 uniform vec4 TintColor;
 uniform bool GrayScale;
@@ -36,6 +38,7 @@ varying vec4 modelCoordinates;
 varying vec3 modelNormal;
 varying vec4 faceColor;
 varying vec3 viewVector;
+varying float sourceBlendWeight;
 
 float grid(
   vec3 coords, vec3 normal, float gridSize, float minGridSize, float lineWidthFactor);
@@ -45,11 +48,22 @@ float texturedGridAlpha(float alpha);
 bool passesAlphaFunc(float alpha);
 float materialAlpha(float alpha);
 
+vec4 faceMaterialSample(float mipBias)
+{
+  vec4 primary = texture2D(Material, gl_TexCoord[0].st, mipBias);
+  if (ApplySourceBlend)
+  {
+    vec4 secondary = texture2D(SourceBlendMaterial, gl_TexCoord[0].st, mipBias);
+    return mix(primary, secondary, clamp(sourceBlendWeight, 0.0, 1.0));
+  }
+  return primary;
+}
+
 void main()
 {
   if (ApplyMaterial)
   {
-    gl_FragColor = texture2D(Material, gl_TexCoord[0].st);
+    gl_FragColor = faceMaterialSample(0.0);
   }
   else
   {
@@ -150,10 +164,9 @@ void main()
     // Base the light/dark choice on a coarse mip of the texture rather than the
     // per-fragment color, so the line commits to one shade across noisy detail instead of
     // speckling. The line is still composited onto the actual shaded fragment color.
-    vec3 decisionColor =
-      ApplyMaterial
-        ? clamp(Brightness * texture2D(Material, gl_TexCoord[0].st, 4.0).rgb, 0.0, 1.0)
-        : gl_FragColor.rgb;
+    vec3 decisionColor = ApplyMaterial
+                           ? clamp(Brightness * faceMaterialSample(4.0).rgb, 0.0, 1.0)
+                           : gl_FragColor.rgb;
 
     vec3 lineColor = adaptiveGridColor(decisionColor);
     gl_FragColor.rgb =

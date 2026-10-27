@@ -22,6 +22,7 @@
 #include "img/ImageAlphaDomain.h"
 
 #include <filesystem>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -41,7 +42,9 @@ enum class SourceMaterialMode
 {
   Strict,
   // Resolve the base image/basic alpha policy, not full shaders or surface effects.
-  BaseTexturePreview
+  BaseTexturePreview,
+  // Explicit brush terrain layers, still not full Source shader parity.
+  TerrainBlendPreview
 };
 struct SourceMaterialInfo
 {
@@ -49,6 +52,7 @@ struct SourceMaterialInfo
   img::ImageAlphaDomain alphaDomain;
   bool noCull = false;
   float alphaTestReference = 0.5f;
+  std::optional<std::filesystem::path> secondaryBaseTexture = std::nullopt;
 };
 Result<SourceMaterialInfo> sourceMaterial(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);

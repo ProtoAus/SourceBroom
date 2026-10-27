@@ -10,6 +10,7 @@
 #include "mdl/Brush.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushNode.h"
+#include "mdl/BrushRendererBrushCache.h"
 #include "mdl/CatchConfig.h"
 #include "mdl/CommandProcessor.h"
 #include "mdl/EditorContext.h"
@@ -2156,7 +2157,34 @@ TEST_CASE(
   }
   SECTION("fractional scalar save reopen undo redo and subsequent movement")
   {
+    const auto weights = [&] {
+      auto& cache = node.brushRendererBrushCache();
+      cache.validateVertexCache(node);
+      const auto& faces = cache.cachedFacesSortedByMaterial();
+      const auto found = std::find_if(faces.begin(), faces.end(), [](const auto& face) {
+        return bool(face.face->sourceDisplacement());
+      });
+      REQUIRE(found != faces.end());
+      for (const auto& face : faces)
+      {
+        if (!face.face->sourceDisplacement())
+        {
+          CHECK(
+            gl::getVertexComponent<3>(
+              cache.cachedVertices()[face.indexOfFirstVertexRelativeToBrush])[0]
+            == 0);
+        }
+      }
+      const auto first = found->indexOfFirstVertexRelativeToBrush;
+      return std::array<float, 3>{
+        gl::getVertexComponent<3>(cache.cachedVertices()[first])[0],
+        gl::getVertexComponent<3>(cache.cachedVertices()[first + 12])[0],
+        gl::getVertexComponent<3>(cache.cachedVertices()[first + 4])[0]};
+    };
+    // Populate the real node cache before a geometry-identical scalar command.
+    CHECK(weights() == std::array<float, 3>{0, static_cast<float>(128.0 / 255.0), 1});
     REQUIRE(setSourceDisplacementAlpha(map, 2, 2, 17.5));
+    CHECK(weights() == std::array<float, 3>{0, static_cast<float>(17.5 / 255.0), 1});
     CHECK(map.modificationCount() == count + 1);
     REQUIRE(map.undoCommandName());
     CHECK(*map.undoCommandName() == "Change Displacement Alpha");
@@ -2194,8 +2222,10 @@ TEST_CASE(
     CHECK(map.modificationCount() == savedCount);
     map.undoCommand();
     CHECK(*node.brush().face(*index).sourceDisplacement() == before);
+    CHECK(weights() == std::array<float, 3>{0, static_cast<float>(128.0 / 255.0), 1});
     CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
     map.redoCommand();
+    CHECK(weights() == std::array<float, 3>{0, static_cast<float>(17.5 / 255.0), 1});
     CHECK(map.vmfScene()->serialize(map.worldNode()) == expected);
     deselectAll(map);
     selectNodes(map, {&node});

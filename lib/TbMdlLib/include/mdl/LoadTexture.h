@@ -22,6 +22,7 @@
 #include "base/Result.h"
 #include "mdl/Palette.h"
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -41,11 +42,13 @@ class FileSystem;
 namespace mdl
 {
 
+// The optional retained-byte budget applies to Source VTFs and their VMT layers.
 Result<gl::Texture> loadTexture(
   const std::filesystem::path& path,
   const std::string& name,
   const fs::FileSystem& fs,
-  const std::optional<Palette>& palette = std::nullopt);
+  const std::optional<Palette>& palette = std::nullopt,
+  std::optional<size_t> vtfDecodedByteBudget = std::nullopt);
 
 } // namespace mdl
 } // namespace tb

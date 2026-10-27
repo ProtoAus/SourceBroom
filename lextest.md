@@ -4,6 +4,27 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.24 basic terrain blend preview — pending owner/Hammer check
+
+Use the whole A5.24 kit and a COPY with a basic WorldVertexTransition displacement.
+Keep the whole A5.23 kit as unmerged recovery. Automated real GPU2580 and full
+Model296/GL21/UI59/App50/Render28 do not confirm these human observations. The prior
+intermittent preference-fixture failure is not proven fixed. No A5.24 owner
+observation has been received.
+
+- [ ] Select one supported terrain face and one native grid sample in
+  **Displacement vertex**. Try **Alpha0** then **Alpha255** with **Apply alpha**;
+  confirm its neighboring triangles change between the two material layers
+  without moving terrain. Undo/redo and check controls at normal window size.
+- [ ] Save As a NEW VMF, reopen and confirm the stored weight and local blend.
+  Compare that weight in matching Hammer++/Source branch if convenient. Record
+  the actual material/branch observed; bump/detail/specular/masks and full Source
+  shader parity are not promised by this linear preview.
+
+Both pending. No original VMF writes, painting, missing-row creation or permission
+bypass is part of this check. Visual approval is not measured performance or
+universal shader/map/native-compiler acceptance.
+
 ## A5.23 stored displacement alpha — pending owner/Hammer check
 
 Use the whole A5.23 kit and a copied VMF with a supported native displacement.

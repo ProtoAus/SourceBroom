@@ -5,7 +5,26 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Stored native displacement alpha — A5.23
+## Basic terrain material blending — A5.24
+
+For a basic **WorldVertexTransition** VMT, both mounted `$basetexture` and
+`$basetexture2` VTFs are loaded on demand within one retained-image budget.
+Displacement weights use a separate vertex attribute:0 selects the first image,
+255 the second. Existing UVs are shared. The selected-face alpha Apply/undo/redo
+updates the cached preview while positions, normals, bounds and picking stay
+unchanged. Alpha for image opacity and editor fade is not a terrain weight.
+
+Only the brush demand path opts into this mode. Strict/default material readers
+and base-only readers do not silently accept the new shader. Missing/duplicate/
+unsafe second paths, blend-modulation textures, independent transforms and proxies
+remain guarded. Optional bump/detail/specular effects are omitted, not implemented.
+Plain brushes have weight0; this adds no paint tools, alpha rows or geometry/save
+permissions. Full Model296/GL21/UI59/App50/Render28 and real GPU2580 pass; seven
+build targets have zero warnings/errors. Human appearance/Hammer comparison is
+pending in [lextest](../../lextest.md). Keep the previous whole kit and use copies.
+The old intermittent preference-file failure remains open despite this UI pass.
+
+## Retained stored native displacement alpha — A5.23
 
 Select exactly one supported terrain face. **Displacement vertex** in the face
 inspector shows the native grid row/column, independent distance and **Alpha

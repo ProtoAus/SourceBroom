@@ -20,10 +20,13 @@
 #include "gl/MaterialRenderFunc.h"
 
 #include "gl/ActiveShader.h"
+#include "gl/GlInterface.h"
 #include "gl/Material.h"
 #include "gl/Texture.h"
 
 #include "kd/path_utils.h"
+
+#include <stdexcept>
 
 namespace tb::gl
 {
@@ -53,6 +56,75 @@ void DefaultMaterialRenderFunc::after(Gl& gl, const Material* material)
   {
     material->deactivate(gl);
   }
+}
+
+SourceBlendMaterialRenderFunc::SourceBlendMaterialRenderFunc(
+  ActiveShader& shader,
+  const bool applyMaterial,
+  const int minFilter,
+  const int magFilter)
+  : DefaultMaterialRenderFunc(minFilter, magFilter)
+  , m_shader(shader)
+  , m_applyMaterial(applyMaterial)
+  , m_minFilter(minFilter)
+  , m_magFilter(magFilter)
+{
+}
+
+void SourceBlendMaterialRenderFunc::before(Gl& gl, const Material* material)
+{
+  if (m_previousActiveTexture)
+  {
+    throw std::logic_error("Source blend material activation must be paired");
+  }
+  // Fail inactive/unlinked uniforms before any GL state or resource activation.
+  m_shader.set("ApplySourceBlend", false);
+  m_shader.set("SourceBlendMaterial", 1);
+  auto active = GLint{};
+  gl.getIntegerv(GL_ACTIVE_TEXTURE, &active);
+  m_previousActiveTexture = active;
+  gl.activeTexture(GL_TEXTURE0);
+  const auto* texture = getTexture(material);
+  // Preserve the Face demand planner: don't request every still-unloaded material.
+  if (texture)
+  {
+    DefaultMaterialRenderFunc::before(gl, material);
+    m_materialActivated = true;
+  }
+  const auto* second = texture ? texture->sourceBlendTexture() : nullptr;
+  if (!m_applyMaterial || !texture || !texture->isReady() || !second)
+  {
+    return;
+  }
+  gl.activeTexture(GL_TEXTURE1);
+  auto binding = GLint{};
+  gl.getIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+  m_previousSecondaryTexture = binding;
+  const auto ready = second->activate(gl, m_minFilter, m_magFilter);
+  gl.activeTexture(GL_TEXTURE0);
+  m_shader.set("ApplySourceBlend", ready);
+}
+
+void SourceBlendMaterialRenderFunc::after(Gl& gl, const Material* material)
+{
+  if (!m_previousActiveTexture)
+  {
+    return;
+  }
+  if (m_previousSecondaryTexture)
+  {
+    gl.activeTexture(GL_TEXTURE1);
+    gl.bindTexture(GL_TEXTURE_2D, static_cast<GLuint>(*m_previousSecondaryTexture));
+    m_previousSecondaryTexture.reset();
+  }
+  gl.activeTexture(GL_TEXTURE0);
+  if (m_materialActivated)
+  {
+    DefaultMaterialRenderFunc::after(gl, material);
+    m_materialActivated = false;
+  }
+  gl.activeTexture(static_cast<GLenum>(*m_previousActiveTexture));
+  m_previousActiveTexture.reset();
 }
 
 void setAlphaFuncUniforms(ActiveShader& shader, const Material* material)

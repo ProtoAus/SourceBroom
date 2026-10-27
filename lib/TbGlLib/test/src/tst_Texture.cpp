@@ -21,6 +21,7 @@
 #include "gl/TestUtils.h"
 #include "gl/Texture.h"
 
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -154,6 +155,80 @@ TEST_CASE("Texture")
     // uploading an already-dropped texture is also a no-op
     texture.upload(gl);
     CHECK(!texture.isReady());
+  }
+
+  SECTION("Source blend layers own paired upload and drop without changing single images")
+  {
+    const auto image = [](EmbeddedDefaults defaults) {
+      auto pixels = TextureBufferList{};
+      setMipBufferSize(pixels, 1, 1, 1, GL_RGBA);
+      return Texture{1, 1, RgbaF{}, GL_RGBA, std::move(defaults), std::move(pixels)};
+    };
+    auto gl = MockGl{};
+    installTextureUploadSupport(gl);
+    auto nextId = GLuint{10};
+    auto created = std::vector<GLuint>{};
+    auto deleted = std::vector<GLuint>{};
+    gl.onGenTextures = [&](const GLsizei count, GLuint* ids) {
+      for (GLsizei i = 0; i < count; ++i)
+      {
+        ids[i] = nextId++;
+        created.push_back(ids[i]);
+      }
+    };
+    gl.onDeleteTextures = [&](const GLsizei count, const GLuint* ids) {
+      deleted.insert(deleted.end(), ids, ids + count);
+    };
+    // The old single-image lifecycle acts before the new layer API.
+    auto single = image(NoEmbeddedDefaults{});
+    single.upload(gl);
+    REQUIRE(single.isReady());
+    CHECK(single.sourceBlendTexture() == nullptr);
+    single.drop(gl);
+    CHECK(created == std::vector<GLuint>{10});
+    CHECK(deleted == created);
+    created.clear();
+    deleted.clear();
+    auto generic = image(NoEmbeddedDefaults{});
+    CHECK_THROWS_AS(
+      generic.setSourceBlendTexture(image(NoEmbeddedDefaults{})), std::invalid_argument);
+    CHECK(generic.sourceBlendTexture() == nullptr);
+    auto texture = image(SourceEmbeddedDefaults{});
+    texture.setSourceBlendTexture(image(NoEmbeddedDefaults{}));
+    REQUIRE(texture.sourceBlendTexture());
+    CHECK(texture.sourceBlendTexture()->buffersIfLoaded().size() == 1);
+    CHECK_FALSE(texture.isReady());
+    CHECK_FALSE(texture.activate(gl, GL_LINEAR, GL_LINEAR));
+    texture.setAlphaDomain(img::ImageAlphaDomain::Binary);
+    CHECK(texture.sourceBlendTexture()->alphaDomain() == img::ImageAlphaDomain::Binary);
+    CHECK_THROWS_AS(
+      texture.setEmbeddedDefaults(NoEmbeddedDefaults{}), std::invalid_argument);
+    CHECK_THROWS_AS(
+      texture.setSourceBlendTexture(image(NoEmbeddedDefaults{})), std::invalid_argument);
+    auto nested = image(SourceEmbeddedDefaults{});
+    nested.setSourceBlendTexture(image(NoEmbeddedDefaults{}));
+    auto parent = image(SourceEmbeddedDefaults{});
+    CHECK_THROWS_AS(
+      parent.setSourceBlendTexture(std::move(nested)), std::invalid_argument);
+    CHECK(parent.sourceBlendTexture() == nullptr);
+    texture.upload(gl);
+    REQUIRE(texture.isReady());
+    REQUIRE(texture.sourceBlendTexture()->isReady());
+    CHECK(created == std::vector<GLuint>{11, 12});
+    CHECK(texture.buffersIfLoaded().empty());
+    CHECK(texture.sourceBlendTexture()->buffersIfLoaded().empty());
+    CHECK_THROWS_AS(
+      texture.setSourceBlendTexture(image(NoEmbeddedDefaults{})), std::invalid_argument);
+    texture.upload(gl);
+    CHECK(created.size() == 2);
+    texture.drop(gl);
+    CHECK(deleted == std::vector<GLuint>{12, 11});
+    CHECK_FALSE(texture.isReady());
+    CHECK_FALSE(texture.sourceBlendTexture()->isReady());
+    texture.drop(gl);
+    texture.upload(gl);
+    CHECK(created.size() == 2);
+    CHECK(deleted.size() == 2);
   }
 
   SECTION("activate selects the mipmap or masked filter mode")

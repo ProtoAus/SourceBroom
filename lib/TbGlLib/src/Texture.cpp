@@ -28,6 +28,8 @@
 
 #include "vm/vec_io.h" // IWYU pragma: keep
 
+#include <stdexcept>
+
 namespace tb::gl
 {
 
@@ -248,6 +250,10 @@ img::ImageAlphaDomain Texture::alphaDomain() const
 void Texture::setAlphaDomain(const img::ImageAlphaDomain alphaDomain)
 {
   m_alphaDomain = alphaDomain;
+  if (m_sourceBlendTexture)
+  {
+    m_sourceBlendTexture->setAlphaDomain(alphaDomain);
+  }
 }
 
 const EmbeddedDefaults& Texture::embeddedDefaults() const
@@ -257,16 +263,46 @@ const EmbeddedDefaults& Texture::embeddedDefaults() const
 
 void Texture::setEmbeddedDefaults(EmbeddedDefaults defaults)
 {
+  if (m_sourceBlendTexture && !std::holds_alternative<SourceEmbeddedDefaults>(defaults))
+  {
+    throw std::invalid_argument("A Source blend texture requires Source render hints");
+  }
   m_embeddedDefaults = std::move(defaults);
+}
+
+const Texture* Texture::sourceBlendTexture() const
+{
+  return m_sourceBlendTexture.get();
+}
+
+void Texture::setSourceBlendTexture(Texture texture)
+{
+  if (
+    !std::holds_alternative<SourceEmbeddedDefaults>(m_embeddedDefaults)
+    || m_sourceBlendTexture || texture.m_sourceBlendTexture
+    || !std::holds_alternative<TextureLoadedState>(m_state)
+    || !std::holds_alternative<TextureLoadedState>(texture.m_state)
+    || buffersIfLoaded().empty() || texture.buffersIfLoaded().empty())
+  {
+    throw std::invalid_argument(
+      "Source blend images require two loaded, unnested layers");
+  }
+  texture.setAlphaDomain(m_alphaDomain);
+  m_sourceBlendTexture = std::make_unique<Texture>(std::move(texture));
 }
 
 bool Texture::isReady() const
 {
-  return std::holds_alternative<TextureReadyState>(m_state);
+  return std::holds_alternative<TextureReadyState>(m_state)
+         && (!m_sourceBlendTexture || m_sourceBlendTexture->isReady());
 }
 
 bool Texture::activate(Gl& gl, const int minFilter, const int magFilter) const
 {
+  if (!isReady())
+  {
+    return false;
+  }
   return std::visit(
     kdl::overload(
       [](const TextureLoadedState&) { return false; },
@@ -309,10 +345,18 @@ void Texture::upload(Gl& gl)
         return textureDroppedState;
       }),
     std::move(m_state));
+  if (m_sourceBlendTexture)
+  {
+    m_sourceBlendTexture->upload(gl);
+  }
 }
 
 void Texture::drop(Gl& gl)
 {
+  if (m_sourceBlendTexture)
+  {
+    m_sourceBlendTexture->drop(gl);
+  }
   m_state = std::visit(
     kdl::overload(
       [&](const TextureLoadedState&) { return TextureDroppedState{}; },

@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.23 stored displacement alpha candidate:
+**Status:** Windows A5.24 basic terrain blend-preview candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,19 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.23 adds **stored displacement alpha weights (0..255)** in the selected-face
+A5.24 adds **basic WorldVertexTransition terrain blending**. Mounted VMTs can
+supply two VTF layers; native displacement alpha0..255 blends first-to-second
+using the existing UVs, independently of image opacity and editor fade. The
+selected-face alpha controls update that preview through normal undo/redo.
+This is a bounded linear preview, not blend masks/transforms, bump/detail/specular
+shading, paint/smoothing or full Source renderer parity. Strict material readers
+remain strict and native geometry/save permissions are unchanged. Current full
+Model296, GL21, UI59, App50 and Render28 pass; real GPU controls pass2580 assertions
+and all seven build targets have zero warnings/errors. The prior intermittent
+Windows preference failure is not established fixed. Parent review is not
+independent visual/Hammer acceptance; use copies and keep the whole A5.23 kit.
+
+Retained A5.23 adds **stored displacement alpha weights (0..255)** in the selected-face
 inspector, independently of distance/height. Complete original rows only: one
 explicit Apply supports no-op, native Save As/reopen and exact undo/redo without
 changing terrain positions/normals/bounds/picking. Missing alpha does not disable

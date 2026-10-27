@@ -326,6 +326,24 @@ Entry resolveMaterial(
   return base;
 }
 
+Result<std::filesystem::path> sourceTexturePath(const std::string& value)
+{
+  auto path = std::filesystem::path{slashes(kdl::str_to_lower(value))};
+  if (path.is_absolute() || path.has_root_name())
+  {
+    return Error{"Absolute Source texture path"};
+  }
+  for (const auto& part : path)
+  {
+    if (part == "..")
+    {
+      return Error{"Parent traversal in Source texture path"};
+    }
+  }
+  path.replace_extension(".vtf");
+  return std::filesystem::path{"materials"} / path;
+}
+
 Result<SourceMaterialInfo> parseMaterial(
   const std::string_view vmt, const SourceMaterialMode mode, const MaterialReader& read)
 {
@@ -334,17 +352,21 @@ Result<SourceMaterialInfo> parseMaterial(
     auto remaining = MaxMaterialTextSize;
     auto active = std::vector<std::filesystem::path>{};
     const auto shader = resolveMaterial(vmt, read, remaining, active);
+    const auto terrainBlend = shader.key == "worldvertextransition"
+                              && mode == SourceMaterialMode::TerrainBlendPreview;
+    const auto preview = mode == SourceMaterialMode::BaseTexturePreview
+                         || mode == SourceMaterialMode::TerrainBlendPreview;
     if (
-      shader.key != "lightmappedgeneric" && shader.key != "unlitgeneric"
+      !terrainBlend && shader.key != "lightmappedgeneric" && shader.key != "unlitgeneric"
       && shader.key != "vertexlitgeneric")
     {
       return Error{"Unsupported Source shader: " + shader.key};
     }
     for (const auto& entry : shader.children)
     {
-      // Preview explicitly omits these optional effects; it never resolves another
-      // base image, proxies, transforms, conditional blocks, or another shader.
-      const auto previewParameter = mode == SourceMaterialMode::BaseTexturePreview
+      // Basic preview omits these optional effects. Only the explicit terrain mode
+      // admits a second base image, never proxies, transforms or conditional blocks.
+      const auto previewParameter = preview
         && (entry.key == "$bumpmap" || entry.key == "$bumpmap2"
             || entry.key == "$normalmapalphaenvmapmask" || entry.key == "$ssbump"
             || entry.key == "$detail" || entry.key == "$detailscale"
@@ -365,6 +387,7 @@ Result<SourceMaterialInfo> parseMaterial(
             || entry.key == "$blendtintbybasealpha" || entry.key == "$envmaplightscale"
             || entry.key == "$color" || entry.key == "$color2");
       if (entry.block || (!previewParameter && entry.key != "$basetexture"
+          && !(terrainBlend && entry.key == "$basetexture2")
           && entry.key != "$surfaceprop" && entry.key != "$surfaceprop2"
           && entry.key != "$keywords" && entry.key != "$model"
           && !entry.key.starts_with('%') && !entry.key.starts_with("$compile")))
@@ -381,17 +404,31 @@ Result<SourceMaterialInfo> parseMaterial(
     {
       return Error{"Missing Source $basetexture"};
     }
-    auto path = std::filesystem::path{slashes(kdl::str_to_lower(base->value))};
-    if (path.is_absolute() || path.has_root_name())
+    const auto primaryPath = sourceTexturePath(base->value);
+    if (primaryPath.is_error())
     {
-      return Error{"Absolute Source texture path"};
+      return std::get<Error>(primaryPath.error());
     }
-    for (const auto& part : path)
+    auto secondaryPath = std::optional<std::filesystem::path>{};
+    if (terrainBlend)
     {
-      if (part == "..")
+      if (
+        std::ranges::count(shader.children, std::string{"$basetexture2"}, &Entry::key)
+        > 1)
       {
-        return Error{"Parent traversal in Source texture path"};
+        return Error{"Repeated Source $basetexture2 requires explicit resolution"};
       }
+      const auto* second = child(shader.children, "$basetexture2");
+      if (!second || second->value.empty())
+      {
+        return Error{"Missing Source $basetexture2"};
+      }
+      auto path = sourceTexturePath(second->value);
+      if (path.is_error())
+      {
+        return std::get<Error>(path.error());
+      }
+      secondaryPath = std::move(path) | kdl::value();
     }
     auto translucent = false;
     auto alphaTest = false;
@@ -467,14 +504,14 @@ Result<SourceMaterialInfo> parseMaterial(
           "most 1"};
       }
     }
-    path.replace_extension(".vtf");
     return SourceMaterialInfo{
-      std::filesystem::path{"materials"} / path,
+      primaryPath | kdl::value(),
       alphaTest     ? img::ImageAlphaDomain::Binary
       : translucent ? img::ImageAlphaDomain::Graduated
                     : img::ImageAlphaDomain::Opaque,
       noCull,
-      alphaTestReference};
+      alphaTestReference,
+      std::move(secondaryPath)};
   }
   catch (const std::runtime_error& e)
   {

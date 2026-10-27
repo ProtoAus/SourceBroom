@@ -55,6 +55,7 @@
 #include "gl/TestGl.h"
 #include "gl/TestUtils.h"
 #include "gl/Texture.h"
+#include "gl/VertexAttributeType.h"
 #include "mdl/BrushBuilder.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushFaceHandle.h"
@@ -992,12 +993,14 @@ varying vec3 modelNormal;
 varying vec4 faceColor;
 varying vec3 viewVector;
 varying vec4 worldCoordinates;
+varying float sourceBlendWeight;
 void main() {
   gl_Position = gl_Vertex;
   gl_TexCoord[0] = vec4(0.5, 0.5, 0.0, 1.0);
   modelCoordinates = worldCoordinates = vec4(0.0, 0.0, 0.0, 1.0);
   modelNormal = viewVector = vec3(0.0, 0.0, 1.0);
   faceColor = vec4(1.0);
+  sourceBlendWeight = 0.0;
 }
 )");
   auto sourceRoot = std::filesystem::path{__FILE__};
@@ -1333,6 +1336,131 @@ void main() {
       resource->dropSync(gl);
     }
     CHECK(actedDefaultCutoff);
+    gl.popAttrib();
+  }
+  {
+    gl.pushAttrib(GL_ALL_ATTRIB_BITS);
+    const auto image = [](const std::array<uint8_t, 4>& rgba) {
+      auto pixels = gl::TextureBuffer{4};
+      std::copy(rgba.begin(), rgba.end(), pixels.data());
+      auto texture = gl::Texture{
+        1,
+        1,
+        Color{RgbaF{1, 1, 1, 1}},
+        GL_RGBA,
+        gl::SourceEmbeddedDefaults{},
+        std::move(pixels)};
+      texture.setAlphaDomain(img::ImageAlphaDomain::Opaque);
+      return texture;
+    };
+    auto texture = image({255, 0, 0, 255});
+    texture.setSourceBlendTexture(image({0, 255, 0, 17}));
+    auto resource = gl::createTextureResource(std::move(texture));
+    resource->uploadSync(gl);
+    REQUIRE(resource->get());
+    REQUIRE(resource->get()->sourceBlendTexture());
+    REQUIRE(resource->get()->sourceBlendTexture()->isReady());
+    auto material = gl::Material{"terrain layers", resource};
+    material.setRelativePath("terrain.vmt");
+    auto plainResource = gl::createTextureResource(image({255, 0, 0, 255}));
+    plainResource->uploadSync(gl);
+    auto plain = gl::Material{"ordinary following terrain", plainResource};
+    plain.setRelativePath("plain.vmt");
+    // Unlike the five legacy fragment controls, link the REAL production vertex stage.
+    auto config = gl::Shaders::FaceShader;
+    config.name += "-source-terrain-real-vertex";
+    const auto loaded = manager.loadProgram(gl, config);
+    INFO((loaded.is_error() ? std::get<Error>(loaded.error()).msg : "success"));
+    REQUIRE(loaded.is_success());
+    auto shader = gl::ActiveShader{gl, manager, config};
+    shader.set("Brightness", 1.0f);
+    shader.set("Material", 0);
+    shader.set("ApplyMaterial", true);
+    shader.set("Alpha", 1.0f);
+    gl::setAlphaFuncUniforms(shader, &material);
+    gl.activeTexture(GL_TEXTURE0);
+    gl.disable(GL_CULL_FACE);
+    gl.disable(GL_BLEND);
+    functions->glMatrixMode(GL_PROJECTION);
+    functions->glLoadIdentity();
+    functions->glMatrixMode(GL_MODELVIEW);
+    functions->glLoadIdentity();
+    const auto readPixel = [&] {
+      auto pixel = std::array<uint8_t, 4>{};
+      functions->glReadPixels(4, 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+      return pixel;
+    };
+    // Old primary rendering actually acts before the new Face-only uniform path.
+    gl.clearColor(0, 0, 1, 1);
+    gl.clear(GL_COLOR_BUFFER_BIT);
+    material.activate(gl, GL_NEAREST, GL_NEAREST);
+    gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    const auto primary = readPixel();
+    CHECK(primary[0] >= 253);
+    CHECK(primary[1] <= 2);
+    CHECK(primary[2] <= 2);
+    material.deactivate(gl);
+    auto sentinel = GLuint{};
+    functions->glGenTextures(1, &sentinel);
+    gl.activeTexture(GL_TEXTURE1);
+    gl.bindTexture(GL_TEXTURE_2D, sentinel);
+    gl.activeTexture(GL_TEXTURE0 + 2);
+    auto blend = gl::SourceBlendMaterialRenderFunc{shader, true, GL_NEAREST, GL_NEAREST};
+    auto weights = std::array<float, 4>{};
+    gl::VertexAttributeTypes::Uv11::setup(
+      gl, shader.program(), 0, sizeof(float), reinterpret_cast<size_t>(weights.data()));
+    const auto draw =
+      [&](const gl::Material& subject, const float weight, const float fade) {
+        weights.fill(weight);
+        shader.set("Alpha", fade);
+        gl::setAlphaFuncUniforms(shader, &subject);
+        REQUIRE_NOTHROW(blend.before(gl, &subject));
+        if (fade < 1.0f)
+        {
+          gl.enable(GL_BLEND);
+          gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+        gl.clearColor(0, 0, 1, 1);
+        gl.clear(GL_COLOR_BUFFER_BIT);
+        gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        const auto pixel = readPixel();
+        blend.after(gl, &subject);
+        auto active = GLint{};
+        gl.getIntegerv(GL_ACTIVE_TEXTURE, &active);
+        CHECK(active == GL_TEXTURE0 + 2);
+        gl.activeTexture(GL_TEXTURE1);
+        auto binding = GLint{};
+        gl.getIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+        CHECK(binding == static_cast<GLint>(sentinel));
+        gl.activeTexture(GL_TEXTURE0 + 2);
+        return pixel;
+      };
+    for (const auto weight : {0.0f, 0.5f, 1.0f})
+    {
+      const auto pixel = draw(material, weight, 1.0f);
+      CHECK(std::abs(int(pixel[0]) - int(std::lround(255 * (1 - weight)))) <= 2);
+      CHECK(std::abs(int(pixel[1]) - int(std::lround(255 * weight))) <= 2);
+      CHECK(pixel[2] <= 2);
+      CHECK(pixel[3] >= 253); // Child alpha17 is not terrain weight or Source opacity.
+    }
+    const auto faded = draw(material, 0.5f, 0.5f);
+    CHECK(std::abs(int(faded[0]) - 64) <= 2);
+    CHECK(std::abs(int(faded[1]) - 64) <= 2);
+    CHECK(std::abs(int(faded[2]) - 128) <= 2);
+    const auto following = draw(plain, 1.0f, 1.0f);
+    CHECK(following[0] >= 253);
+    CHECK(following[1] <= 2);
+    CHECK(following[2] <= 2);
+    gl::VertexAttributeTypes::Uv11::cleanup(gl, shader.program(), 0);
+    auto client = GLint{};
+    gl.getIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &client);
+    CHECK(client == GL_TEXTURE0);
+    gl.activeTexture(GL_TEXTURE1);
+    gl.bindTexture(GL_TEXTURE_2D, 0);
+    functions->glDeleteTextures(1, &sentinel);
+    gl.activeTexture(GL_TEXTURE0);
+    resource->dropSync(gl);
+    plainResource->dropSync(gl);
     gl.popAttrib();
   }
   CHECK(gl.getError() == GL_NO_ERROR);

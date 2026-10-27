@@ -1,11 +1,46 @@
-# SourceBroom validation — A5.23 stored displacement alpha
+# SourceBroom validation — A5.24 basic terrain blend preview
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.23 — stored alpha without geometry or permission widening
+## A5.24 — bounded two-layer terrain preview
+
+- Actual compiled PARTIAL wiring contains the parser/dual demand budget/private
+  child lifecycle/VBO/production binding helper and tests; Face host/stages are
+  still old. **2545 GPU controls pass**, including old five-shader alpha/culling
+  checks and the real Face vertex/primary pixel, before one missing new uniform
+  yields **two nested contract failures**, observed exit42. A missing test include
+  and the original expected-exit1 wrapper mismatch are preserved separately, not
+  called product RED. No uniform guard or failure policy was weakened.
+- After wiring the real Face host and both stages, the same native-context GPU
+  case passes **2580 assertions**. First/intermediate/second RGB, raw child alpha17
+  not becoming terrain weight/opacity, separate editor fade, following plain
+  reset, saved unit1 binding, active server unit and client-unit0 cleanup act.
+- Parser22/demand25 controls verify explicit opt-in, default/base-only rejection,
+  safe complete second paths, Patch inheritance, both image bytes, one remaining
+  retained-byte budget and unchanged VMT input. Child76 controls verify single
+  image parity, loaded/unnested ownership, ready/upload/drop and metadata guards.
+  Native cache/history117 verifies ordinary0 and terrain0/128/255 plus scalar
+  update/undo/redo without geometry or preserving-save permission changes.
+- Actual final seven-target client/checker/test build has **zero warning/error
+  lines**. Full **Model296/296, GL21/21, UI59/59, App50/50, Render28/28** pass on
+  the formatted20-code-file cut. This current UI pass does NOT establish that
+  the known intermittent Windows preference rename failure is fixed.
+- Complete20-file direct parent review/source fingerprints and explicit-UTF8
+  changed-range formatting identify the cut. Existing LSP modernize hints remain;
+  no independent-review or clean clang-tidy claim. Installed package/corpus receipts
+  are separate real-boundary evidence, not inferred from source tests.
+
+Only the brush demand path opts into basic WorldVertexTransition. Shared UV linear
+blend is not modulation/independent transforms/proxies, bump/detail/specular,
+lightmap/model parity, paint/smoothing, row creation or topology. Default strict
+material modes and all native geometry/save guards remain. Human appearance and
+matching-Hammer checks remain pending in ../../lextest.md; Source support is not
+complete.
+
+## Retained A5.23 — stored alpha without geometry or permission widening
 
 - Actual compiled PARTIAL-wiring RED has API, owning row bindings, local setter
   and Map route present; the existing emitter refusal/missing UI remain. Model

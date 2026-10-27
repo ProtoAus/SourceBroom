@@ -878,7 +878,7 @@ void FaceAttribsEditor::updateControls()
       ? tr("Alpha source rows are unavailable; distance editing is independent.")
     : !writable
       ? tr("Read-only native preview; alpha weights are preserved.")
-      : tr("Stored alpha weight only; material blending preview remains limited."));
+      : tr("Stored blend weight. Basic WorldVertexTransition preview; no paint tools."));
   if (displacement)
   {
     const auto blockRow = QSignalBlocker{m_displacementRow};

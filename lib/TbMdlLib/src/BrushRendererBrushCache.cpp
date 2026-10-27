@@ -111,7 +111,10 @@ void BrushRendererBrushCache::validateVertexCache(const mdl::BrushNode& brushNod
 
       const auto& position = vertex->position();
       m_cachedVertices.emplace_back(
-        vm::vec3f{position}, vm::vec3f{face.boundary().normal}, face.uvCoords(position));
+        vm::vec3f{position},
+        vm::vec3f{face.boundary().normal},
+        face.uvCoords(position),
+        vm::vec<float, 1>{0.0f});
 
       currentHalfEdge = currentHalfEdge->previous();
     }
@@ -124,7 +127,8 @@ void BrushRendererBrushCache::validateVertexCache(const mdl::BrushNode& brushNod
         m_cachedVertices.emplace_back(
           vm::vec3f{displacement->positions()[i]},
           vm::vec3f{displacement->normals()[i]},
-          face.uvCoords(displacement->basePositions()[i]));
+          face.uvCoords(displacement->basePositions()[i]),
+          vm::vec<float, 1>{static_cast<float>(displacement->alphas()[i] / 255.0)});
       }
     }
     // face cache

@@ -26,6 +26,7 @@
 
 #include "kd/reflection_decl.h"
 
+#include <memory>
 #include <variant>
 #include <vector>
 
@@ -94,6 +95,7 @@ private:
   img::ImageAlphaDomain m_alphaDomain = img::ImageAlphaDomain::Opaque;
 
   EmbeddedDefaults m_embeddedDefaults;
+  std::unique_ptr<Texture> m_sourceBlendTexture;
 
   mutable TextureState m_state;
 
@@ -105,6 +107,7 @@ private:
     m_format,
     m_alphaDomain,
     m_embeddedDefaults,
+    m_sourceBlendTexture,
     m_state);
 
 public:
@@ -146,6 +149,9 @@ public:
 
   const EmbeddedDefaults& embeddedDefaults() const;
   void setEmbeddedDefaults(EmbeddedDefaults defaults);
+
+  const Texture* sourceBlendTexture() const;
+  void setSourceBlendTexture(Texture texture);
 
   bool isReady() const;
 

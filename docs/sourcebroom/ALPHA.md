@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.23 native displacement alpha candidate
+# Try the Windows SourceBroom A5.24 basic terrain blend candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,36 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.23: edit stored displacement alpha weights
+## A5.24: preview basic two-texture terrain blending
+
+Basic **WorldVertexTransition** VMTs now load both mounted VTF layers. On a
+supported displacement, stored alpha0 shows the first layer, alpha255 the second,
+and intermediate weights interpolate between them. Use the existing selected-face
+**Displacement vertex → Alpha (0..255) → Apply alpha** controls. One sample affects
+its neighboring triangles, not every vertex on the face. Undo/redo restores the
+preview without changing height or native geometry. Image alpha/opacity and editor
+fade remain separate from terrain weight.
+
+This is a shared-UV linear preview, not a Source shader replacement. Blend-mask
+textures, independent texture transforms, proxies and ambiguous/missing second
+layers still refuse; optional bump/detail/specular effects are not rendered.
+No painting/smoothing, alpha-row creation, topology/power/sew or geometry/save
+permission is added. Other Source games remain configurable; CSS/Momentum are
+first tested profiles, not hard-coded exclusive targets.
+
+Current full **Model296 / GL21 / UI59 / App50 / Render28** pass, and the real GPU
+case passes **2580 assertions**, including previous alpha/culling controls, both
+layers, fade separation and GL-state cleanup. The seven-target build has zero
+warnings/errors. A current UI pass does not prove the prior intermittent Windows
+preference failure fixed. Automated/parent review is not human/Hammer acceptance.
+
+**Quick owner check (pending):** in the whole A5.24 kit, open a COPY with a basic
+WorldVertexTransition displacement. Pick one native sample, try0 then255, undo/redo
+and confirm the local texture blend changes without moving terrain. Save As a
+NEW VMF and reopen. Compare its weights in matching Hammer++ if convenient. Keep
+the whole A5.23 kit as unmerged recovery; never overwrite an original to test it.
+
+## Retained A5.23: edit stored displacement alpha weights
 
 Select exactly one supported native terrain **face**. In the face inspector's
 **Displacement vertex** section, choose its native grid row/column, enter an
