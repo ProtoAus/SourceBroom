@@ -552,8 +552,12 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 - Basic plain-brush/point-entity creation, duplication, deletion and limited
   brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
   other CSG/arbitrary topology, native layer/linked-instance authoring, displacement
-  creation/sculpt/power/sew, native nonuniform scale/shear/flip, overlays and instances
-  remain unsupported. Ordinary native groups, live cordons and manual visgroups
+  creation/sculpt/power/sew and displacement nonuniform scale/shear/flip, overlays
+  and instances remain unsupported. Plain uncached non-displacement brushes
+  already support valid nonuniform scale, shear and flip through normal commands;
+  six actual Map/UV-lock arms verify planes, texel mapping and exact save/history
+  on the existing A5.22 code. This is a scope clarification, not a new feature or
+  permission for cached/opaque/terrain/prop transforms. Ordinary native groups, live cordons and manual visgroups
   have the separate bounded paths above; cached-member group/clip/reparent guards remain. Common unsafe paths refuse before mutation;
   some upstream controls can remain visible and save guards stay authoritative.
 - The saved-file metadata dialog is read-only; it is not the live group/cordon/

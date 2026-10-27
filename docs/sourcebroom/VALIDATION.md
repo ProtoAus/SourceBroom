@@ -32,6 +32,19 @@ Portable/installed corpus receipts are separate from source validation; refresh
 at that real boundary. Original corpus remains read-only. Owner/Hammer checks in
 ../../lextest.md are pending; RGB authoring is not object tint/full Source support.
 
+### Existing plain-brush affine clarification — no product change
+
+A separate VmfMap section on unchanged A5.22 production code runs actual
+scaleSelection(2,1.5,.5), shear transformSelection and X flipSelection, each with
+UV lock off/on. All six arms act changed geometry, independently verify plane
+covariance and locked texel mapping, preserve native bindings, Save As/reopen/
+stable bytes, exact undo/redo and original input. Actual Model target build0new
+compiler warnings and the existing VmfMap case pass. Only tests/docs changed;
+no new alpha, transform implementation or repeated full-suite claim. Global
+nonuniform/shear/flip wording is narrowed to the displacement/cache/opaque/prop
+restrictions it actually describes. This is not arbitrary topology/world-bound
+permission or independent Hammer/visual acceptance.
+
 ## Retained A5.21 — manual visgroups, native visibility and replay
 
 Current final post-review production:

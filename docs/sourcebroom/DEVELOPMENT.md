@@ -21,6 +21,20 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Existing plain native brush affine scope — test/docs clarification
+
+Do not generalize the displacement/cache guards to plain brushes. Inspection of
+BrushFace::transform741–813 found its explicit policy applies only with native
+displacement data; ordinary faces already use affine plane/UV handling and mirror
+winding correction. On unchanged A5.22 production code, an added VmfMap section
+acts scaleSelection(2,1.5,.5), transformSelection shear and flipSelection(X), each
+with UV lock off/on. Independent transformed-plane and locked-texel checks,
+Save As/reopen/stable save, native bindings, exact undo/redo and unchanged input
+all pass through existing helpers. Actual Model build0newwarnings/one VmfMap case
+pass. No implementation, new alpha/product patch, geometry guard or independent
+Hammer claim; prior global wording was overbroad. Keep all cached/displacement/
+opaque/prop restrictions. Human check remains pending in ../../lextest.md.
+
 ## Explicit own-record visgroup RGB — A5.22
 
 NativeVisgroupRecord now owns optional parsed RGB plus a COLOR-ONLY refusal

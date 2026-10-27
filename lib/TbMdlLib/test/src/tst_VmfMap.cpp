@@ -2384,6 +2384,104 @@ TEST_CASE("VmfMap", "[vmf]")
     CHECK(readBinary(path) == original);
   }
 
+  SECTION("plain native affine routes preserve planes UVs bindings and exact history")
+  {
+    const auto operation = GENERATE(0, 1, 2);
+    const auto lockUv = GENERATE(false, true);
+    auto env = fs::TestEnvironment{};
+    const auto path = env.dir() / "plain affine original.vmf";
+    const auto original = nativeRamp(true);
+    writeBinary(path, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(path, config);
+    auto& node = ramp(map);
+    const auto before = node.brush();
+    const auto positions = filePositions(map);
+    auto matrix = vm::scaling_matrix(vm::vec3d{2, 1.5, 0.5});
+    if (operation == 1)
+    {
+      matrix = vm::mat4x4d::identity();
+      matrix[1][0] = 0.25;
+    }
+    else if (operation == 2)
+    {
+      matrix = vm::scaling_matrix(vm::vec3d{-1, 1, 1});
+    }
+    selectNodes(map, {&node});
+    map.editorContext().setAlignmentLock(lockUv);
+    if (operation == 0)
+    {
+      REQUIRE(scaleSelection(map, {0, 0, 0}, {2, 1.5, 0.5}));
+    }
+    else if (operation == 1)
+    {
+      REQUIRE(transformSelection(map, "Plain native shear", matrix));
+    }
+    else
+    {
+      REQUIRE(flipSelection(map, {0, 0, 0}, vm::axis::x));
+    }
+    const auto changed = node.brush();
+    CHECK(changed != before);
+    CHECK(changed.faceCount() == before.faceCount());
+    CHECK(filePositions(map) == positions);
+    for (const auto& face : before.faces())
+    {
+      const auto found =
+        std::ranges::find(changed.faces(), face.lineNumber(), &BrushFace::lineNumber);
+      REQUIRE(found != changed.faces().end());
+      const auto oldAxes = face.takeUvCoordSystemSnapshot();
+      const auto newAxes = found->takeUvCoordSystemSnapshot();
+      REQUIRE(oldAxes);
+      REQUIRE(newAxes);
+      const auto& oldUv = face.uvAttributes();
+      const auto& newUv = found->uvAttributes();
+      for (const auto& point : face.points())
+      {
+        const auto transformed = matrix * point;
+        CHECK(
+          vm::dot(found->boundary().normal, transformed)
+          == Catch::Approx(found->boundary().distance).margin(0.000001));
+        if (lockUv)
+        {
+          CHECK(
+            vm::dot(oldAxes->uAxis, point) / oldUv.scale.x() + oldUv.offset.x()
+            == Catch::Approx(
+                 vm::dot(newAxes->uAxis, transformed) / newUv.scale.x()
+                 + newUv.offset.x())
+                 .margin(0.0001));
+          CHECK(
+            vm::dot(oldAxes->vAxis, point) / oldUv.scale.y() + oldUv.offset.y()
+            == Catch::Approx(
+                 vm::dot(newAxes->vAxis, transformed) / newUv.scale.y()
+                 + newUv.offset.y())
+                 .margin(0.0001));
+        }
+      }
+    }
+    const auto savedPath = env.dir() / "plain affine saved.vmf";
+    REQUIRE(map.saveAs(savedPath).is_success());
+    const auto saved = readBinary(savedPath);
+    CHECK(saved != original);
+    CHECK(readBinary(path) == original);
+    auto reopenedFixture = MapFixture{};
+    auto& reopened = reopenedFixture.load(savedPath, config);
+    checkReopenedBrush(ramp(reopened).brush(), changed);
+    CHECK(filePositions(reopened) == positions);
+    REQUIRE(reopened.save().is_success());
+    CHECK(readBinary(savedPath) == saved);
+    map.undoCommand();
+    CHECK(node.brush() == before);
+    const auto undone = env.dir() / "plain affine undone.vmf";
+    REQUIRE(map.saveTo(undone).is_success());
+    CHECK(readBinary(undone) == original);
+    map.redoCommand();
+    CHECK(node.brush() == changed);
+    const auto redone = env.dir() / "plain affine redone.vmf";
+    REQUIRE(map.saveTo(redone).is_success());
+    CHECK(readBinary(redone) == saved);
+  }
+
   SECTION(
     "native new map resolves its VMF starter without retaining saved-file association")
   {

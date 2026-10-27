@@ -23,6 +23,15 @@ No A5.22 owner observation has been received.
 All pending. Visual approval confirms only the actual observed case, not full
 Source branch/renderer/performance compatibility or data-integrity measurements.
 
+## Existing A5.22 plain-brush affine behavior — pending owner/Hammer check
+
+- [ ] On a copied VMF with a plain uncached non-displacement brush, try unequal
+  axis scaling, shear and mirror/flip, undo/redo and Save As/reopen in Hammer++.
+  Check both UV-lock modes only if useful. This capability already existed; the
+  six-arm automated proof corrects broad docs, not a new product feature. Cached,
+  opaque, displacement and prop restrictions remain separate. No observation
+  received; never use original files or infer all-map acceptance from this case.
+
 ## A5.21 live manual visgroups — pending owner/Hammer check
 
 Use a **copied editable** CSS/Momentum VMF in the whole A5.21 kit. Keep the whole

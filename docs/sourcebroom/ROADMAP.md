@@ -175,7 +175,7 @@ compatible merely because they also use VMF.
   A5.9 also adds bounded Source-only entity skins for simple fixed FGD studio
   paths, preserving other-game/explicit/legacy/dynamic declaration semantics.
   Common integer VTF formats retain bounded RGBA8 preview. Full A6/Source support
-  is not claimed: native nonuniform scale/shear/flip, sculpt/create/power/sew, blend
+  is not claimed: displacement nonuniform scale/shear/flip, sculpt/create/power/sew, blend
   materials, overlays/instances and broader shader/model tools remain pending.
   All 184 model entries and native focus4,009 assertions/41 cases pass. Review
   overflow red->green364/2 acts through Core and Map; affected UI129/3 and existing
@@ -307,6 +307,10 @@ This is the first interactive alpha, **not** a claim of complete Source support.
 **Candidate boundary:** basic native brushes/points can be created, duplicated,
 deleted and placed in supported plain brush-entity ownership, without a Quake
 MAP round trip. Arbitrary topology and opaque-reference mutations remain gated.
+Plain uncached non-displacement brushes already admit valid nonuniform scale,
+shear and flip through normal commands; six actual Map/UV-lock controls on A5.22
+verify existing behavior, not a newly implemented transform feature. Cache,
+displacement, opaque-reference and prop restrictions are separate and unchanged.
 Existing native entities have typed FGD hints and an ordered output table;
 supported props have a static root/default-pose preview.
 Ordinary native groups now have bounded scene Group/Ungroup authoring (A5.15).
