@@ -5,12 +5,13 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.20 native polygon-cache ownership candidate:
+**Status:** Windows A5.23 stored displacement alpha candidate:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
 FGD-backed properties and ordered Source outputs, preserving saves, external
-compile/play, capability preflight, read-only saved metadata, live native cordons and an explicit
+compile/play, capability preflight, read-only saved metadata, live native cordons,
+manual visgroups/own-record RGB, stored terrain weights and an explicit
 custom-content distribution ZIP. CSS and Momentum are the first tested profiles,
 not the only configurable games. Independent Hammer++ and detailed authoring
 acceptance remain pending; full A5, advanced native authoring and a general
@@ -38,7 +39,23 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.20 enables **duplication and deletion of ordinary non-terrain brushes with
+A5.23 adds **stored displacement alpha weights (0..255)** in the selected-face
+inspector, independently of distance/height. Complete original rows only: one
+explicit Apply supports no-op, native Save As/reopen and exact undo/redo without
+changing terrain positions/normals/bounds/picking. Missing alpha does not disable
+valid height editing. This is not full Source material blending, paint/smoothing,
+missing-row creation or topology. Model294/294 and the inspector pass; full UI58/59
+retains the known unchanged Windows preference rename failure. Actual client/
+checker/test builds have zero new compiler diagnostics; parent review is not
+independent Hammer/owner acceptance. Keep the whole A5.22 kit as recovery.
+
+Retained A5.21/A5.22 add live native manual-visgroup tree/membership/Show/Hide and
+explicit own-record RGB, not automatic/wrapper visibility or member object tint.
+See [current alpha instructions](docs/sourcebroom/ALPHA.md),
+[tool limits](docs/sourcebroom/SOURCE_TOOLS.md) and [pending human checks](lextest.md).
+Complete Source support and a general release remain unclaimed.
+
+Retained A5.20 enables **duplication and deletion of ordinary non-terrain brushes with
 validated point_data or vertices_plus polygons**, including supported whole/partial
 brush entities and safe brush additions to those entities. Copies retain stable
 new native IDs and remain movable, duplicable and removable after Save As/reopen.

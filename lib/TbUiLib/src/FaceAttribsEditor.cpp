@@ -626,6 +626,15 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   m_displacementDistance->setDecimals(6);
   m_applyDisplacement = new QPushButton{tr("Apply distance")};
   m_applyDisplacement->setObjectName("sourceDisplacementApply");
+  m_displacementAlpha = new QDoubleSpinBox{};
+  m_displacementAlpha->setObjectName("sourceDisplacementAlpha");
+  m_displacementAlpha->setRange(0, 255);
+  m_displacementAlpha->setDecimals(6);
+  m_applyDisplacementAlpha = new QPushButton{tr("Apply alpha")};
+  m_applyDisplacementAlpha->setObjectName("sourceDisplacementAlphaApply");
+  m_displacementAlphaStatus = new QLabel{};
+  m_displacementAlphaStatus->setObjectName("sourceDisplacementAlphaStatus");
+  m_displacementAlphaStatus->setWordWrap(true);
   displacementLayout->addWidget(new QLabel{tr("Row")}, 1, 0);
   displacementLayout->addWidget(m_displacementRow, 1, 1);
   displacementLayout->addWidget(new QLabel{tr("Column")}, 1, 2);
@@ -633,6 +642,10 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   displacementLayout->addWidget(new QLabel{tr("Distance")}, 2, 0);
   displacementLayout->addWidget(m_displacementDistance, 2, 1, 1, 2);
   displacementLayout->addWidget(m_applyDisplacement, 2, 3);
+  displacementLayout->addWidget(new QLabel{tr("Alpha (0..255)")}, 3, 0);
+  displacementLayout->addWidget(m_displacementAlpha, 3, 1, 1, 2);
+  displacementLayout->addWidget(m_applyDisplacementAlpha, 3, 3);
+  displacementLayout->addWidget(m_displacementAlphaStatus, 4, 0, 1, 4);
   faceAttribsLayout->addWidget(m_displacementEditor, r, 0, 1, 4);
   connect(m_displacementRow, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
     updateDisplacementSample();
@@ -646,6 +659,14 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
       static_cast<size_t>(m_displacementRow->value()),
       static_cast<size_t>(m_displacementColumn->value()),
       m_displacementDistance->value());
+    updateControls();
+  });
+  connect(m_applyDisplacementAlpha, &QAbstractButton::clicked, this, [this] {
+    mdl::setSourceDisplacementAlpha(
+      m_document.map(),
+      static_cast<size_t>(m_displacementRow->value()),
+      static_cast<size_t>(m_displacementColumn->value()),
+      m_displacementAlpha->value());
     updateControls();
   });
   faceAttribsLayout->setColumnStretch(1, 1);
@@ -806,6 +827,7 @@ void FaceAttribsEditor::updateDisplacementSample()
     return;
   }
   m_displacementDistance->setValue(displacement.distance(row, column));
+  m_displacementAlpha->setValue(displacement.alpha(row, column));
 }
 
 void FaceAttribsEditor::updateControls()
@@ -841,9 +863,22 @@ void FaceAttribsEditor::updateControls()
   const auto displacement =
     faceHandles.size() == 1 ? faceHandles[0].face().sourceDisplacement() : nullptr;
   m_displacementEditor->setVisible(bool(displacement));
-  m_displacementEditor->setEnabled(
-    displacement && displacement->canEditDistances()
-    && !m_document.map().isReadOnlyVmfPreview());
+  const auto writable = displacement && !m_document.map().isReadOnlyVmfPreview();
+  const auto distanceEditable = writable && displacement->canEditDistances();
+  const auto alphaRows = displacement && displacement->canEditAlphas();
+  const auto alphaEditable = writable && alphaRows;
+  m_displacementEditor->setEnabled(writable);
+  m_displacementDistance->setEnabled(distanceEditable);
+  m_applyDisplacement->setEnabled(distanceEditable);
+  m_displacementAlpha->setEnabled(alphaEditable);
+  m_applyDisplacementAlpha->setEnabled(alphaEditable);
+  m_displacementAlphaStatus->setText(
+    !displacement ? tr("No native displacement selected.")
+    : !alphaRows
+      ? tr("Alpha source rows are unavailable; distance editing is independent.")
+    : !writable
+      ? tr("Read-only native preview; alpha weights are preserved.")
+      : tr("Stored alpha weight only; material blending preview remains limited."));
   if (displacement)
   {
     const auto blockRow = QSignalBlocker{m_displacementRow};

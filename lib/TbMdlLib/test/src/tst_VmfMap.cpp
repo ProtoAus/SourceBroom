@@ -2102,6 +2102,110 @@ TEST_CASE("VmfMap displacement translation undo and continued saving", "[vmf]")
   CHECK(readBinary(originalPath) == original);
 }
 
+TEST_CASE(
+  "VmfMap displacement alpha command preserves geometry and exact history", "[vmf]")
+{
+  auto env = fs::TestEnvironment{};
+  const auto originalPath = env.dir() / "alpha original.vmf";
+  const auto original = nativeDisplacementRoom();
+  writeBinary(originalPath, original);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(originalPath, config);
+  auto& node = ramp(map);
+  const auto index = node.brush().findFace(vm::vec3d{0, 0, 1});
+  REQUIRE(index);
+  REQUIRE(node.brush().face(*index).sourceDisplacement());
+  selectBrushFaces(map, {BrushFaceHandle{node, *index}});
+  const auto before = *node.brush().face(*index).sourceDisplacement();
+  const auto positions = filePositions(map);
+  const auto bounds = node.physicalBounds();
+  REQUIRE(before.canEditAlphas());
+  CHECK(before.alpha(2, 2) == 128);
+  // Actual pre-existing distance command controls the alpha publish gate.
+  REQUIRE(setSourceDisplacementDistance(map, 2, 2, 24));
+  CHECK(node.physicalBounds().max.z() == 88);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  const auto count = map.modificationCount();
+  SECTION("no-op and invalid input never add history or mutate source")
+  {
+    CHECK(setSourceDisplacementAlpha(map, 2, 2, 128));
+    CHECK_FALSE(setSourceDisplacementAlpha(map, 5, 2, 17));
+    CHECK_FALSE(setSourceDisplacementAlpha(map, 2, 5, 17));
+    CHECK_FALSE(setSourceDisplacementAlpha(map, 2, 2, -1));
+    CHECK_FALSE(setSourceDisplacementAlpha(map, 2, 2, 256));
+    CHECK(map.modificationCount() == count);
+    CHECK(*node.brush().face(*index).sourceDisplacement() == before);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  }
+  SECTION("requires exactly one selected native displacement face")
+  {
+    deselectAll(map);
+    CHECK_FALSE(setSourceDisplacementAlpha(map, 2, 2, 17));
+    const auto ordinary = (*index + 1) % node.brush().faceCount();
+    selectBrushFaces(map, {BrushFaceHandle{node, ordinary}});
+    CHECK_FALSE(setSourceDisplacementAlpha(map, 2, 2, 17));
+    deselectAll(map);
+    selectBrushFaces(
+      map, {BrushFaceHandle{node, ordinary}, BrushFaceHandle{node, *index}});
+    CHECK_FALSE(setSourceDisplacementAlpha(map, 2, 2, 17));
+    CHECK(map.modificationCount() == count);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  }
+  SECTION("fractional scalar save reopen undo redo and subsequent movement")
+  {
+    REQUIRE(setSourceDisplacementAlpha(map, 2, 2, 17.5));
+    CHECK(map.modificationCount() == count + 1);
+    REQUIRE(map.undoCommandName());
+    CHECK(*map.undoCommandName() == "Change Displacement Alpha");
+    const auto after = node.brush().face(*index).sourceDisplacement();
+    CHECK(after->alpha(2, 2) == 17.5);
+    CHECK(after->positions() == before.positions());
+    CHECK(after->basePositions() == before.basePositions());
+    CHECK(after->normals() == before.normals());
+    CHECK(after->indices() == before.indices());
+    CHECK(node.physicalBounds() == bounds);
+    CHECK(filePositions(map) == positions);
+    auto hits = PickResult{};
+    pick(map, vm::ray3d{{32, 32, 128}, {0, 0, -1}}, hits);
+    REQUIRE_FALSE(hits.empty());
+    CHECK(hits.all()[0].distance() == Catch::Approx(48));
+    const auto outputPath = env.dir() / "alpha saved.vmf";
+    REQUIRE(map.saveAs(outputPath).is_success());
+    auto expected = original;
+    const auto row = std::string{"row2 \"0 64 128 192 255\""};
+    const auto offset = expected.find(row);
+    REQUIRE(offset != std::string::npos);
+    expected.replace(offset, row.size(), "row2 \"0 64 17.5 192 255\"");
+    CHECK(readBinary(outputPath) == expected);
+    CHECK(readBinary(originalPath) == original);
+    auto reopened = MapFixture{};
+    auto& loaded = reopened.load(outputPath, config);
+    const auto reopenedMesh = ramp(loaded).brush().face(*index).sourceDisplacement();
+    REQUIRE(reopenedMesh);
+    CHECK(reopenedMesh->alpha(2, 2) == 17.5);
+    CHECK(reopenedMesh->positions() == before.positions());
+    REQUIRE(loaded.save().is_success());
+    CHECK(readBinary(outputPath) == expected);
+    const auto savedCount = map.modificationCount();
+    CHECK(setSourceDisplacementAlpha(map, 2, 2, 17.5));
+    CHECK(map.modificationCount() == savedCount);
+    map.undoCommand();
+    CHECK(*node.brush().face(*index).sourceDisplacement() == before);
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    map.redoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == expected);
+    deselectAll(map);
+    selectNodes(map, {&node});
+    REQUIRE(translateSelection(map, {16, 8, 4}));
+    CHECK(node.brush().face(*index).sourceDisplacement()->alpha(2, 2) == 17.5);
+    map.undoCommand();
+    CHECK(map.vmfScene()->serialize(map.worldNode()) == expected);
+  }
+}
+
 TEST_CASE("VmfMap displacement distance undo and safe save", "[vmf]")
 {
   auto env = fs::TestEnvironment{};

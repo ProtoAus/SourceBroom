@@ -712,14 +712,15 @@ TEST_CASE("MapWindow")
 }
 
 TEST_CASE(
-  "Source displacement inspector applies distance and guards stale grid coordinates",
+  "Source displacement inspector applies distance alpha and guards stale grid "
+  "coordinates",
   "[source]")
 {
   auto env = fs::TestEnvironment{};
   auto settings = NativeGroupSettingsScope{env.dir()};
   auto fixture = AppControllerFixture{};
   auto& appController = fixture.appController();
-  const auto solid = [](const size_t id, const size_t power) {
+  const auto solid = [](const size_t id, const size_t power, const bool withAlphas) {
     const auto planes = std::array<std::string, 6>{
       "(0 0 0) (0 64 0) (0 0 64)",
       "(64 0 0) (64 0 64) (64 64 0)",
@@ -756,7 +757,22 @@ TEST_CASE(
           }
           text += "\"\n";
         }
-        text += "} }\n";
+        text += "}\n";
+        if (withAlphas)
+        {
+          text += "alphas {\n";
+          for (size_t row = 0; row < size; ++row)
+          {
+            text += "row" + std::to_string(row) + " \"";
+            for (size_t column = 0; column < size; ++column)
+            {
+              text += "128.00 ";
+            }
+            text += "\"\n";
+          }
+          text += "}\n";
+        }
+        text += "}\n";
       }
       text += "}\n";
     }
@@ -764,7 +780,8 @@ TEST_CASE(
   };
   env.createFile(
     "displacement.vmf",
-    "world { id 1 classname worldspawn\n" + solid(2, 6) + solid(20, 2) + "}\n");
+    "world { id 1 classname worldspawn\n" + solid(2, 6, true) + solid(20, 2, true)
+      + solid(40, 2, false) + "}\n");
   auto loaded = MapDocument::loadDocument(
     appController.environmentConfig(),
     mdl::QuakeGameInfo,
@@ -778,15 +795,19 @@ TEST_CASE(
   auto editor = FaceAttribsEditor{appController, *document};
   auto& map = document->map();
   const auto nodes = map.worldNode().defaultLayer()->children();
-  REQUIRE(nodes.size() == 2);
+  REQUIRE(nodes.size() == 3);
   auto* large = dynamic_cast<mdl::BrushNode*>(nodes[0]);
   auto* small = dynamic_cast<mdl::BrushNode*>(nodes[1]);
+  auto* sparse = dynamic_cast<mdl::BrushNode*>(nodes[2]);
   REQUIRE(large);
   REQUIRE(small);
+  REQUIRE(sparse);
   const auto largeFace = large->brush().findFace(vm::vec3d{0, 0, 1});
   const auto smallFace = small->brush().findFace(vm::vec3d{0, 0, 1});
+  const auto sparseFace = sparse->brush().findFace(vm::vec3d{0, 0, 1});
   REQUIRE(largeFace);
   REQUIRE(smallFace);
+  REQUIRE(sparseFace);
   auto* row = editor.findChild<QSpinBox*>("sourceDisplacementRow");
   auto* column = editor.findChild<QSpinBox*>("sourceDisplacementColumn");
   auto* distance = editor.findChild<QDoubleSpinBox*>("sourceDisplacementDistance");
@@ -820,6 +841,40 @@ TEST_CASE(
   QApplication::processEvents();
   CHECK(distance->value() == 16);
   CHECK(small->brush().face(*smallFace).sourceDisplacement()->distance(2, 2) == 16);
+  // The actual distance controls above act before the absent-alpha-controls RED.
+  auto* alpha = editor.findChild<QDoubleSpinBox*>("sourceDisplacementAlpha");
+  auto* applyAlpha = editor.findChild<QPushButton*>("sourceDisplacementAlphaApply");
+  REQUIRE(alpha);
+  REQUIRE(applyAlpha);
+  CHECK(alpha->value() == 128);
+  REQUIRE(applyAlpha->isEnabled());
+  const auto geometry = small->brush().face(*smallFace).sourceDisplacement()->positions();
+  const auto alphaCount = map.modificationCount();
+  alpha->setValue(17.5);
+  applyAlpha->click();
+  CHECK(map.modificationCount() == alphaCount + 1);
+  CHECK(small->brush().face(*smallFace).sourceDisplacement()->alpha(2, 2) == 17.5);
+  CHECK(small->brush().face(*smallFace).sourceDisplacement()->positions() == geometry);
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(alpha->value() == 128);
+  map.redoCommand();
+  QApplication::processEvents();
+  CHECK(alpha->value() == 17.5);
+  const auto repeatedCount = map.modificationCount();
+  applyAlpha->click();
+  CHECK(map.modificationCount() == repeatedCount);
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*sparse, *sparseFace}});
+  QApplication::processEvents();
+  CHECK_FALSE(sparse->brush().face(*sparseFace).sourceDisplacement()->canEditAlphas());
+  CHECK_FALSE(alpha->isEnabled());
+  CHECK_FALSE(applyAlpha->isEnabled());
+  REQUIRE(distance->isEnabled());
+  REQUIRE(apply->isEnabled());
+  distance->setValue(24);
+  apply->click();
+  CHECK(sparse->brush().face(*sparseFace).sourceDisplacement()->distance(2, 2) == 24);
 }
 
 TEST_CASE("Source material settings group game mounts without changing the catalog")

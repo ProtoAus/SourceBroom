@@ -1,16 +1,49 @@
-# SourceBroom validation — A5.22 explicit native visgroup RGB
+# SourceBroom validation — A5.23 stored displacement alpha
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.22 — own-record RGB without implicit defaults
+## A5.23 — stored alpha without geometry or permission widening
+
+- Actual compiled PARTIAL-wiring RED has API, owning row bindings, local setter
+  and Map route present; the existing emitter refusal/missing UI remain. Model
+  **180 assertions /176 controls pass /4 desired failures**, UI **24/23/1**. Old
+  distance and local alpha controls act. This is not an all-code-withheld/stub RED.
+- After the bounded emitter/UI changes, focused **2Model/1UI** pass. Actual final
+  four-target client/checker/test build has zero new compiler diagnostics; full
+  **Model294/294** passes. Full **UI58/59**: ONLY the unchanged Windows
+  QPreferenceStore Unicode-fixture rename AccessDenied fails. The current log
+  was inspected; this known prior failure is preserved/unfixed, not waived or
+  repeatedly rerun to claim59/59. The new inspector case passes.
+- Nine source files match explicit-UTF8 changed-range formatting; final source/
+  four-executable hashes and complete **669-line parent review** identify the
+  cut. No independent alpha review claim. Actual-source clang DB refreshed from
+  **889 TUs/30 Release CL logs** after bounding compiler concurrency. Core has
+  modernize hints, not C++ errors; this is not a clean clang-tidy/self-test claim.
+- A fractional alpha changes ONLY its bound original numeric token. Stable
+  Save As/reopen, no-op, exact undo/redo and untouched original bytes act through
+  Core and Map. Positions/base positions/normals/indices/bounds and raised ray
+  picking remain unchanged; a subsequent supported translation still works.
+- Missing/partial rows refuse alpha creation while acted distance editing remains
+  available. Same-value foreign alpha row text, invalid coordinates/range,
+  ordinary/multiple-face selection and stale queued UI indices remain guarded.
+  Actual Qt Apply, no extra no-op history, undo/redo and65-to-5 selection refresh
+  pass. Existing frame/corner/elevation/vector/cache/world/opaque/topology checks
+  are not relaxed. No material/shader blending or paint/smoothing implementation.
+
+App50/Render28 remain retained A5.21 evidence, not new alpha results. Installed
+corpus/portable receipts are refreshed only at the real new-reader boundary;
+source checks alone do not claim installation. Owner control/weight/Hammer checks
+in ../../lextest.md remain pending. Full A6/Source support is not complete.
+
+## Retained A5.22 — own-record RGB without implicit defaults
 
 - API/tests compiled BEFORE product wiring, zero new compiler diagnostics. Actual
   ModelRGB **169 assertions / 123 controls pass / 46 desired failures** and actual
   UI **6 / 5 / 1** retained: existing rename/save/undo acted before desired RGB.
-- First wired3Model+1UI cases pass. Current full **Model292/292**, **UI59/59** and
+- First wired3Model+1UI cases pass. A5.22 full **Model292/292**, **UI59/59** and
   actual client/checker/test4target build pass with0new compiler diagnostics.
   A5.21 **App50/Render28** are retained history, not rerun/current RGB claims.
 - Tested6-file source/executable fingerprints and complete721-line parent review
@@ -577,11 +610,12 @@ manual native mesh appearance and independent Hammer checks remain pending.
 | Area | Implemented and checked | Not implied |
 | --- | --- | --- |
 | Native document | Ordered/repeated keys, comments, unknown blocks, numeric text, byte-exact no-edit serialization; surgical token edits and entry/nesting bounds | All VMF branch semantics or independent Hammer acceptance |
-| Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; ordinary Front/Back/Both clips; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | Other CSG/arbitrary topology, native editor-group/layer/displacement/overlay/instance authoring |
+| Scene/edit/save | Stable bindings; native starter/new plain brushes and point entities; supported duplication/deletion and brush-entity ownership; bounded ordinary groups and Front/Back/Both clips; strict geometry/UV/side-identity admission; undo/redo and transactional preserving save/Save As | Other CSG/arbitrary topology, layers, displacement ownership, overlays or instances |
 | Compatibility preview | Explicit opt-in immutable partial reader; duplicate IDs/bytes unchanged; omitted-solid counts and labelled plane samples; selection-only commands; create-new unchanged copy | Editable repair, complete geometry, proxy hulls, normal save/export/build or relaxed syntax/resource limits |
 | Entity tools | FGD property hints, choices/flags and I/O metadata; ordered/repeated outputs; unknown data retained, definition defaults not blindly inserted | FGD completeness or correctness for every game; malformed data silently repaired |
 | Props/materials | Bounded static MDL44/48/49 with matching VVD/VTX, root/default pose, installed loose/VPK materials; Source fixed-studio entity skins and static body selection; explicit fallbacks | Animation, physics/full shader parity or every model variant |
-| Native metadata | Read-only groups/visgroups/membership/hidden/cameras/cordons, known-reference diagnostics; camera-eye navigation | Scene parenting, visibility/cordon authoring or arbitrary compiler clipping behavior |
+| Native terrain | Bounded native meshes/picking; existing distance and stored alpha samples; admitted whole-base translation/rotation/positive uniform scale, including validated coupled cache motion; native history/save | Missing-row creation, paint/smoothing, topology/power/sew, nonuniform/shear/flip, full material blending or independent native acceptance |
+| Native metadata | Saved-file read-only inspection/camera eye; live bounded cordons and manual visgroup tree/membership/Show/Hide/own-record RGB; known-reference diagnostics | Automatic/wrapper flag authoring, automatic group predicates, arbitrary metadata or compiler clipping behavior |
 | Build tools | Actual staged-byte preflight; bounded reader; CSS20/Strata25 per-stage BSP-header contracts; leak/coordinate diagnostics; fresh staging and stop-on-failure | Whole-BSP validation, every Source branch, successful runtime load from process creation alone |
 | Custom packages | Explicit custom-only root/rights acknowledgement, bounded discovery, reviewed immutable snapshots, separate approval, create-new distribution ZIP | Automatic stock/VPK redistribution, complete discovery, licence certification or BSP embedding |
 
@@ -596,8 +630,11 @@ not substituted for compilation or runtime checks.
 
 | Check | Actual result |
 | --- | --- |
-| Current filesystem / graphics / model / normal UI CTest suites | **20/20 + 21/21 + 175/175 + 43/43 passed** (259 entries) |
-| Preference history | A5.5 full42/43 and isolated QPreferenceStore Windows rename failures remain preserved/unfixed. The current pass has no preference-code fix and is not an all-runs-green claim |
+| Current A5.23 product/checker/model/UI build | Four actual Release targets, zero new compiler diagnostics; source/executable fingerprinted cut |
+| Current A5.23 full model / normal UI suites | **294/294 + 58/59**; new alpha inspector passes, known unchanged QPreferenceStore Windows rename failure preserved |
+| Retained earlier filesystem / graphics / model / UI suites | **20/20 + 21/21 + 175/175 + 43/43 passed** (259 historical entries), not rerun A5.23 results |
+| Retained A5.21 App / renderer suites | **50/50 + 28/28**, not new alpha results |
+| Preference history | Prior full42/43 and isolated Windows rename failures remain preserved/unfixed; A5.23 full UI58/59 contains that same known failure. No preference-code fix or all-runs-green claim |
 | Focused cutout/two-sided/Patch/rendering controls | Graphics **990 assertions /2 cases**, model **7654 /7 cases** and expanded shared-alpha GPU **2539 /1 case** passed |
 | Focused accepted-fix UI controls | **4/4 passed**: property/I/O namespace controls, production build backend and metadata/package tools |
 | Lossless supplied corpus | **38/38 passed**, no-edit plus acted in-memory mutation; original SHA-256 unchanged |

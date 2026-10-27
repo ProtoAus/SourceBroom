@@ -4,6 +4,28 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.23 stored displacement alpha — pending owner/Hammer check
+
+Use the whole A5.23 kit and a copied VMF with a supported native displacement.
+Keep the whole A5.22 kit as unmerged recovery. Automated Model294/current alpha
+inspector and source-preservation checks do not confirm these observations.
+Full UI58/59 retains the known unchanged Windows preference-fixture failure.
+No A5.23 owner observation has been received.
+
+- [ ] Select one terrain face, choose a native grid row/column in **Displacement
+  vertex**, set a fractional **Alpha (0..255)** and press **Apply alpha**. Undo/redo
+  and confirm the controls are clear at normal window size without moving terrain.
+  Distance is a separate action; stored weight does not promise shader blending.
+- [ ] Save As a NEW VMF, reopen and compare its stored terrain alpha in matching
+  Hammer++/Source branch if available. Record only the actual observed control,
+  weight and branch; paint/smoothing/material parity are not implied.
+- [ ] If a map lacks complete alpha rows, alpha controls should stay unavailable
+  without disabling otherwise valid distance editing. Do not add/strip native
+  blocks or overwrite an original to force the check.
+
+All pending. Visual approval is not numerical performance or all-map/native-
+compiler acceptance; no new material-blending or complete Source claim.
+
 ## A5.22 explicit visgroup RGB — pending owner/Hammer check
 
 Use the whole A5.22 kit and a copied VMF; keep the whole A5.21 kit as recovery.

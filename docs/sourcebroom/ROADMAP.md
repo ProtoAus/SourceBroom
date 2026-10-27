@@ -33,13 +33,21 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.22 candidate:** explicit own-record native visgroup RGB authoring through
+- **A5.23 candidate:** explicit per-sample stored displacement alpha0..255 through
+  the face inspector and normal native Map preflight/history. Complete original
+  alpha rows only; no-op/surgical save/reopen/exact undo/redo preserve source and
+  geometry. Missing alpha does not disable valid height editing. This is not
+  material blending, paint/smoothing, topology or missing-row creation. Full
+  Model294/294 and the inspector pass; full UI58/59 retains the known unchanged
+  Windows preference rename failure. Actual client/checker/test builds have0new
+  diagnostics; parent review only, owner/Hammer weight acceptance pending.
+- **Retained A5.22 candidate:** explicit own-record native visgroup RGB authoring through
   the existing scoped request/history. Three bounded channels and separate Set
   in the LIVE inspector; absent RGB is not an invented default, same-value is
   lexical no-op, and unsupported/repeated scalar color is color-only protection.
   Retained and moved-subtree emission, new drafts, save/reopen, exact undo/redo
   and stale-row refusal are covered. Actual preimplementation RGB REDs retained;
-  current fullModel292/UI59 and product/checker builds0 new diagnostics. No
+  A5.22 fullModel292/UI59 and product/checker builds0 new diagnostics. No
   member editor.color/tint/propagation/color removal or new geometry authority.
   Parent reviewed the six-file delta; owner/Hammer RGB acceptance pending.
 - **Retained A5.21 candidate:** loaded/new manual-visgroup tree CRUD, ordered direct
@@ -341,6 +349,12 @@ Hammer reopening, and the selected compiler. Unsupported branch features are
 reported before a misleading successful build.
 
 ### A6 — Advanced native Source features
+
+The current foundation admits bounded native meshes, distance samples, selected
+proper similarity transforms and separately stored alpha samples (A5.23). It
+does not complete A6: stored blend-weight editing is not full shader blending,
+paint/smoothing or topology/power/sew, and independent native acceptance remains
+pending. The remaining feature/exit requirements below still apply.
 
 - Displacements: correct topology, normals, offsets, alpha blending, sculpting,
   sewing, transforms, undo, and serialization.

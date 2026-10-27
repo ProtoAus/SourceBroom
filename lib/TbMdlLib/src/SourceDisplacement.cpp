@@ -256,6 +256,7 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
   result.m_alphas.assign(total, 0.0);
   result.m_directionRows.resize(result.m_size);
   result.m_distanceRows.resize(result.m_size);
+  result.m_alphaRows.resize(result.m_size);
   result.m_offsetRows.resize(result.m_size);
   result.m_offsetNormalRows.resize(result.m_size);
   const auto bindRow =
@@ -352,16 +353,20 @@ std::optional<SourceDisplacement> SourceDisplacement::read(
     result.m_offsetNormals.assign(total, vm::vec3d{});
     result.m_offsetNormalRows.assign(result.m_size, Row{});
   }
-  readRows("alphas", 1, [&](const size_t y, auto, const auto&, const auto& values) {
-    for (size_t x = 0; x < result.m_size; ++x)
-    {
-      if (values[x].value < 0 || values[x].value > 255)
+  readRows(
+    "alphas",
+    1,
+    [&](const size_t y, const auto row, const auto& text, const auto& values) {
+      bindRow(result.m_alphaRows[y], row, text, values);
+      for (size_t x = 0; x < result.m_size; ++x)
       {
-        invalid(*block, "alpha sample outside 0..255");
+        if (values[x].value < 0 || values[x].value > 255)
+        {
+          invalid(*block, "alpha sample outside 0..255");
+        }
+        result.m_alphas[y * result.m_size + x] = values[x].value;
       }
-      result.m_alphas[y * result.m_size + x] = values[x].value;
-    }
-  });
+    });
   if (
     !result.m_normalsBound
     && std::any_of(
@@ -457,6 +462,21 @@ double SourceDisplacement::distance(const size_t row, const size_t column) const
   }
   return m_distances[row * m_size + column];
 }
+double SourceDisplacement::alpha(const size_t row, const size_t column) const
+{
+  if (row >= m_size || column >= m_size)
+  {
+    throw std::out_of_range{"displacement sample"};
+  }
+  return m_alphas[row * m_size + column];
+}
+bool SourceDisplacement::canEditAlphas() const
+{
+  return m_alphaRows.size() == m_size && m_alphas.size() == m_size * m_size
+         && std::all_of(m_alphaRows.begin(), m_alphaRows.end(), [this](const auto& row) {
+              return row.entry && row.spans.size() == m_size;
+            });
+}
 bool SourceDisplacement::canEditDistances() const
 {
   return m_normalsBound
@@ -495,6 +515,17 @@ void SourceDisplacement::setDistance(
     rebuild();
     throw;
   }
+}
+void SourceDisplacement::setAlpha(
+  const size_t row, const size_t column, const double value)
+{
+  if (!canEditAlphas() || !std::isfinite(value) || value < 0 || value > 255)
+  {
+    invalid(m_entry, "alpha samples require bound rows and finite values in 0..255");
+  }
+  (void)alpha(row, column);
+  // Blend weight only: geometry, normals and bounds remain unchanged.
+  m_alphas[row * m_size + column] = value;
 }
 SourceDisplacement SourceDisplacement::translated(const vm::vec3d& delta) const
 {
@@ -712,12 +743,25 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
     || m_size != before.m_size || m_elevationRow != before.m_elevationRow
     || m_startRow != before.m_startRow || m_worldBounds != before.m_worldBounds
     || m_normalsBound != before.m_normalsBound
-    || m_rotationSupported != before.m_rotationSupported || m_alphas != before.m_alphas
+    || m_rotationSupported != before.m_rotationSupported
+    || m_alphas.size() != before.m_alphas.size()
     || m_directionRows != before.m_directionRows
-    || m_distanceRows != before.m_distanceRows || m_offsetRows != before.m_offsetRows
+    || m_distanceRows != before.m_distanceRows || m_alphaRows != before.m_alphaRows
+    || m_offsetRows != before.m_offsetRows
     || m_offsetNormalRows != before.m_offsetNormalRows)
   {
     invalid(m_entry, "unsupported displacement structure or provenance edit");
+  }
+  if (m_alphas != before.m_alphas)
+  {
+    if (
+      !canEditAlphas() || !before.canEditAlphas()
+      || std::any_of(m_alphas.begin(), m_alphas.end(), [](const double value) {
+           return !std::isfinite(value) || value < 0 || value > 255;
+         }))
+    {
+      invalid(m_entry, "alpha changes require complete bound rows and values in 0..255");
+    }
   }
   const auto scale = m_baseScale / before.m_baseScale;
   if (
@@ -789,6 +833,10 @@ std::vector<VmfValueEdit> SourceDisplacement::editsFrom(
       before.m_distanceRows[y],
       std::span{before.m_distances}.subspan(y * m_size, m_size),
       std::span{m_distances}.subspan(y * m_size, m_size));
+    editRow(
+      before.m_alphaRows[y],
+      std::span{before.m_alphas}.subspan(y * m_size, m_size),
+      std::span{m_alphas}.subspan(y * m_size, m_size));
   }
   const auto editVectors =
     [&](const auto& rows, const auto& oldValues, const auto& newValues) {

@@ -21,6 +21,38 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
+## Stored displacement alpha samples — A5.23
+
+The existing bounded row reader now owns alpha entry/text/numeric-span bindings.
+Complete original rows are required; absent/partial tables are not authored.
+The scalar getter/setter enforce current grid coordinates and finite values in
+0..255. Alpha changes update only the weight vector: no geometry/normal/bounds
+rebuild. The selected-face Map route uses existing applyAndSwap/native preflight,
+exact one-face selection and normal history; same value adds no command.
+
+editsFrom replaces ONLY blanket alpha-value equality with immutable original
+alpha-row provenance, size/range/complete-binding checks and the existing surgical
+numeric-span emitter. Base/frame/corner/elevation/vector/cache/opaque/world and
+operation authorities are unchanged. Foreign same-value row text still refuses.
+Height and alpha eligibility are independent. Both UI sample getters use the
+current selected-mesh index guard; the explicit Alpha Apply/status does not claim
+material blending, paint/smoothing or missing-row/topology creation.
+
+Actual compiled PARTIAL-wiring RED retains API/row binding/local setter/Map route,
+with the existing emitter refusal and missing UI: Model180 assertions/176 controls
+pass/4 desired failures, UI24/23/1. It is not an all-code-withheld or stub RED.
+After wiring, focused2Model/1UI pass. Full Model294/294; full UI58/59 with ONLY the
+known unchanged Windows QPreferenceStore Unicode-fixture rename failure. No
+preference fix or all-UI-green claim. Four actual client/checker/test targets
+build0new diagnostics; all9 source changed ranges use explicit UTF8 formatting.
+Complete669-line parent review and source/executable fingerprints identify this
+cut. Refreshed ignored clang DB uses889 actual TUs/30 Release CL logs; modernize
+hints remain, not a clang-tidy clean claim. App50/Render28 are retained A5.21.
+
+Installed corpus/portable receipts are a separate real-boundary check. Owner
+weight/control/Hammer observation is pending in ../../lextest.md. Stored alpha
+editing is not full material blending or complete A6/Source support.
+
 ## Existing plain native brush affine scope — test/docs clarification
 
 Do not generalize the displacement/cache guards to plain brushes. Inspection of
@@ -35,7 +67,7 @@ pass. No implementation, new alpha/product patch, geometry guard or independent
 Hammer claim; prior global wording was overbroad. Keep all cached/displacement/
 opaque/prop restrictions. Human check remains pending in ../../lextest.md.
 
-## Explicit own-record visgroup RGB — A5.22
+## Retained explicit own-record visgroup RGB — A5.22
 
 NativeVisgroupRecord now owns optional parsed RGB plus a COLOR-ONLY refusal
 reason. One explicit scoped loaded/draft target + three int channels extends the
@@ -58,7 +90,7 @@ separate Set capture existing press-time intent; white for an absent field is a
 labelled draft, not a stored/default claim. Name/reparent never applies it.
 
 Actual compiled pre-wiring ModelRGB169 assertions/123controls/46desiredfails and
-UI6/5/1 precede the implementation. New3Model/1UI cases then pass; current full
+UI6/5/1 precede the implementation. New3Model/1UI cases then pass; A5.22 full
 Model292/UI59 and actual4target client/checker/tests build pass0newMSVCdiagnostics.
 Six-file full delta parent-reviewed; no independent RGB review claim. All6 files
 match clang-format using explicit UTF8. A mixed Python cp1252 preview was corrected
@@ -426,7 +458,7 @@ CMake, Git, and Pandoc already installed (substitute local paths):
 cmake -S . -B ../build -G "Visual Studio 18 2026" -A x64 `
   -DCMAKE_PREFIX_PATH=C:/Qt/6.10.3/msvc2022_64 `
   -DCMAKE_CONFIGURATION_TYPES=Release
-cmake --build ../build --config Release --target TrenchBroom SourceBroomVmfCheck TbFsLibTest TbGlLibTest TbMdlLibTest TbUiLibTest --parallel 1
+cmake --build ../build --config Release --target TrenchBroom SourceBroomVmfCheck TbFsLibTest TbGlLibTest TbMdlLibTest TbUiLibTest --parallel 1 -- /p:CL_MPCount=2
 ctest --test-dir ../build/lib/TbMdlLib/test -C Release --output-on-failure
 cmake --install ../build --config Release --prefix ../alpha
 ```
@@ -438,6 +470,16 @@ reconfigure also encountered an already-applied Assimp dependency patch. After
 all pinned dependencies were fetched, `-DFETCHCONTENT_FULLY_DISCONNECTED=ON`
 allowed reuse without rerunning population/patching. **Do not enable that option
 on a fresh tree with missing dependencies.** No dependency source was hand-edited.
+
+For this Visual Studio example, request low project/compiler concurrency with
+`--parallel 1 -- /p:CL_MPCount=2`. A shared-header rebuild on the 16GB host hit a
+420s tool timeout with the old invocation; the same existing build completed
+with these requested settings, reusing valid objects. Generated projects enable
+multiprocess compilation, but this setup's CL-command tlogs retain no `/MP`
+switches: no measured worker cap, memory-root-cause or speedup is claimed.
+Preserve valid objects/logs; do not clean/copy the whole build or keep repeating
+the timed-out invocation. Other generators have different native arguments;
+this MSBuild option is not a Ninja option.
 
 Use the build's actual executable location (multi-config builds add `Release`):
 
@@ -631,6 +673,8 @@ Save As/reopen, and refuses invalid indices/nonfinite/out-of-world edits before
 mutation. Sparse/missing/zero-direction authoring data does not enable this tool.
 The inspector's queued selection refresh may lag a row-change signal: always
 check indices against the **current selected mesh**, not the old widget range.
+A5.23 adds the separate stored-alpha route above; both getters share this guard,
+and missing alpha rows do not disable independently valid height editing.
 
 A5.9 adds pure native base translation through the existing brush/Map command.
 Retain startposition scalar spans and translate the start, corners, derived mesh

@@ -57,7 +57,135 @@ std::string replaceOnce(
   source.replace(pos, from.size(), to);
   return source;
 }
+std::string alphaFixture()
+{
+  auto rows = std::string{"alphas { // preserve scalar spelling\n"};
+  for (size_t row = 0; row < 5; ++row)
+  {
+    rows += "\"row" + std::to_string(row) + "\" \"000.0 +64  128.00   192 255\"\n";
+  }
+  rows += "}\ntriangle_tags {";
+  return replaceOnce(displacementFixture(), "triangle_tags {", rows);
+}
 } // namespace
+
+TEST_CASE("SourceDisplacement alpha samples preserve geometry and numeric provenance")
+{
+  const auto source = alphaFixture();
+  const auto document = VmfDocument::parse(source);
+  const auto original = loadDisplacement(source);
+  REQUIRE(original.canEditAlphas());
+  CHECK(original.alpha(2, 2) == 128);
+  // Existing distance authoring acts before every alpha arm.
+  auto control = original;
+  control.setDistance(2, 2, 24);
+  CHECK(document.serialize(control.editsFrom(original)) != source);
+  control.setDistance(2, 2, 16);
+  CHECK(document.serialize(control.editsFrom(original)) == source);
+  auto edited = original;
+  SECTION("one fractional alpha edit is surgical and does not rebuild geometry")
+  {
+    edited.setAlpha(2, 2, 17.5);
+    CHECK(edited.alpha(2, 2) == 17.5);
+    CHECK(original.alpha(2, 2) == 128);
+    CHECK(edited.positions() == original.positions());
+    CHECK(edited.basePositions() == original.basePositions());
+    CHECK(edited.normals() == original.normals());
+    CHECK(edited.indices() == original.indices());
+    CHECK(edited.bounds() == original.bounds());
+    CHECK(edited.distance(2, 2) == original.distance(2, 2));
+    const auto edits = edited.editsFrom(original);
+    REQUIRE(edits.size() == 1);
+    const auto saved = document.serialize(edits);
+    CHECK(
+      saved
+      == replaceOnce(
+        source,
+        "\"row2\" \"000.0 +64  128.00   192 255\"",
+        "\"row2\" \"000.0 +64  17.5   192 255\""));
+    const auto reopened = loadDisplacement(saved);
+    CHECK(reopened.alpha(2, 2) == 17.5);
+    CHECK(reopened.positions() == original.positions());
+    CHECK(reopened.alphas() == edited.alphas());
+    CHECK(document.serialize(edited.editsFrom(original)) == saved);
+    edited.setAlpha(2, 2, 128);
+    CHECK(edited == original);
+    CHECK(document.serialize(edited.editsFrom(original)) == source);
+  }
+  SECTION("same parsed value is a lexical no-op")
+  {
+    edited.setAlpha(2, 2, 128);
+    CHECK(edited == original);
+    CHECK(edited.editsFrom(original).empty());
+    CHECK(document.serialize(edited.editsFrom(original)) == source);
+  }
+  SECTION("invalid finite range or coordinates refuse before mutation")
+  {
+    const auto value = GENERATE(
+      -1.0,
+      255.01,
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::quiet_NaN());
+    CHECK_THROWS_AS(edited.setAlpha(2, 2, value), std::invalid_argument);
+    CHECK(edited == original);
+    CHECK_THROWS_AS(edited.setAlpha(5, 2, 0), std::out_of_range);
+    CHECK_THROWS_AS(edited.setAlpha(2, 5, 0), std::out_of_range);
+    CHECK_THROWS_AS(edited.alpha(5, 2), std::out_of_range);
+    CHECK_THROWS_AS(edited.alpha(2, 5), std::out_of_range);
+    CHECK(edited == original);
+  }
+  SECTION("missing or partial alpha rows do not silently become authored")
+  {
+    const auto partial = GENERATE(false, true);
+    const auto bytes =
+      partial ? replaceOnce(source, "\"row2\" \"000.0 +64  128.00   192 255\"\n", "")
+              : displacementFixture();
+    auto sparse = loadDisplacement(bytes);
+    const auto before = sparse;
+    CHECK_FALSE(sparse.canEditAlphas());
+    CHECK(sparse.canEditDistances());
+    CHECK(sparse.alpha(2, 2) == 0);
+    CHECK_THROWS_AS(sparse.setAlpha(2, 2, 17), std::invalid_argument);
+    CHECK(sparse == before);
+    sparse.setDistance(2, 2, 24);
+    CHECK_FALSE(sparse.editsFrom(before).empty());
+  }
+  SECTION("foreign same-value alpha row text is not numeric authority")
+  {
+    const auto foreign = loadDisplacement(replaceOnce(
+      source,
+      "\"row2\" \"000.0 +64  128.00   192 255\"",
+      "\"row2\" \"000.0 +64  1.28e2   192 255\""));
+    CHECK(foreign.alphas() == original.alphas());
+    CHECK_THROWS_AS(foreign.editsFrom(original), std::invalid_argument);
+  }
+  SECTION("alpha composes with existing distance and admitted base translation")
+  {
+    edited.setAlpha(2, 2, 17.5);
+    edited.setDistance(2, 2, 24);
+    const auto delta = vm::vec3d{16, 8, 4};
+    edited = edited.translated(delta);
+    CHECK(edited.alpha(2, 2) == 17.5);
+    CHECK(edited.positions()[12] == vm::vec3d{48, 40, 28});
+    const auto saved = document.serialize(edited.editsFrom(original));
+    const auto parsed = VmfDocument::parse(saved);
+    auto newCorners = corners;
+    for (auto& corner : newCorners)
+    {
+      corner = corner + delta;
+    }
+    const auto reopened =
+      SourceDisplacement::read(parsed, parsed.roots()[0], newCorners, {0, 0, 1}, bounds);
+    REQUIRE(reopened);
+    CHECK(reopened->alphas() == edited.alphas());
+    CHECK(reopened->positions() == edited.positions());
+    edited = edited.translated(-delta);
+    edited.setDistance(2, 2, 16);
+    edited.setAlpha(2, 2, 128);
+    CHECK(edited == original);
+    CHECK(document.serialize(edited.editsFrom(original)) == source);
+  }
+}
 
 TEST_CASE("SourceDisplacement")
 {

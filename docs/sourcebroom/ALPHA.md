@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.22 native-visgroup RGB candidate
+# Try the Windows SourceBroom A5.23 native displacement alpha candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,34 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.22: explicitly edit a native visgroup's RGB
+## A5.23: edit stored displacement alpha weights
+
+Select exactly one supported native terrain **face**. In the face inspector's
+**Displacement vertex** section, choose its native grid row/column, enter an
+**Alpha (0..255)** value and press **Apply alpha**. Fractional values are allowed.
+This changes the stored blend weight, not the terrain's height, normals, bounds
+or picking. Distance has its own separate Apply action.
+
+Only complete existing alpha rows are editable. Missing/partial rows remain
+preserved and disable alpha authoring without disabling otherwise valid distance
+editing. Same value is a no-op; invalid indices/range refuse. Normal undo/redo,
+Save As and reopen preserve native identity and untouched numeric spelling.
+This is **not** paint/smoothing, missing-row creation, topology/power/sew or full
+Source material blending preview. Existing terrain/cache/frame guards remain.
+
+Current Model **294/294** and the new inspector case pass. Full UI is **58/59**:
+the known unchanged Windows QPreferenceStore Unicode-fixture rename failure is
+preserved, not repaired or counted as a pass. Actual client/checker/test builds
+have zero new compiler diagnostics. App50/Render28 remain retained A5.21 evidence,
+not new alpha results; parent review is not independent/Hammer acceptance.
+
+**Quick owner check (pending):** use the whole A5.23 kit and a copied VMF with a
+supported displacement. Change one stored weight, undo/redo, Save As a new VMF
+and reopen; compare that terrain alpha in matching Hammer++ if available. Check
+the controls are usable without expecting shader/blend-paint parity. Keep the
+whole A5.22 kit as unmerged recovery and never overwrite an original to test it.
+
+## Retained A5.22: explicitly edit a native visgroup's RGB
 
 In **Map → LIVE native manual visgroups**, select a supported record, edit its
 three bounded RGB channels, then press **Set RGB on this visgroup only**. The RGB
@@ -38,8 +65,8 @@ apply. Save/reopen, new/moved subtrees, undo/redo and press-time scoped action
 identity use the existing native preservation/history path; color removal is not
 an authored operation.
 
-Current full **Model292 / UI59** and actual product/checker builds pass with zero
-new compiler diagnostics. A5.21 App50/Render28 remain retained evidence, not new
+At A5.22, full **Model292 / UI59** and actual product/checker builds passed with
+zero new compiler diagnostics. A5.21 App50/Render28 remain retained evidence, not new
 RGB suite results. Parent reviewed the complete six-file scalar delta; no new
 independent-review or human/Hammer acceptance claim.
 

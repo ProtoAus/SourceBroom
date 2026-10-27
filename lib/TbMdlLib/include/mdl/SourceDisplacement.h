@@ -60,6 +60,7 @@ private:
   std::vector<double> m_alphas;
   std::vector<Row> m_directionRows;
   std::vector<Row> m_distanceRows;
+  std::vector<Row> m_alphaRows;
   std::vector<Row> m_offsetRows;
   std::vector<Row> m_offsetNormalRows;
   bool m_normalsBound = false;
@@ -99,8 +100,11 @@ public:
   const std::vector<double>& alphas() const { return m_alphas; }
   const vm::bbox3d& bounds() const { return m_bounds; }
   double distance(size_t row, size_t column) const;
+  double alpha(size_t row, size_t column) const;
   bool canEditDistances() const;
+  bool canEditAlphas() const;
   void setDistance(size_t row, size_t column, double distance);
+  void setAlpha(size_t row, size_t column, double alpha);
   SourceDisplacement translated(const vm::vec3d& delta) const;
   /** Explicit rotation path only; not permission for generic affine commands. */
   SourceDisplacement rigidlyTransformed(const vm::mat4x4d& transform) const;

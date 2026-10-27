@@ -5,7 +5,29 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Explicit native visgroup RGB — A5.22
+## Stored native displacement alpha — A5.23
+
+Select exactly one supported terrain face. **Displacement vertex** in the face
+inspector shows the native grid row/column, independent distance and **Alpha
+(0..255)** values, and separate Apply buttons. Press **Apply alpha** to change
+one stored weight, including fractional values; it does not move/rebuild terrain,
+change picking/bounds or apply a drafted distance. Same parsed value is a no-op.
+
+Only complete original alpha tables are editable; missing/partial rows remain
+preserved and alpha-disabled, without disabling otherwise valid distance editing.
+Read-only preview remains non-authoring. Current-mesh index checks cover both
+sample getters during queued selection changes. Native save/reopen and exact
+undo/redo retain original bindings and all untouched number spelling/source.
+
+This is stored blend-weight authoring, **not** full Source material blending
+preview, paint/smoothing, alpha-row creation or topology/power/sew. Existing
+geometry/cache/frame/opaque authorities are unchanged. Full Model294/294 and the
+new inspector case pass; full UI58/59 preserves the known unchanged Windows
+QPreferenceStore rename failure. Actual product/checker/test builds have0new
+diagnostics. Owner control/weight/Hammer observation remains pending; use a copy
+and keep the previous whole kit. See [lextest](../../lextest.md).
+
+## Retained explicit native visgroup RGB — A5.22
 
 Select a supported record in **Map → LIVE native manual visgroups**. The RGB
 column, three channels and state explanation are current UNSAVED metadata. Press
@@ -22,8 +44,8 @@ restore an originally absent field exactly.
 
 Known/absent/new/moved records use the existing scoped request/history and both
 native emission paths, including local edits inside moved source subtrees. Use
-Save As on a copy; compare actual record RGB in matching Hammer++. FullModel292/
-UI59 and current product/checker builds pass0new diagnostics; human acceptance is
+Save As on a copy; compare actual record RGB in matching Hammer++. A5.22 Model292/
+UI59 and its product/checker builds pass0new diagnostics; human acceptance is
 pending in [lextest](../../lextest.md).
 
 ## LIVE native manual visgroups — retained A5.21 controls
@@ -423,8 +445,10 @@ Select exactly one displacement **face**
 to show a **Displacement vertex** row/column/distance section in the face inspector.
 Choose a grid row and column, enter a distance and click **Apply distance**. This
 uses normal undo/redo and preserving Save As. The row/column order is the native
-Source grid, not a screen-space brush. The tool is disabled when the original
-normal/distance data is incomplete or cannot safely express a distance change.
+Source grid, not a screen-space brush. The distance tool is disabled when the
+original normal/distance data is incomplete or cannot safely express a distance
+change. A5.23 adds the separate stored-alpha controls described above; alpha-row
+eligibility is independent, and neither tool silently authors missing rows.
 
 Use a copy until manual/Hammer acceptance is recorded. Unknown attachments and
 references remain guarded; missing or malformed meshes are not silently replaced

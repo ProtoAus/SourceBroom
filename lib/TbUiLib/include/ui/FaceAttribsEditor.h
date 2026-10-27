@@ -98,6 +98,9 @@ private:
   QSpinBox* m_displacementColumn = nullptr;
   QDoubleSpinBox* m_displacementDistance = nullptr;
   QAbstractButton* m_applyDisplacement = nullptr;
+  QDoubleSpinBox* m_displacementAlpha = nullptr;
+  QAbstractButton* m_applyDisplacementAlpha = nullptr;
+  QLabel* m_displacementAlphaStatus = nullptr;
   SignalDelayer* m_updateControlsSignalDelayer = nullptr;
 
   NotifierConnection m_notifierConnection;
