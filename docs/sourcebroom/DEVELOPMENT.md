@@ -21,7 +21,34 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Basic WorldVertexTransition preview — A5.24
+## Brush vertex producer/consumer boundary — A5.25
+
+The owner observed an unusable scattered-vertex view in A5.24. The cache had
+P3/N/UV0/UV1 (36bytes), but BrushVertexArray still used P3NT2 (32bytes), and
+BrushRenderer's memcpy counted destination bytes. Thus each later vertex was
+misaligned/truncated even though native geometry and the cache itself were valid.
+The previous native GPU test used client arrays and did not exercise this copy/
+holder/upload path; normal renderer tests mostly asserted draw commands.
+
+BrushVertexArray now aliases BrushRendererBrushCache::Vertex, making holder
+allocation and GL attribute stride share one definition. Production std::copy
+replaces the unchecked raw memcpy, so incompatible future types fail to compile.
+Existing array tests explicitly initialize ordinary terrain weight0. No parser,
+source mutation, native edit/save capability, shader or tolerance change.
+
+New production BrushRenderer checks capture actual vertex upload and pointer
+stride, compare all24 cube vertices' position/normal/UV/weight, and require a draw.
+A small extension of the existing native GPU case uses the real packed holder/
+VboManager and checks extent/green blend at four pixels. Both actual pre-fix logs
+show32==36 and corrupt attributes/missing pixels; they then hit a separate test
+VBO-lifetime cleanup contract, so no clean RED counts are invented. Bounds probing
+was made nonfatal/safe and pending VBOs explicitly freed after holder destruction.
+After the production fix, upload141 and GPU2597 assertions pass with normal exit0.
+The actual supplied VMF copy strictly loads; original/copy hashes remain unchanged.
+Owner whole-map visual acceptance stays pending; A5.24's observed failure is not
+converted into a pass by these controls. Do not ship A5.24 as a safe fallback.
+
+## Retained basic WorldVertexTransition preview — A5.24
 
 TerrainBlendPreview is a separate opt-in material mode. Only brush loadTexture
 uses it: default Strict and BaseTexturePreview still reject WorldVertexTransition.

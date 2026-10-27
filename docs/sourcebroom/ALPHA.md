@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.24 basic terrain blend candidate
+# Try the Windows SourceBroom A5.25 vertex-upload fix
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,20 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.24: preview basic two-texture terrain blending
+## A5.25: restore correct brush positions
+
+**Do not use A5.24:** the owner observed scattered vertices and an unusable large
+VMF view. Its cached vertices were36 bytes but the renderer's holder/copy/stride
+still used32. A5.25 shares the complete cache type and replaces the untyped copy
+with typed copying. Native geometry, preservation and save guards do not change.
+The actual copied input loads strictly and both original/copy hashes stay unchanged.
+
+Production upload checks141 and the real packed-VBO GPU case2597 pass; earlier
+shader/draw-count tests did not cover this boundary. Whole-map visual confirmation
+is still pending. Open a COPY in the whole A5.25 kit and check the main viewport
+and edges before testing edits. Keep the whole A5.23 kit as fallback, not A5.24.
+
+## Retained A5.24 feature: preview basic two-texture terrain blending
 
 Basic **WorldVertexTransition** VMTs now load both mounted VTF layers. On a
 supported displacement, stored alpha0 shows the first layer, alpha255 the second,

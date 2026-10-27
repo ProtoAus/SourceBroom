@@ -4,13 +4,27 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
-## A5.24 basic terrain blend preview — pending owner/Hammer check
+## A5.25 brush vertex upload — pending owner confirmation
+
+A5.24 owner observation is FAILED: loading the supplied large VMF scattered
+vertices and made the view unusable. A5.25 fixes the actual36/32-byte cache/upload
+mismatch; automated production-upload141 and packed-GPU2597 checks do not replace
+this human check. Use the whole A5.25 kit and a COPY; A5.23 is fallback, not A5.24.
+
+- [ ] Reopen the same copied VMF and confirm brush geometry and edges stay in place
+  and the viewport is usable. Check selection/editing only after it looks correct.
+- [ ] If convenient, check one supported terrain alpha change/undo separately.
+
+No A5.25 owner visual confirmation received yet. Original VMFs must not be changed
+for this check; no broad performance, all-map or Hammer/compiler pass is implied.
+
+## A5.24 basic terrain blend preview — FAILED owner load, superseded
 
 Use the whole A5.24 kit and a COPY with a basic WorldVertexTransition displacement.
 Keep the whole A5.23 kit as unmerged recovery. Automated real GPU2580 and full
 Model296/GL21/UI59/App50/Render28 do not confirm these human observations. The prior
-intermittent preference-fixture failure is not proven fixed. No A5.24 owner
-observation has been received.
+intermittent preference-fixture failure is not proven fixed. The owner subsequently reported scattered vertices/an unusable VMF view;
+that failure is confirmed, not acceptance. Do not use this kit for the checks below.
 
 - [ ] Select one supported terrain face and one native grid sample in
   **Displacement vertex**. Try **Alpha0** then **Alpha255** with **Apply alpha**;
@@ -21,7 +35,8 @@ observation has been received.
   the actual material/branch observed; bump/detail/specular/masks and full Source
   shader parity are not promised by this linear preview.
 
-Both pending. No original VMF writes, painting, missing-row creation or permission
+The planned blend checks below were not confirmed; the A5.24 load failed first.
+No original VMF writes, painting, missing-row creation or permission
 bypass is part of this check. Visual approval is not measured performance or
 universal shader/map/native-compiler acceptance.
 

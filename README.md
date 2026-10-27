@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.24 basic terrain blend-preview candidate:
+**Status:** Windows A5.25 brush vertex-upload regression fix:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,16 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.24 adds **basic WorldVertexTransition terrain blending**. Mounted VMTs can
+A5.25 fixes **scrambled brush geometry introduced by A5.24**: the cache gained a
+terrain-weight component but the upload holder still used the old32-byte vertex.
+The holder now uses the cache's full36-byte type, and typed copying makes future
+producer/consumer mismatches a compile error. Actual production upload141 and real
+packed-VBO GPU2597 checks pass. The owner's unusable A5.24 view is a confirmed
+failed observation; **avoid A5.24**, keep A5.23 as recovery, and use copied VMFs.
+A5.25 whole-map visual confirmation is pending; prior draw-count/shader checks
+missed this byte-layout boundary. Native data/edit/save guards are unchanged.
+
+Retained A5.24 adds **basic WorldVertexTransition terrain blending**. Mounted VMTs can
 supply two VTF layers; native displacement alpha0..255 blends first-to-second
 using the existing UVs, independently of image opacity and editor fade. The
 selected-face alpha controls update that preview through normal undo/redo.

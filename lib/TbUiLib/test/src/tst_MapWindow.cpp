@@ -55,11 +55,13 @@
 #include "gl/TestGl.h"
 #include "gl/TestUtils.h"
 #include "gl/Texture.h"
+#include "gl/VboManager.h"
 #include "gl/VertexAttributeType.h"
 #include "mdl/BrushBuilder.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushFaceHandle.h"
 #include "mdl/BrushNode.h"
+#include "mdl/BrushRendererBrushCache.h"
 #include "mdl/EditorContext.h"
 #include "mdl/EntityDefinition.h"
 #include "mdl/EntityDefinitionManager.h"
@@ -76,6 +78,7 @@
 #include "mdl/Map_Selection.h"
 #include "mdl/VmfScene.h"
 #include "mdl/WorldNode.h"
+#include "render/BrushRendererArrays.h"
 #include "ui/AppControllerFixture.h"
 #include "ui/CatchConfig.h"
 #include "ui/FaceAttribsEditor.h"
@@ -93,6 +96,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 
@@ -1459,6 +1463,66 @@ void main() {
     gl.bindTexture(GL_TEXTURE_2D, 0);
     functions->glDeleteTextures(1, &sentinel);
     gl.activeTexture(GL_TEXTURE0);
+    {
+      // Exercise the packed cache -> production holder -> real VBO path, not client
+      // arrays.
+      using Vertex = mdl::BrushRendererBrushCache::Vertex;
+      const auto packed = std::array<Vertex, 4>{
+        Vertex{
+          vm::vec3f{-1, -1, 0},
+          vm::vec3f{0, 0, 1},
+          vm::vec2f{0.5f, 0.5f},
+          vm::vec<float, 1>{1}},
+        Vertex{
+          vm::vec3f{1, -1, 0},
+          vm::vec3f{0, 0, 1},
+          vm::vec2f{0.5f, 0.5f},
+          vm::vec<float, 1>{1}},
+        Vertex{
+          vm::vec3f{-1, 1, 0},
+          vm::vec3f{0, 0, 1},
+          vm::vec2f{0.5f, 0.5f},
+          vm::vec<float, 1>{1}},
+        Vertex{
+          vm::vec3f{1, 1, 0},
+          vm::vec3f{0, 0, 1},
+          vm::vec2f{0.5f, 0.5f},
+          vm::vec<float, 1>{1}}};
+      auto vboManager = gl::VboManager{};
+      {
+        auto vertices = render::BrushVertexArray{};
+        const auto [allocation, destination] =
+          vertices.getPointerToInsertVerticesAt(packed.size());
+        REQUIRE(allocation);
+        CHECK(sizeof(*destination) == sizeof(packed.front()));
+        std::memcpy(destination, packed.data(), packed.size() * sizeof(*destination));
+        vertices.prepare(gl, vboManager);
+        REQUIRE(vertices.prepared());
+        REQUIRE(vertices.setup(gl, shader.program()));
+        shader.set("Alpha", 1.0f);
+        gl::setAlphaFuncUniforms(shader, &material);
+        blend.before(gl, &material);
+        gl.clearColor(0, 0, 1, 1);
+        gl.clear(GL_COLOR_BUFFER_BIT);
+        gl.drawArrays(GL_TRIANGLE_STRIP, static_cast<GLint>(allocation->pos), 4);
+        for (const auto point :
+             {vm::vec2i{2, 2}, vm::vec2i{5, 2}, vm::vec2i{2, 5}, vm::vec2i{5, 5}})
+        {
+          auto pixel = std::array<uint8_t, 4>{};
+          functions->glReadPixels(
+            point.x(), point.y(), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+          CHECK(pixel[0] <= 2);
+          CHECK(pixel[1] >= 253);
+          CHECK(pixel[2] <= 2);
+        }
+        blend.after(gl, &material);
+        vertices.cleanup(gl, shader.program());
+        auto clientUnit = GLint{};
+        gl.getIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &clientUnit);
+        CHECK(clientUnit == GL_TEXTURE0);
+      }
+      vboManager.destroyPendingVbos(gl);
+    }
     resource->dropSync(gl);
     plainResource->dropSync(gl);
     gl.popAttrib();

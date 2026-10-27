@@ -5,7 +5,17 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Basic terrain material blending — A5.24
+## Brush upload correction — A5.25
+
+A5.24 is known broken: an owner load produced scattered geometry. The brush cache
+had a36-byte vertex, while the renderer holder still copied/drew32-byte vertices.
+A5.25 shares the cache type through upload/attribute setup and uses typed copying;
+production byte/attribute checks141 and packed real-GPU checks2597 pass. This does
+not alter native geometry/UVs, IDs, edit permissions or preserving saves. Use the
+whole A5.25 kit with copied VMFs; keep A5.23 as recovery. Whole-map owner appearance
+remains pending; the earlier direct shader checks did not test this upload path.
+
+## Retained basic terrain material blending — A5.24
 
 For a basic **WorldVertexTransition** VMT, both mounted `$basetexture` and
 `$basetexture2` VTFs are loaded on demand within one retained-image budget.

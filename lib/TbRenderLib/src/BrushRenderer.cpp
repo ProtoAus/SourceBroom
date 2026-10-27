@@ -32,7 +32,7 @@
 
 #include "kd/contracts.h"
 
-#include <cstring>
+#include <algorithm>
 #include <vector>
 
 namespace tb::render
@@ -554,7 +554,7 @@ void BrushRenderer::validateBrush(const mdl::BrushNode& brushNode)
   contract_assert(m_vertexArray != nullptr);
   auto [vertBlock, dest] =
     m_vertexArray->getPointerToInsertVerticesAt(cachedVertices.size());
-  std::memcpy(dest, cachedVertices.data(), cachedVertices.size() * sizeof(*dest));
+  std::copy(cachedVertices.begin(), cachedVertices.end(), dest);
   info.vertexHolderKey = vertBlock;
 
   const auto brushVerticesStartIndex = static_cast<GLuint>(vertBlock->pos);

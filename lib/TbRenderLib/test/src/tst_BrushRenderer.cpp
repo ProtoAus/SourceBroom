@@ -32,6 +32,7 @@
 #include "mdl/BrushBuilder.h"
 #include "mdl/BrushFace.h"
 #include "mdl/BrushNode.h"
+#include "mdl/BrushRendererBrushCache.h"
 #include "mdl/MapFormat.h"
 #include "render/BrushRenderer.h"
 #include "render/RenderBatch.h"
@@ -42,6 +43,8 @@
 
 #include "vm/bbox.h"
 
+#include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <optional>
 #include <unordered_map>
@@ -186,6 +189,59 @@ TEST_CASE("BrushRenderer rendering")
 
   auto blendMaterial = gl::Material{"blend", createTextureResource(gl::Texture{4, 4})};
   blendMaterial.setBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  SECTION("the production brush upload preserves every cached vertex attribute")
+  {
+    auto brushNode = makeCubeBrushNode(opaqueMaterial, vm::vec3d{120, 240, 360});
+    auto& cache = brushNode.brushRendererBrushCache();
+    cache.validateVertexCache(brushNode);
+    const auto expected = cache.cachedVertices();
+    REQUIRE(expected.size() == 24);
+    auto uploaded = std::vector<std::byte>{};
+    auto stride = GLsizei{};
+    auto vertexOffset = size_t{};
+    gl.onBufferSubData = [&](
+                           const GLenum target,
+                           const GLintptr offset,
+                           const GLsizeiptr size,
+                           const void* data) {
+      if (target == GL_ARRAY_BUFFER)
+      {
+        REQUIRE(offset >= 0);
+        REQUIRE(size > 0);
+        uploaded.resize(static_cast<size_t>(offset + size));
+        std::memcpy(uploaded.data() + offset, data, static_cast<size_t>(size));
+      }
+    };
+    gl.onVertexPointer = [&](GLint, GLenum, const GLsizei value, const void* offset) {
+      stride = value;
+      vertexOffset = reinterpret_cast<size_t>(offset);
+    };
+    auto renderer = BrushRenderer{};
+    renderer.addBrush(brushNode);
+    auto batch = RenderBatch{vboManager};
+    renderer.render(renderContext, batch);
+    batch.render(renderContext);
+    REQUIRE(drawCallCount == 1);
+    REQUIRE(stride > 0);
+    CHECK(static_cast<size_t>(stride) == sizeof(expected.front()));
+    REQUIRE(!uploaded.empty());
+    for (size_t i = 0; i < expected.size(); ++i)
+    {
+      const auto offset = vertexOffset + i * static_cast<size_t>(stride);
+      CHECK(offset + sizeof(expected[i]) <= uploaded.size());
+      if (offset + sizeof(expected[i]) > uploaded.size())
+      {
+        break;
+      }
+      auto actual = mdl::BrushRendererBrushCache::Vertex{};
+      std::memcpy(&actual, uploaded.data() + offset, sizeof(actual));
+      CHECK(gl::getVertexComponent<0>(actual) == gl::getVertexComponent<0>(expected[i]));
+      CHECK(gl::getVertexComponent<1>(actual) == gl::getVertexComponent<1>(expected[i]));
+      CHECK(gl::getVertexComponent<2>(actual) == gl::getVertexComponent<2>(expected[i]));
+      CHECK(gl::getVertexComponent<3>(actual) == gl::getVertexComponent<3>(expected[i]));
+    }
+  }
 
   SECTION(
     "a material with real blend factors is drawn in the transparent pass, with depth "

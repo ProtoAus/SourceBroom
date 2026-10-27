@@ -22,6 +22,7 @@
 #include "gl/ShaderProgram.h"
 #include "gl/TestUtils.h"
 #include "gl/VboManager.h"
+#include "mdl/BrushRendererBrushCache.h"
 #include "render/BrushRendererArrays.h"
 
 #include "vm/vec.h"
@@ -290,7 +291,7 @@ TEST_CASE("BrushIndexArray")
 
 TEST_CASE("BrushVertexArray")
 {
-  using Vertex = gl::VertexTypes::P3NT2::Vertex;
+  using Vertex = mdl::BrushRendererBrushCache::Vertex;
 
   auto gl = gl::MockGl{};
   gl::installVboSupport(gl);
@@ -317,8 +318,10 @@ TEST_CASE("BrushVertexArray")
       auto array = BrushVertexArray{};
       const auto [block, dest] = array.getPointerToInsertVerticesAt(2);
       REQUIRE(block != nullptr);
-      dest[0] = Vertex{vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}};
-      dest[1] = Vertex{vm::vec3f{1, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{1, 0}};
+      dest[0] = Vertex{
+        vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}, vm::vec<float, 1>{0}};
+      dest[1] = Vertex{
+        vm::vec3f{1, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{1, 0}, vm::vec<float, 1>{0}};
 
       CHECK(!array.prepared());
     }
@@ -334,7 +337,8 @@ TEST_CASE("BrushVertexArray")
       REQUIRE(block2 != nullptr);
       for (auto i = 0u; i < 100; ++i)
       {
-        dest2[i] = Vertex{vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}};
+        dest2[i] = Vertex{
+          vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}, vm::vec<float, 1>{0}};
       }
 
       CHECK(!array.prepared());
@@ -346,8 +350,10 @@ TEST_CASE("BrushVertexArray")
     auto array = BrushVertexArray{};
     const auto [block, dest] = array.getPointerToInsertVerticesAt(2);
     const auto freedPos = block->pos;
-    dest[0] = Vertex{vm::vec3f{1, 2, 3}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}};
-    dest[1] = Vertex{vm::vec3f{4, 5, 6}, vm::vec3f{0, 0, 1}, vm::vec2f{1, 0}};
+    dest[0] = Vertex{
+      vm::vec3f{1, 2, 3}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}, vm::vec<float, 1>{0}};
+    dest[1] = Vertex{
+      vm::vec3f{4, 5, 6}, vm::vec3f{0, 0, 1}, vm::vec2f{1, 0}, vm::vec<float, 1>{0}};
 
     array.deleteVerticesWithKey(block);
 
@@ -355,14 +361,16 @@ TEST_CASE("BrushVertexArray")
     // afterward reuses the same position
     const auto [block2, dest2] = array.getPointerToInsertVerticesAt(2);
     CHECK(block2->pos == freedPos);
-    dest2[0] = Vertex{vm::vec3f{7, 8, 9}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}};
+    dest2[0] = Vertex{
+      vm::vec3f{7, 8, 9}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}, vm::vec<float, 1>{0}};
   }
 
   SECTION("prepare uploads the array")
   {
     auto array = BrushVertexArray{};
     const auto [block, dest] = array.getPointerToInsertVerticesAt(1);
-    dest[0] = Vertex{vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}};
+    dest[0] = Vertex{
+      vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}, vm::vec<float, 1>{0}};
 
     array.prepare(gl, vboManager);
     CHECK(array.prepared());
@@ -372,7 +380,8 @@ TEST_CASE("BrushVertexArray")
   {
     auto array = BrushVertexArray{};
     const auto [block, dest] = array.getPointerToInsertVerticesAt(1);
-    dest[0] = Vertex{vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}};
+    dest[0] = Vertex{
+      vm::vec3f{0, 0, 0}, vm::vec3f{0, 0, 1}, vm::vec2f{0, 0}, vm::vec<float, 1>{0}};
 
     array.prepare(gl, vboManager);
     CHECK(array.setup(gl, shaderProgram));

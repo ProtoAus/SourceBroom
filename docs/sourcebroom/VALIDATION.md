@@ -1,11 +1,33 @@
-# SourceBroom validation — A5.24 basic terrain blend preview
+# SourceBroom validation — A5.25 brush upload correction
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.24 — bounded two-layer terrain preview
+## A5.25 — actual packed vertex upload
+
+Owner observation: A5.24 scattered vertices and the map was not usable. Root
+cause is verified at the production boundary: cached vertices36bytes, holder/
+copy/GL stride32bytes. Prior shader/client-array controls were insufficient.
+
+Actual pre-fix runs show the size mismatch, corrupt uploaded attributes and wrong
+packed-VBO pixels. Both then suffered a separate test teardown contract, so their
+abnormal exit is preserved, not presented as a clean counted RED. After correcting
+only test cleanup and sharing the complete cache type/typed production copy,
+**141 production-upload assertions** and **2597 real-GPU assertions** pass with
+exit0, including actual position/normal/UV/weight bytes and four geometry/blend
+pixels. Four affected product/checker/test build targets have zero warning/error
+lines. Full affected Render28/28 and UI59/59 pass; the old intermittent preference
+issue is not proven fixed. Model296/GL21/App50 are retained unchanged-source
+coverage, not newly measured A5.25 runs. Native source/geometry/edit/save guards
+remain unchanged. A hash-verified
+copy of the supplied map loads strictly; the original and copy are unchanged.
+
+Whole-map owner visual confirmation is pending in ../../lextest.md. Do not infer
+it from corpus or shader counts; A5.24 stays a failed candidate, not a fallback.
+
+## Retained A5.24 — bounded two-layer terrain preview (known broken upload)
 
 - Actual compiled PARTIAL wiring contains the parser/dual demand budget/private
   child lifecycle/VBO/production binding helper and tests; Face host/stages are
