@@ -5,7 +5,31 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Standard terrain blend-modulation mask preview — A5.34
+## Static Source material RGB preview — A5.35
+
+Known basic preview shaders now apply `$color` and `$color2` componentwise, rather
+than dropping the authored RGB. Three finite normalized values, optionally `[ ... ]`,
+or quoted byte-scale `{ ... }` triples are supported. Opacity/cutoff/alpha/editor
+fade are separate. Common host resets ordinary/Q2/raw/null/disabled hints to white;
+five fragment configurations, masked terrain and grid decision colors use the tint
+before editor overlays. Raw image data, byte budget, geometry/layout/native writes
+and content authority do not change.
+
+Strict/default and unknown-shader guards stay intact. HDR, malformed/duplicate/
+block colors, expressions/proxies and nonwhite per-pixel tint coupling are refused.
+Scalar exactly`1` preserves the old neutral base-image omission, not general scalar
+or native parity. Full regression caught and fixed that compatibility in production,
+old test unchanged. This is not full gamma/branch/material-shader reproduction.
+
+Same-test real desktop GPU3847 passes after59 desired partial-wiring RGB failures;
+CURRENT full Model316/UI64/App50/GL21/Render28 pass, seven builds0 compiler
+diagnostics/12 held fingerprints. GPU uses synthetic shared Vertex values through
+actual production holder/VBO/Face, not an actual native cache instance. Native
+source/corpus proof retained, not re-dated; no new owner/Hammer acceptance.
+Keep whole A5.34/A5.33/A5.25 and see [pending check](../../lextest.md). Full Source
+support remains in progress.
+
+## Retained standard terrain blend-modulation mask preview — A5.34
 
 Demanded brush WorldVertexTransition materials may additionally name one mounted
 `$blendmodulatetexture` VTF. Its red channel is the transition half-width, green its

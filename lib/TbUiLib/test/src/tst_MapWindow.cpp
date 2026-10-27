@@ -2255,6 +2255,169 @@ void main() {
     }
     CHECK(actedDefaultCutoff);
     gl.popAttrib();
+    {
+      gl.pushAttrib(GL_POLYGON_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      const auto tinted = [](const float opacity = 1.0f) {
+        auto hints = gl::SourceEmbeddedDefaults{};
+        hints.opacity = opacity;
+        hints.colorModulation = {0.5f, 0.25f, 0.75f};
+        return gl::EmbeddedDefaults{hints};
+      };
+      const auto drawColor = [&](
+                               gl::EmbeddedDefaults hints,
+                               const img::ImageAlphaDomain domain,
+                               const uint8_t alpha,
+                               const char* extension,
+                               const bool applySource,
+                               const bool nullHints,
+                               const float fade,
+                               const std::array<float, 3> expectedColor,
+                               const float expectedAlpha) {
+        CAPTURE(
+          config.name, alpha, extension, applySource, nullHints, fade, expectedColor);
+        auto pixels = gl::TextureBuffer{4};
+        const auto rgba = std::array<uint8_t, 4>{128, 192, 224, alpha};
+        std::copy(rgba.begin(), rgba.end(), pixels.data());
+        auto texture = gl::Texture{
+          1, 1, Color{RgbaF{1, 1, 1, 1}}, GL_RGBA, std::move(hints), std::move(pixels)};
+        texture.setAlphaDomain(domain);
+        auto resource = gl::createTextureResource(std::move(texture));
+        resource->uploadSync(gl);
+        REQUIRE(resource->get());
+        REQUIRE(resource->get()->isReady());
+        auto material = gl::Material{"RGB data control", resource};
+        material.setRelativePath(std::string{"rgb-control"} + extension);
+        if (face)
+        {
+          shader.set("Alpha", fade);
+        }
+        gl::setAlphaFuncUniforms(shader, nullHints ? nullptr : &material, applySource);
+        gl.disable(GL_CULL_FACE);
+        gl.disable(GL_DEPTH_TEST);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(GL_COLOR_BUFFER_BIT);
+        material.activate(gl, GL_NEAREST, GL_NEAREST);
+        gl.enable(GL_BLEND);
+        gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl.drawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        auto pixel = std::array<uint8_t, 4>{};
+        functions->glReadPixels(4, 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+        for (size_t channel = 0; channel < expectedColor.size(); ++channel)
+        {
+          const auto expected = static_cast<int>(
+            std::lround(rgba[channel] * expectedColor[channel] * expectedAlpha));
+          CHECK(std::abs(int(pixel[channel]) - expected) <= 2);
+        }
+        material.deactivate(gl);
+        resource->dropSync(gl);
+      };
+      const auto rgb = std::array{0.5f, 0.25f, 0.75f};
+      const auto white = std::array{1.0f, 1.0f, 1.0f};
+      drawColor(
+        tinted(),
+        img::ImageAlphaDomain::Opaque,
+        128,
+        ".vmt",
+        true,
+        false,
+        1.0f,
+        rgb,
+        1.0f);
+      drawColor(
+        tinted(0.25f),
+        img::ImageAlphaDomain::Graduated,
+        128,
+        ".vmt",
+        true,
+        false,
+        1.0f,
+        rgb,
+        (128.0f / 255.0f) * 0.25f);
+      drawColor(
+        tinted(),
+        img::ImageAlphaDomain::Binary,
+        192,
+        ".vmt",
+        true,
+        false,
+        1.0f,
+        rgb,
+        1.0f);
+      drawColor(
+        tinted(),
+        img::ImageAlphaDomain::Binary,
+        64,
+        ".vmt",
+        true,
+        false,
+        1.0f,
+        rgb,
+        0.0f);
+      drawColor(
+        tinted(),
+        img::ImageAlphaDomain::Opaque,
+        128,
+        ".vmt",
+        false,
+        false,
+        1.0f,
+        white,
+        1.0f);
+      drawColor(
+        gl::NoEmbeddedDefaults{},
+        img::ImageAlphaDomain::Opaque,
+        128,
+        ".vmt",
+        true,
+        false,
+        1.0f,
+        white,
+        1.0f);
+      drawColor(
+        gl::Q2EmbeddedDefaults{0, 0, 0},
+        img::ImageAlphaDomain::Graduated,
+        128,
+        ".png",
+        true,
+        false,
+        1.0f,
+        white,
+        128.0f / 255.0f);
+      drawColor(
+        gl::NoEmbeddedDefaults{},
+        img::ImageAlphaDomain::Graduated,
+        128,
+        ".png",
+        true,
+        false,
+        1.0f,
+        white,
+        128.0f / 255.0f);
+      drawColor(
+        tinted(0.25f),
+        img::ImageAlphaDomain::Graduated,
+        128,
+        ".vmt",
+        true,
+        true,
+        1.0f,
+        white,
+        128.0f / 255.0f);
+      if (face)
+      {
+        drawColor(
+          tinted(),
+          img::ImageAlphaDomain::Opaque,
+          128,
+          ".vmt",
+          true,
+          false,
+          0.4f,
+          rgb,
+          0.4f);
+      }
+      gl.popAttrib();
+    }
   }
   {
     gl.pushAttrib(GL_ALL_ATTRIB_BITS);
@@ -2695,6 +2858,34 @@ void main() {
         }
         gl.activeTexture(GL_TEXTURE0);
         maskedResource->dropSync(gl);
+      }
+      {
+        gl.activeTexture(GL_TEXTURE0);
+        auto tintedTexture = image({255, 0, 0, 255});
+        auto hints = gl::SourceEmbeddedDefaults{};
+        hints.colorModulation = {0.5f, 0.25f, 1.0f};
+        tintedTexture.setEmbeddedDefaults(hints);
+        tintedTexture.setSourceBlendTexture(image({0, 255, 0, 17}));
+        tintedTexture.setSourceBlendMaskTexture(image({64, 128, 0, 255}));
+        auto tintedResource = gl::createTextureResource(std::move(tintedTexture));
+        tintedResource->uploadSync(gl);
+        REQUIRE(tintedResource->get());
+        REQUIRE(tintedResource->get()->isReady());
+        auto tintedMaterial = gl::Material{"tinted masked terrain", tintedResource};
+        tintedMaterial.setRelativePath("tinted-mask.vmt");
+        const auto blendWeight = remapped(MaskPixel{64, 128, 0, 255}, 0.375f);
+        for (const auto& pixel : drawPacked(tintedMaterial, 0.375f, 1.0f))
+        {
+          CHECK(
+            std::abs(int(pixel[0]) - int(std::lround(255 * (1 - blendWeight) * 0.5f)))
+            <= 2);
+          CHECK(
+            std::abs(int(pixel[1]) - int(std::lround(255 * blendWeight * 0.25f))) <= 2);
+          CHECK(pixel[2] <= 2);
+          CHECK(pixel[3] >= 253);
+        }
+        gl.activeTexture(GL_TEXTURE0);
+        tintedResource->dropSync(gl);
       }
       for (size_t i = 0; i < sentinels.size(); ++i)
       {

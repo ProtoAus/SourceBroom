@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.34 — standard terrain blend-modulation masks
+# Try Windows SourceBroom A5.35 — bounded static material RGB tint
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,32 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.34: preview standard terrain blend-modulation masks
+## A5.35: preview static Source material RGB
+
+Known basic preview shaders now retain literal `$color` / `$color2` factors rather
+than omitting them. Three finite normalized components, optionally `[ ... ]`, or
+byte-scale `{ ... }` components multiply together. It works across the five current
+fragment configurations and after masked terrain mixing, before editor overlays.
+Alpha/cutout/opacity/fade stay independent; raw pixels/layout/native writes unchanged.
+
+This is not full shader/branch/gamma parity: normalized range only, no HDR,
+expressions/proxies or per-pixel tint coupling. Nonwhite coupled tint stays refused.
+Legacy scalar exactly `1` remains the existing neutral base-image omission; arbitrary
+scalar colors/native scalar semantics are not certified. Default/strict and unknown
+shader guards stay unchanged.
+
+Actual same-test desktop GPU3847 passes after59 desired runtime RGB failures;
+full Model316/UI64/App50/GL21/Render28 pass, seven builds0 compiler diagnostics on
+12 held fingerprints. An old base-image scalar1 regression was caught and fixed in
+production without rewriting its old test. Native/corpus source proof is retained,
+not a fresh corpus claim. GPU vertices are synthetic shared-cache type through
+real production holder/VBO/Face stages, not an actual native cache instance.
+
+**Small owner check (pending):** if your usual copied map already has a known tinted
+material, check that color only—no hunting/editing/saving needed. Matching-game/
+Hammer/full shader comparison remains separate. Keep whole A5.34/A5.33/A5.25.
+
+## Retained A5.34: preview standard terrain blend-modulation masks
 
 Basic WorldVertexTransition previews now admit one mounted `$blendmodulatetexture`
 VTF alongside the two base images. Red/green data shapes the transition using the

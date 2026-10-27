@@ -344,6 +344,64 @@ Result<std::filesystem::path> sourceTexturePath(const std::string& value)
   return std::filesystem::path{"materials"} / path;
 }
 
+std::optional<std::array<float, 3>> parseColorModulation(std::string_view value)
+{
+  const auto trim = [](std::string_view& text) {
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())))
+    {
+      text.remove_prefix(1);
+    }
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
+    {
+      text.remove_suffix(1);
+    }
+  };
+  trim(value);
+  // Preserve the existing base-image preview's neutral scalar omission.
+  if (value == "1")
+  {
+    return std::array{1.0f, 1.0f, 1.0f};
+  }
+  auto scale = 1.0f;
+  if (!value.empty() && (value.front() == '[' || value.front() == '{'))
+  {
+    const auto closing = value.front() == '[' ? ']' : '}';
+    if (value.back() != closing)
+    {
+      return std::nullopt;
+    }
+    scale = value.front() == '{' ? 255.0f : 1.0f;
+    value.remove_prefix(1);
+    value.remove_suffix(1);
+  }
+  auto result = std::array<float, 3>{};
+  for (auto& component : result)
+  {
+    trim(value);
+    if (!value.empty() && value.front() == '+')
+    {
+      value.remove_prefix(1);
+    }
+    if (value.empty())
+    {
+      return std::nullopt;
+    }
+    const auto parsed =
+      std::from_chars(value.data(), value.data() + value.size(), component);
+    if (parsed.ec != std::errc{} || !std::isfinite(component) || component < 0.0f
+        || component > scale
+        || (parsed.ptr != value.data() + value.size()
+            && !std::isspace(static_cast<unsigned char>(*parsed.ptr))))
+    {
+      return std::nullopt;
+    }
+    value.remove_prefix(static_cast<size_t>(parsed.ptr - value.data()));
+    component /= scale;
+  }
+  trim(value);
+  return value.empty() ? std::optional{result} : std::nullopt;
+}
+
 Result<SourceMaterialInfo> parseMaterial(
   const std::string_view vmt, const SourceMaterialMode mode, const MaterialReader& read)
 {
@@ -505,6 +563,50 @@ Result<SourceMaterialInfo> parseMaterial(
         }
       }
     }
+    auto colorModulation = std::array{1.0f, 1.0f, 1.0f};
+    if (preview)
+    {
+      for (const auto* parameter : {"$color", "$color2"})
+      {
+        if (std::ranges::count(shader.children, std::string{parameter}, &Entry::key) > 1)
+        {
+          return Error{"Repeated Source RGB parameter requires explicit resolution"};
+        }
+        if (const auto* entry = child(shader.children, parameter))
+        {
+          const auto color = parseColorModulation(entry->value);
+          if (!color)
+          {
+            return Error{"Unsupported Source RGB literal: " + std::string{parameter}};
+          }
+          for (size_t i = 0; i < colorModulation.size(); ++i)
+          {
+            colorModulation[i] *= (*color)[i];
+          }
+        }
+      }
+      if (colorModulation != std::array{1.0f, 1.0f, 1.0f})
+      {
+        for (const auto* parameter :
+             {"$blendtintbybasealpha", "$notint", "$tintmasktexture"})
+        {
+          if (
+            std::ranges::count(shader.children, std::string{parameter}, &Entry::key) > 1)
+          {
+            return Error{"Repeated Source RGB coupling requires explicit resolution"};
+          }
+          if (const auto* entry = child(shader.children, parameter))
+          {
+            const auto disabled = entry->key == "$tintmasktexture" ? entry->value.empty()
+                                                                   : entry->value == "0";
+            if (!disabled)
+            {
+              return Error{"Unsupported coupled Source RGB preview: " + entry->key};
+            }
+          }
+        }
+      }
+    }
     auto alphaTestReference = 0.5f;
     if (
       std::ranges::count(shader.children, std::string{"$alphatestreference"}, &Entry::key)
@@ -583,7 +685,8 @@ Result<SourceMaterialInfo> parseMaterial(
       alphaTestReference,
       std::move(secondaryPath),
       opacity,
-      std::move(modulationPath)};
+      std::move(modulationPath),
+      colorModulation};
   }
   catch (const std::runtime_error& e)
   {

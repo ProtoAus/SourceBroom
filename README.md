@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.34 bounded terrain blend-modulation mask preview:
+**Status:** Windows A5.35 bounded static Source material RGB preview:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,24 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.34 adds standard **WorldVertexTransition blend-modulation masks** to demanded
+A5.35 restores bounded authored **`$color` / `$color2` RGB modulation** in known
+basic material previews, including models, browsers, UV view and masked terrain.
+Normalized literal triples (or byte-scale `{ ... }` triples) multiply together;
+alpha/cutout/opacity/editor fade stay separate. Raw images, byte budgets, vertex
+layout, geometry and native writes do not change. HDR, arbitrary scalar colors,
+proxies and per-pixel tint coupling are not claimed; legacy scalar `1` remains a
+neutral base-image omission, not proof of general native scalar semantics.
+
+Same-test desktop GPU3847 passes after59 desired partial-wiring RGB pixel failures.
+Full Model316/UI64/App50/GL21/Render28 pass; seven builds have zero compiler
+diagnostics on twelve held code fingerprints. Five fragment arms use a fixture
+vertex stage; the separate real holder/VBO/Face arm uses synthetic shared Vertex
+values, not an actual native cache instance. Reader/
+serializer corpus evidence is retained, not re-dated. No new human/Hammer/full
+shader/gamma/SDK acceptance. Use whole A5.35 on copies, keep A5.34/A5.33/A5.25.
+Full Source support continues.
+
+Retained A5.34 adds standard **WorldVertexTransition blend-modulation masks** to demanded
 brush previews. A mounted `$blendmodulatetexture` shapes the two terrain layers
 using its red/green data and the stored vertex weight, sharing existing UVs.
 Patterned masks, opacity/fade independence and following ordinary materials are

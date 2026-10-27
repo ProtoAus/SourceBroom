@@ -42,6 +42,7 @@
 #include "kd/task_manager.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -152,6 +153,12 @@ TEST_CASE("Source translucent opacity is explicit bounded and demanded")
     env.createFile(
       "materials/test/patch.vmt",
       "Patch { include materials/test/base.vmt replace { $alpha 0.5 } }");
+    const auto rgbSource = std::string{
+      R"(LightmappedGeneric { $basetexture test/pixel $translucent 1 $alpha 0.25 $color "[0.5 0.25 1]" })"};
+    env.createFile("materials/test/rgb.vmt", rgbSource);
+    env.createFile(
+      "materials/test/rgb-patch.vmt",
+      R"(Patch { include materials/test/rgb.vmt replace { $color "[0.25 0.5 0]" } })");
     auto fs = GameFileSystem{};
     auto logger = NullLogger{};
     REQUIRE(fs.initializeSource(env.dir(), logger).is_success());
@@ -187,9 +194,111 @@ TEST_CASE("Source translucent opacity is explicit bounded and demanded")
               3)
               .is_error());
     }
+    for (const auto* material : {"rgb", "rgb-patch"})
+    {
+      CAPTURE(material);
+      const auto result = loadTexture(
+        std::string{"materials/test/"} + material + ".vmt",
+        material,
+        fs,
+        std::nullopt,
+        4);
+      REQUIRE(result.is_success());
+      const auto& texture = result.value();
+      REQUIRE(texture.buffersIfLoaded().size() == 1);
+      CHECK(texture.buffersIfLoaded().front().size() == 4);
+      CHECK(texture.buffersIfLoaded().front().data()[0] == 255);
+      CHECK(texture.buffersIfLoaded().front().data()[3] == 128);
+      CHECK(texture.alphaDomain() == img::ImageAlphaDomain::Graduated);
+      const auto* hints =
+        std::get_if<gl::SourceEmbeddedDefaults>(&texture.embeddedDefaults());
+      REQUIRE(hints);
+      CHECK(hints->opacity == 0.25f);
+      const auto expected = std::string_view{material} == "rgb"
+                              ? std::array{0.5f, 0.25f, 1.0f}
+                              : std::array{0.25f, 0.5f, 0.0f};
+      CHECK(hints->colorModulation == expected);
+      CHECK(loadTexture(
+              std::string{"materials/test/"} + material + ".vmt",
+              material,
+              fs,
+              std::nullopt,
+              3)
+              .is_error());
+    }
+    const auto rgbUnchanged = fs.openFile("materials/test/rgb.vmt") | kdl::value();
+    CHECK(rgbUnchanged->reader().readString(rgbUnchanged->size()) == rgbSource);
     const auto unchanged = fs.openFile("materials/test/base.vmt") | kdl::value();
     CHECK(unchanged->reader().readString(unchanged->size()) == vmt);
   }
+}
+
+TEST_CASE("Source static RGB modulation is bounded preview data")
+{
+  const auto white = std::array{1.0f, 1.0f, 1.0f};
+  struct ColorCase
+  {
+    const char* parameters;
+    std::array<float, 3> expected;
+  };
+  const auto values = std::array{
+    ColorCase{R"($color "[0.5 0.25 1]")", {0.5f, 0.25f, 1.0f}},
+    ColorCase{R"($COLOR2 "{128 64 255}")", {128.0f / 255.0f, 64.0f / 255.0f, 1.0f}},
+    ColorCase{R"($color "0.5 0.25 1")", {0.5f, 0.25f, 1.0f}},
+    ColorCase{R"($color "[0.5 1 0.25]" $color2 "[0.5 0.25 1]")", {0.25f, 0.25f, 0.25f}},
+    ColorCase{R"($color2 "[0 0 0]")", {0.0f, 0.0f, 0.0f}},
+    ColorCase{"$color 1 $color2 1", {1.0f, 1.0f, 1.0f}}};
+  for (const auto* shader : {"LightmappedGeneric", "UnlitGeneric", "VertexLitGeneric"})
+  {
+    const auto prefix = std::string{shader} + " { $basetexture test/pixel ";
+    const auto control =
+      sourceMaterial(prefix + "}", SourceMaterialMode::BaseTexturePreview);
+    REQUIRE(control.is_success());
+    CHECK(control.value().colorModulation == white);
+    CHECK(control.value().opacity == 1.0f);
+    for (const auto& value : values)
+    {
+      CAPTURE(shader, value.parameters);
+      const auto text = prefix + value.parameters + " $translucent 1 $alpha 0.5 }";
+      CHECK(sourceMaterial(text, SourceMaterialMode::Strict).is_error());
+      const auto parsed = sourceMaterial(text, SourceMaterialMode::BaseTexturePreview);
+      REQUIRE(parsed.is_success());
+      CHECK(parsed.value().colorModulation == value.expected);
+      CHECK(parsed.value().opacity == 0.5f);
+      CHECK(parsed.value().alphaDomain == img::ImageAlphaDomain::Graduated);
+    }
+    for (const auto* invalid :
+         {R"($color "")",
+          R"($color "[0.5 0.25]")",
+          R"($color "[0.5 0.25 1 1]")",
+          R"($color "[-0.1 0 1]")",
+          R"($color2 "[1.01 0 1]")",
+          R"($color "{256 0 0}")",
+          R"($color "[nan 0 1]")",
+          R"($color "[1 inf 1]")",
+          R"($color "[0.5,0.25,1]")",
+          R"($color "[0.5 0.25 1] trailing")",
+          R"($color { nested vector })",
+          R"($color "[1 1 1]" $COLOR "[0 0 0]")",
+          R"($color "[0.5 1 1]" $blendtintbybasealpha 1)",
+          R"($color "[0.5 1 1]" $tintmasktexture tint/mask)",
+          R"($color2 "[0.5 1 1]" $notint 1)"})
+    {
+      CAPTURE(shader, invalid);
+      CHECK(
+        sourceMaterial(prefix + invalid + " }", SourceMaterialMode::BaseTexturePreview)
+          .is_error());
+    }
+  }
+  const auto terrain = sourceMaterial(
+    R"(WorldVertexTransition { $basetexture a $basetexture2 b $color "[0.5 1 0.25]" })",
+    SourceMaterialMode::TerrainBlendPreview);
+  REQUIRE(terrain.is_success());
+  CHECK(terrain.value().colorModulation == (std::array{0.5f, 1.0f, 0.25f}));
+  const auto unknown = sourceMaterial(
+    R"(UnknownShader { $basetexture a $color "not a literal" })",
+    SourceMaterialMode::BaseTexturePreview);
+  CHECK(unknown.is_error());
 }
 
 TEST_CASE("Source terrain modulation masks require explicit bounded preview")

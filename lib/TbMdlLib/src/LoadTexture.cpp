@@ -69,7 +69,10 @@ Result<gl::Texture> loadTexture(
                texture.setAlphaDomain(info.alphaDomain);
                texture.setEmbeddedDefaults(
                  gl::SourceEmbeddedDefaults{
-                   info.noCull, info.alphaTestReference, info.opacity});
+                   info.noCull,
+                   info.alphaTestReference,
+                   info.opacity,
+                   info.colorModulation});
                if (info.secondaryBaseTexture)
                {
                  auto retained = size_t{0};

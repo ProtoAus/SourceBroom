@@ -33,7 +33,15 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.34 candidate:** standard WorldVertexTransition modulation-mask preview on
+- **A5.35 candidate:** static literal `$color`/`$color2` RGB factors in known basic
+  previews, five fragment configurations +masked terrain, independent of raw alpha/
+  opacity/fade. Same GPU3847 passes after59 desired RGB runtime failures; full
+  Model316/UI64/App50/GL21/Render28 pass, seven builds0 compiler diagnostics,12 held
+  fingerprints. Legacy scalar1 omission preserved after regression, not arbitrary
+  scalar parity. HDR/proxies/per-pixel tint coupling/full gamma/branch semantics
+  remain guarded/pending. No geometry/layout/native writes; corpus proof retained.
+  Keep whole A5.34/A5.33/A5.25; human/Hammer and full Source support still pending.
+- **Retained A5.34 candidate:** standard WorldVertexTransition modulation-mask preview on
   demanded brush materials: mounted scalar path, flat third data image, shared
   byte budget, red/green weight remap and sampler2 restoration. No layout/geometry/
   native-write widening. Same GPU3587 passes after128 desired runtime pixel RED;

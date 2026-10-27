@@ -4,6 +4,17 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.35 static material RGB — pending small owner check
+
+No new owner observation. Whole A5.35 on copies, keep A5.34/A5.33/A5.25.
+Automated GPU3847/Model316/UI64/App50/GL21/Render28 is not human/matching-game
+shader acceptance; synthetic shared Vertex +real holder/VBO, not native cache.
+
+- [ ] If the usual copied map already has a known `$color`/`$color2` tint, check
+  that color only. No search, editing or saving is needed; otherwise leave pending.
+- [ ] Optional separate matching-game/Hammer view, not full gamma/HDR/branch
+  or general shader equivalence. Scalar1 remains legacy neutral omission only.
+
 ## A5.34 terrain blend-modulation masks — pending small owner check
 
 No new owner observation. Whole A5.34 on COPY only; keep whole A5.33/A5.32/A5.25

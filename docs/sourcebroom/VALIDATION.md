@@ -1,11 +1,40 @@
-# SourceBroom validation — A5.34 standard terrain blend-modulation masks
+# SourceBroom validation — A5.35 bounded static material RGB
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.34 — bounded standard terrain blend-modulation masks
+## A5.35 — bounded static material RGB modulation
+
+- Schema-only actual build0/runtime289:228 acting controls,60 desired RGB parse/
+  demand failures and ONE own wrong unknown-shader fallback assumption. Corrected
+  control to existing refusal, no admission widening or credit for that failure.
+- Parser/loader focused cases pass with literal RGB, byte-scale/color*color2/Patch,
+  alpha/raw-buffer/budget/preservation and invalid/strict/unknown/coupled guards.
+- With RGB metadata but OLD shared host/stages, actual desktop GPU3847 has3788
+  controls pass/59 desired RGB failures at only3 channel assertions. Final SAME
+  compiled test SHA3847/1 passes across five configurations +masked terrain;
+  raw cutout/opacity/editor fades and ordinary/Q2/raw/null/disabled resets act.
+  Five fragment arms use a fixture vertex stage/client arrays; separately, masked
+  Face uses synthetic shared-cache Vertex values +REAL production holder/VBO.
+  Neither is an actual native mesh/cache instance. No new vertex bytes.
+- Full Model315/316 initially caught2 untouched scalar1 base-image checks; product
+  now preserves that neutral omission, old test unchanged. CURRENT full
+  Model316/UI64/App50/GL21/Render28 pass with matching actual Passed/zeroFailed.
+  Seven builds0 compiler diagnostics,12 held code fingerprints. Shader/host/GPUtest
+  unchanged by parser compatibility fix; retain3847 without gratuitous rerun.
+- Changed-range format/UTF8/diffcheck, explicit LSP/direct parent review; not
+  independent/clean-LSP/tidy/human/Hammer. Native source files remain unchanged;
+  A5.31 body/corpus38/35same3reasons/38 proof retained, not rerun/re-dated. Fresh
+  original38SHA/installed authored probe/whole-kit checks are separate boundaries.
+
+Normalized static RGB only. Scalar exactly1 is legacy neutral omission, not general
+scalar semantics. HDR/proxies/per-pixel tint coupling/complete gamma/shader/branch
+parity remain unclaimed/guarded. Raw pixels/alpha/budget/geometry/layout/native-save
+permissions unchanged. Keep whole A5.34/A5.33/A5.25 recovery. Source work continues.
+
+## Retained A5.34 — bounded standard terrain blend-modulation masks
 
 - Actual tests-only parser build0/runtime26:23 acting plain/two-layer/strict/refusal
   controls pass,3 desired mask admissions fail. No compile/input-error credit.

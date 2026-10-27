@@ -26,6 +26,7 @@
 
 #include "kd/reflection_decl.h"
 
+#include <array>
 #include <memory>
 #include <variant>
 #include <vector>
@@ -54,7 +55,9 @@ struct SourceEmbeddedDefaults
   bool noCull = false;
   float alphaTestReference = 0.5f;
   float opacity = 1.0f;
-  kdl_reflect_decl(SourceEmbeddedDefaults, noCull, alphaTestReference, opacity);
+  std::array<float, 3> colorModulation{1.0f, 1.0f, 1.0f};
+  kdl_reflect_decl(
+    SourceEmbeddedDefaults, noCull, alphaTestReference, opacity, colorModulation);
 };
 
 using EmbeddedDefaults =

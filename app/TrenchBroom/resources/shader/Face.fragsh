@@ -49,6 +49,7 @@ vec3 adaptiveGridColor(vec3 background);
 float texturedGridAlpha(float alpha);
 bool passesAlphaFunc(float alpha);
 float materialAlpha(float alpha);
+vec3 materialColor(vec3 color);
 
 vec4 faceMaterialSample(float mipBias)
 {
@@ -66,9 +67,9 @@ vec4 faceMaterialSample(float mipBias)
       weight = upper > lower ? smoothstep(lower, upper, weight)
                              : (weight > lower ? 1.0 : 0.0);
     }
-    return mix(primary, secondary, weight);
+    primary = mix(primary, secondary, weight);
   }
-  return primary;
+  return vec4(materialColor(primary.rgb), primary.a);
 }
 
 void main()

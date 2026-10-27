@@ -41,6 +41,7 @@ vec3 adaptiveGridColor(vec3 background);
 float texturedGridAlpha(float alpha);
 bool passesAlphaFunc(float alpha);
 float materialAlpha(float alpha);
+vec3 materialColor(vec3 color);
 
 float getSoftStripes(float coord, float gridDivider, float gridSize, float stripeSize)
 {
@@ -75,7 +76,7 @@ void gridLinesSoft(vec2 inCoords)
   // speckling.
   vec3 decisionColor =
     ApplyMaterial
-      ? clamp(Brightness * texture2D(Material, gl_TexCoord[0].st, 4.0).rgb, 0.0, 1.0)
+      ? clamp(Brightness * materialColor(texture2D(Material, gl_TexCoord[0].st, 4.0).rgb), 0.0, 1.0)
       : gl_FragColor.rgb;
 
   vec3 lineColor = adaptiveGridColor(decisionColor);
@@ -87,7 +88,8 @@ void main()
 {
   if (ApplyMaterial)
   {
-    gl_FragColor = texture2D(Material, gl_TexCoord[0].st);
+    vec4 texel = texture2D(Material, gl_TexCoord[0].st);
+    gl_FragColor = vec4(materialColor(texel.rgb), texel.a);
   }
   else
   {

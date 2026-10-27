@@ -21,6 +21,7 @@
 #include "base/Result.h"
 #include "img/ImageAlphaDomain.h"
 
+#include <array>
 #include <filesystem>
 #include <optional>
 #include <string_view>
@@ -55,6 +56,7 @@ struct SourceMaterialInfo
   std::optional<std::filesystem::path> secondaryBaseTexture = std::nullopt;
   float opacity = 1.0f; // Explicit translucent preview, not terrain blend weight.
   std::optional<std::filesystem::path> blendModulateTexture = std::nullopt;
+  std::array<float, 3> colorModulation{1.0f, 1.0f, 1.0f};
 };
 Result<SourceMaterialInfo> sourceMaterial(
   std::string_view vmt, SourceMaterialMode mode = SourceMaterialMode::Strict);

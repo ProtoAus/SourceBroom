@@ -27,6 +27,12 @@ uniform int AlphaFuncCompare;
 uniform float AlphaFuncThreshold;
 uniform bool IgnoreTextureAlpha;
 uniform float MaterialOpacity;
+uniform vec3 SourceMaterialColor;
+
+vec3 materialColor(vec3 color)
+{
+  return color * SourceMaterialColor;
+}
 
 // Use only after passesAlphaFunc: a cutout's surviving pixels are opaque, while
 // graduated materials retain their real opacity. Constant Source opacity is not

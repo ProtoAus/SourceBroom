@@ -26,6 +26,9 @@
 
 #include "kd/path_utils.h"
 
+#include "vm/vec.h"
+
+#include <array>
 #include <stdexcept>
 
 namespace tb::gl
@@ -152,6 +155,9 @@ void setAlphaFuncUniforms(
   const auto* defaults =
     texture ? std::get_if<SourceEmbeddedDefaults>(&texture->embeddedDefaults()) : nullptr;
   shader.set("MaterialOpacity", applyOpacity && defaults ? defaults->opacity : 1.0f);
+  const auto color =
+    applyOpacity && defaults ? defaults->colorModulation : std::array{1.0f, 1.0f, 1.0f};
+  shader.set("SourceMaterialColor", vm::vec3f{color[0], color[1], color[2]});
   shader.set(
     "IgnoreTextureAlpha",
     texture && texture->alphaDomain() != img::ImageAlphaDomain::Graduated

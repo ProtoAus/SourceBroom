@@ -21,7 +21,44 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Standard terrain blend-modulation masks — A5.34
+## Bounded static RGB material modulation — A5.35
+
+$color/$color2 were admitted but OMITTED in preview. Known basic preview shaders
+now parse three finite normalized literals (optional[]) or byte-scale{} triples,
+componentwise multiply, default white. Strict/default/unknown shader guards stay
+unchanged. Duplicate/empty/malformed/HDR and nonwhite per-pixel tint coupling refuse.
+Scalar exactly1 preserves the legacy neutral base-image omission, not arbitrary
+scalar/native semantic parity. Full regression caught that old contract; production
+fixed without rewriting its untouched test. Source image paths/permissions unchanged.
+
+RGB travels in Source hints, raw pixels/average/budget/alpha/geometry/layout/native
+writes unchanged. Common host resets white for ordinary/Q2/raw/null/disabled hints.
+Shared materialColor multiplies only RGB before brightness/overlays/grid decisions;
+Face does so after layer mixing. RGB-only sampling before cutoff does NOT alter its
+raw alpha; cutout/opacity/fade controls act. Six actual production callers use the
+five known fragment configurations. Incomplete LSP background references were
+supplemented with actual caller reads. No new vertex bytes or GPU resources.
+
+Default-schema-only build0/runtime289:228 controls pass,60 desiredRGB failures plus
+ONE own incorrect UnknownShader-accepted control. Corrected to existing refusal,
+not an admission change; no credit for bad control. Parser/loader then pass focused
+controls. With RGB metadata but OLD shared host/stages, GPU3847:3788 controls pass,
+59 desired RGB pixel failures only. Final SAME test SHA3847/1pass, five configurations
+and real holder/VBO/Face masked terrain (SYNTHETIC shared Vertex values, not actual
+native mesh/cache). The five fragment arms separately use a fixture vertex stage/
+client arrays, not five whole production pipelines. No inactive-uniform/compile/
+silence/abort credit.
+
+Initial full Model315/316 exposed only2 legacy scalar1 checks. After production
+compatibility fix, CURRENT Model316/UI64/App50/GL21/Render28 match actual Passed
+records/zeroFailed, seven builds0 compiler diagnostics on12 held code fingerprints.
+GPU host/stages/test unchanged after parser-only compatibility fix, reuse3847 result
+without rerun/re-date. Explicit LSP/direct parent review, not independent/tidy clean.
+Native source/corpus evidence retained unchanged, original38SHA checked at delivery.
+Public SDK headers consulted for behavior only; no implementation copied/bundled.
+No full gamma/HDR/branch/shader/Hammer/new owner acceptance. Full Source continues.
+
+## Retained standard terrain blend-modulation masks — A5.34
 
 TerrainBlendPreview + WorldVertexTransition alone admits one scalar safe mounted
 $blendmodulatetexture. Default/Strict/BaseTexturePreview stay strict. Existing final
