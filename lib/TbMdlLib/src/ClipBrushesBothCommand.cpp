@@ -70,7 +70,11 @@ ClipBrushesBothCommand::ClipBrushesBothCommand(
   }
 }
 
-ClipBrushesBothCommand::~ClipBrushesBothCommand() = default;
+ClipBrushesBothCommand::~ClipBrushesBothCommand()
+{
+  if (m_removal)
+    m_scene->disposeRemoval(*m_removal);
+}
 
 void ClipBrushesBothCommand::ownDetachedSiblings()
 {
@@ -114,6 +118,12 @@ bool ClipBrushesBothCommand::doPerformDo(Map& map)
     if (!m_registered)
     {
       // Allocate all command snapshots/selection helpers before scene publication.
+      m_beforeVisgroups = scene->visgroups();
+      m_keeperBindings.clear();
+      for (const auto& [node, contents] : m_keepers)
+      {
+        m_keeperBindings.push_back(node->lineNumber());
+      }
       m_deselect = SelectionCommand::deselectAll();
       auto selected = std::vector<Node*>{m_subjects.begin(), m_subjects.end()};
       selected.insert(selected.end(), m_siblings.begin(), m_siblings.end());
@@ -137,6 +147,7 @@ bool ClipBrushesBothCommand::doPerformDo(Map& map)
     }
     else
     {
+      scene->validateVisgroupReplay(*m_beforeVisgroups, m_keeperBindings);
       for (size_t i = 0; i < m_siblings.size(); ++i)
       {
         if (!sameBrush(m_siblings[i]->brush(), m_backStates[i]))
@@ -144,6 +155,10 @@ bool ClipBrushesBothCommand::doPerformDo(Map& map)
           throw std::invalid_argument{"native Both parked sibling changed"};
         }
       }
+      auto placements = std::vector<std::pair<Node*, Node*>>{};
+      for (size_t i = 0; i < m_siblings.size(); ++i)
+        placements.emplace_back(m_siblings[i], m_keepers[i].first->parent());
+      scene->validateActivation(*m_removal, placements);
       scene->validateBothClipReplay(m_subjects, m_keepers, m_siblings, map.worldBounds());
     }
   }
@@ -161,7 +176,14 @@ bool ClipBrushesBothCommand::doPerformDo(Map& map)
   }
   try
   {
-    addNodesAndNotify(m_additions, map);
+    addNodesAndNotify(m_additions, map, [&] {
+      if (m_removal)
+      {
+        map.vmfScene()->activateRemoval(
+          *m_removal, {m_siblings.begin(), m_siblings.end()});
+        m_removal.reset();
+      }
+    });
   }
   catch (...)
   {
@@ -169,16 +191,49 @@ bool ClipBrushesBothCommand::doPerformDo(Map& map)
     throw;
   }
   ownDetachedSiblings();
+  m_scene = map.vmfScene();
+  if (!m_afterVisgroups)
+  {
+    m_afterBindings = m_keeperBindings;
+    for (const auto* sibling : m_siblings)
+    {
+      m_afterBindings.push_back(sibling->lineNumber());
+    }
+    m_afterVisgroups = m_scene->visgroups();
+  }
   m_select->performDo(map);
   return true;
 }
 
 bool ClipBrushesBothCommand::doPerformUndo(Map& map)
 {
+  try
+  {
+    auto* scene = map.vmfScene();
+    if (!scene || scene != m_scene || !m_afterVisgroups)
+    {
+      throw std::invalid_argument{"native Both replay scene changed"};
+    }
+    // Admit both the expected metadata and Front contents before selection or parking.
+    scene->validateVisgroupReplay(*m_afterVisgroups, m_afterBindings);
+    for (const auto& [node, contents] : m_keepers)
+    {
+      scene->validateClipContents(
+        dynamic_cast<const BrushNode&>(*node), contents, map.worldBounds());
+    }
+    m_removal = scene->prepareRemoval({m_siblings.begin(), m_siblings.end()});
+  }
+  catch (const std::exception& e)
+  {
+    map.logger().error() << "Native Both parking refused: " << e.what();
+    return false;
+  }
   m_select->performUndo(map);
   try
   {
-    removeNodesAndNotify(m_additions, map);
+    removeNodesAndNotify(m_additions, map, [&] {
+      map.vmfScene()->publishRemoval(*m_removal, {m_siblings.begin(), m_siblings.end()});
+    });
   }
   catch (...)
   {

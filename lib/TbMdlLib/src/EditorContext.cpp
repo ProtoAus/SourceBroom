@@ -197,16 +197,28 @@ bool EditorContext::visible(const Node& node) const
 
 bool EditorContext::visible(const WorldNode& worldNode) const
 {
+  if (worldNode.effectiveNativeVisibility().hidden())
+  {
+    return false;
+  }
   return worldNode.visible();
 }
 
 bool EditorContext::visible(const LayerNode& layerNode) const
 {
+  if (layerNode.effectiveNativeVisibility().hidden())
+  {
+    return false;
+  }
   return layerNode.visible();
 }
 
 bool EditorContext::visible(const GroupNode& groupNode) const
 {
+  if (groupNode.effectiveNativeVisibility().hidden())
+  {
+    return false;
+  }
   if (groupNode.selected())
   {
     return true;
@@ -220,6 +232,10 @@ bool EditorContext::visible(const GroupNode& groupNode) const
 
 bool EditorContext::visible(const EntityNode& entityNode) const
 {
+  if (entityNode.effectiveNativeVisibility().hidden())
+  {
+    return false;
+  }
   if (entityNode.selected())
   {
     return true;
@@ -250,6 +266,10 @@ bool EditorContext::visible(const EntityNode& entityNode) const
 
 bool EditorContext::visible(const BrushNode& brushNode) const
 {
+  if (brushNode.effectiveNativeVisibility().hidden())
+  {
+    return false;
+  }
   if (brushNode.selected())
   {
     return true;
@@ -286,6 +306,10 @@ bool EditorContext::visible(const BrushNode& brushNode, const BrushFace& face) c
 
 bool EditorContext::visible(const PatchNode& patchNode) const
 {
+  if (patchNode.effectiveNativeVisibility().hidden())
+  {
+    return false;
+  }
   if (patchNode.selected())
   {
     return true;

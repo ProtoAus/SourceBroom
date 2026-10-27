@@ -6,6 +6,8 @@ endif()
 
 target_sources(TbMdlLibTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeCordons.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeVisgroups.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Map_NativeVisgroups.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Map_NativeCordons.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_AssetUtils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_Autosaver.cpp
@@ -128,6 +130,7 @@ target_sources(TbMdlLibTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfDocument.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfFile.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfScene.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfScene_nativeVisgroups.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_VmfMap.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_SourceContent.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LoadVtfTexture.cpp

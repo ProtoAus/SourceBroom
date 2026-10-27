@@ -1335,4 +1335,46 @@ TEST_CASE("EditorContext")
 }
 
 
+TEST_CASE(
+  "EditorContext native visibility vetoes every typed selected path", "[visgroups]")
+{
+  auto world = WorldNode{{}, Entity{}, MapFormat::Standard};
+  auto context = EditorContext{};
+  auto* point = createTopLevelPointEntity(world);
+  auto* brush = createTopLevelBrush(world);
+  auto* patch = createTopLevelPatch(world);
+  auto* group = new GroupNode{Group{"native"}};
+  world.defaultLayer()->addChild(group);
+  point->select();
+  brush->select();
+  patch->select();
+  group->select();
+  REQUIRE(context.visible(*point));
+  REQUIRE(context.visible(*brush));
+  REQUIRE(context.visible(*patch));
+  REQUIRE(context.visible(*group));
+  for (const auto cause :
+       {NativeVisibility{true, false, false},
+        NativeVisibility{false, true, false},
+        NativeVisibility{false, false, true}})
+  {
+    world.setNativeVisibility(cause);
+    CHECK_FALSE(context.visible(world));
+    CHECK_FALSE(context.visible(*world.defaultLayer()));
+    CHECK_FALSE(context.visible(*group));
+    CHECK_FALSE(context.visible(*point));
+    CHECK_FALSE(context.visible(*brush));
+    CHECK_FALSE(context.visible(*patch));
+    CHECK_FALSE(context.visible(*brush, brush->brush().faces().front()));
+    CHECK_FALSE(context.selectable(*point));
+    CHECK_FALSE(brush->visible());
+    CHECK(brush->sessionVisible());
+    CHECK(brush->visibilityState() == VisibilityState::Inherited);
+    auto clone = std::unique_ptr<Node>{world.cloneRecursively(worldBounds)};
+    CHECK(clone->nativeVisibility() == cause);
+    world.setNativeVisibility({});
+    CHECK(context.visible(*brush));
+  }
+}
+
 } // namespace tb::mdl

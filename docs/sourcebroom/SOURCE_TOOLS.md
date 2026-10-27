@@ -5,6 +5,37 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
+## LIVE native manual visgroups — A5.21
+
+In the **Map** inspector, scroll to **LIVE native manual visgroups**. Unlike the
+saved-file dialog, this is current UNSAVED native state. Supported loaded/new
+records can be created, renamed, reparented and deleted; moved records append at
+the new parent, retaining other sibling order. Assign/unassign either the current
+native selection or explicitly highlighted member rows. The latter can recover
+hidden unassigned supported objects without allowing hidden geometry picking.
+
+**Show members / Hide members** set manual intent over the supported current
+record descendant/owning closure. Assignment never replays an earlier Hide. Own
+manual/automatic flags, inherited/effective native causes, ordinary session state
+and protected/unprojected reasons are displayed separately. Manual Show does not
+clear wrapper, automatic, inherited-owner or session causes that it did not author.
+Ordinary Show All likewise cannot override native-hidden selection/rendering.
+Missing flags use the declared no-veto preview fallback; this is not a claim to
+reconstruct a Hammer checkbox or automatic classification.
+
+Native record/member handles and captured action scope are authoritative; names,
+native numbers and row positions are not. Protected/ambiguous/opaque rows refuse
+atomically while independent supported branches remain usable. Native no-op,
+refusal and full undo preserve original bytes. Ordered Unassign/reassign persists
+live reference order across save/reopen. Session-only hiding saves without
+changing native flags. Actual Both clip undo/redo checks the expected relevant
+metadata and Front operation authority before changing selection or the tree.
+
+RGB editing, wrapper/automatic flag authoring, automatic group predicates and
+arbitrary opaque/cached geometry remain outside this boundary. Use Save As on a
+copy and keep the previous whole kit. Model/UI/render/runtime checks are not
+independent Hammer or human appearance acceptance; see [lextest](../../lextest.md).
+
 ## Read-only compatibility preview
 
 Normal editable loading remains strict. A native load refusal can offer an
@@ -297,9 +328,10 @@ opaque. The display is capped, with an explicit notice if not all rows fit.
 These inspector fields remain **read-only**. A5.15 separately enables ordinary
 native grouping through the normal map actions and guarded native bindings, not
 by making this snapshot authoritative or treating group IDs as TrenchBroom parent
-bindings. A5.16 separately enables ordinary live cordons in the map inspector;
-this saved inspector remains read-only. Visgroup/visibility authoring is not
-silently enabled. SourceBroom does not apply cordon clipping itself; native metadata
+bindings. A5.16 separately enables ordinary live cordons and A5.21 enables the
+bounded LIVE manual-visgroup interface in the map inspector; this saved inspector
+remains read-only. It does not grant wrapper/automatic visibility authoring.
+SourceBroom does not apply cordon clipping itself; native metadata
 is passed to external tools whose actual region behavior must be tested.
 
 **Go to camera eye** moves only the eye and preserves the current view direction;
@@ -411,9 +443,10 @@ animation, bodygroup or universal FGD/SDK parity.
 
 ## Still outside this candidate
 
-Basic plain-object authoring does not imply arbitrary topology or native
-visgroup/layer/hidden/linked-instance/complete-displacement/overlay authoring, full Source material
-rendering or all-branch performance. Common unsupported operations are gated;
+Basic plain-object authoring and A5.21 manual-visgroup controls do not imply
+arbitrary topology, automatic/wrapper visibility or RGB authoring, layers, linked
+instances, complete displacement/overlay authoring, full Source material rendering
+or all-branch performance. Common unsupported operations are gated;
 some upstream actions can remain visible, but unsupported content changes must
 refuse before mutation and preserving-save remains the final backstop. Never ignore an error or assume an
 unsuccessful save changed the original. Use **Save As** and inspect a copy in

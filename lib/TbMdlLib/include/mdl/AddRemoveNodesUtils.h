@@ -21,6 +21,7 @@
 
 #include "kd/flat_map.h"
 
+#include <functional>
 #include <vector>
 
 namespace tb::mdl
@@ -28,8 +29,13 @@ namespace tb::mdl
 class Map;
 class Node;
 
-void addNodesAndNotify(const kdl::flat_map<Node*, std::vector<Node*>>& nodes, Map& map);
+void addNodesAndNotify(
+  const kdl::flat_map<Node*, std::vector<Node*>>& nodes,
+  Map& map,
+  const std::function<void()>& afterTreeEdit = {});
 void removeNodesAndNotify(
-  const kdl::flat_map<Node*, std::vector<Node*>>& nodes, Map& map);
+  const kdl::flat_map<Node*, std::vector<Node*>>& nodes,
+  Map& map,
+  const std::function<void()>& afterTreeEdit = {});
 
 } // namespace tb::mdl

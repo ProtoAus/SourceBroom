@@ -200,6 +200,12 @@ void EntityRenderer::setAngleColor(const Color& angleColor)
   m_angleColor = angleColor;
 }
 
+bool EntityRenderer::visible(const mdl::EntityNode& entity) const
+{
+  return !entity.effectiveNativeVisibility().hidden()
+         && (m_showHiddenEntities || m_editorContext.visible(entity));
+}
+
 void EntityRenderer::setShowHiddenEntities(const bool showHiddenEntities)
 {
   m_showHiddenEntities = showHiddenEntities;
@@ -317,7 +323,7 @@ void EntityRenderer::renderClassnames(
 
     for (const auto* entityNode : m_entities)
     {
-      if (m_showHiddenEntities || m_editorContext.visible(*entityNode))
+      if (visible(*entityNode))
       {
         if (
           !entityNode->containingGroup()
@@ -354,7 +360,7 @@ void EntityRenderer::renderAngles(RenderContext& renderContext, RenderBatch& ren
 
     for (const auto* entityNode : m_entities)
     {
-      if (!m_showHiddenEntities && !m_editorContext.visible(*entityNode))
+      if (!visible(*entityNode))
       {
         continue;
       }

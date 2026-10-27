@@ -36,6 +36,7 @@
 #include "mdl/NodeContents.h"
 #include "mdl/PasteType.h"
 #include "mdl/PickResult.h"
+#include "mdl/SelectionChange.h"
 #include "mdl/SourceEditorMetadata.h"
 #include "mdl/SourceTransformPolicy.h"
 #include "mdl/SwapNodeContentsCommand.h"
@@ -4468,6 +4469,21 @@ TEST_CASE(
   auto& target = nativeNode(map, "2");
   auto& marker = nativeNode(map, "9");
   selectNodes(map, {&marker, &target}); // valid earlier candidate, invalid later closure
+  if (kind == "hidden")
+  {
+    CHECK_FALSE(target.selected());
+    REQUIRE(marker.selected());
+    REQUIRE(map.selection().nodes == std::vector<Node*>{&marker});
+    // Deliberately UNSAFE low-level precondition, not ordinary selectable behavior.
+    // Keep the backend whole-closure refusal acted after the selection-veto proof.
+    map.selectionWillChangeNotifier();
+    target.select();
+    auto changed = SelectionChange{};
+    changed.selectedNodes = {&target};
+    map.selectionDidChangeNotifier(changed);
+    REQUIRE(target.selected());
+    REQUIRE(map.selection().nodes == std::vector<Node*>{&marker, &target});
+  }
   const auto selection = map.selection().nodes;
   const auto positions = filePositions(map);
   const auto count = map.modificationCount();

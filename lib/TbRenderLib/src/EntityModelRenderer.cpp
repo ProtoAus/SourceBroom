@@ -193,6 +193,12 @@ bool EntityModelRenderer::showHiddenEntities() const
   return m_showHiddenEntities;
 }
 
+bool EntityModelRenderer::visible(const mdl::EntityNode& entity) const
+{
+  return !entity.effectiveNativeVisibility().hidden()
+         && (m_showHiddenEntities || m_editorContext.visible(entity));
+}
+
 void EntityModelRenderer::setShowHiddenEntities(const bool showHiddenEntities)
 {
   m_showHiddenEntities = showHiddenEntities;
@@ -249,7 +255,7 @@ void EntityModelRenderer::renderPass(RenderContext& renderContext, const bool tr
 
   const auto renderEntity =
     [&](const mdl::EntityNode& entityNode, gl::MaterialRenderer& renderer) {
-      if (!m_showHiddenEntities && !m_editorContext.visible(entityNode))
+      if (!visible(entityNode))
       {
         return;
       }

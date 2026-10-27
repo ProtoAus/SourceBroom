@@ -24,6 +24,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QRadioButton>
+#include <QScrollArea>
 
 #include "mdl/GameConfig.h"
 #include "mdl/GameInfo.h"
@@ -37,6 +38,7 @@
 #include "ui/MapDocument.h"
 #include "ui/ModEditor.h"
 #include "ui/NativeCordonEditor.h"
+#include "ui/NativeVisgroupEditor.h"
 #include "ui/QStyleUtils.h"
 #include "ui/QVecUtils.h"
 #include "ui/TitledPanel.h"
@@ -110,9 +112,20 @@ void MapInspector::createGui(MapDocument& document)
   sizer->addWidget(new BorderLine{}, 0);
   sizer->addWidget(m_mapPropertiesEditor, 0);
   sizer->addWidget(new NativeCordonEditor{document}, 0);
+  sizer->addWidget(new NativeVisgroupEditor{document}, 0);
   sizer->addWidget(new BorderLine{}, 0);
   sizer->addWidget(m_modEditor, 0);
-  setLayout(sizer);
+  auto* content = new QWidget{};
+  content->setLayout(sizer);
+  auto* scroll = new QScrollArea{};
+  scroll->setObjectName("mapInspectorScroll");
+  scroll->setWidgetResizable(true);
+  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scroll->setWidget(content);
+  auto* outer = new QVBoxLayout{};
+  outer->setContentsMargins(0, 0, 0, 0);
+  outer->addWidget(scroll);
+  setLayout(outer);
 }
 
 QWidget* MapInspector::createLayerEditor(MapDocument& document)

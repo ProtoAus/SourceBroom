@@ -5,6 +5,7 @@
 #pragma once
 
 #include "mdl/UndoableCommand.h"
+#include "mdl/VmfScene.h"
 
 #include <memory>
 #include <vector>
@@ -42,6 +43,10 @@ private:
   std::unique_ptr<SelectionCommand> m_select;
   bool m_grouping;
   bool m_registered = false;
+  bool m_performed = false;
+  VmfScene* m_scene = nullptr;
+  std::optional<PreparedVmfRemoval> m_removal;
+  std::optional<NativeVisgroupSnapshot> m_beforeVisgroups, m_afterVisgroups;
 
   void reconcileOwnership();
   bool validate(Map& map, const std::vector<Placement>& expected) const;

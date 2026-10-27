@@ -23,6 +23,7 @@
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QInputDialog>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QMimeData>
@@ -32,8 +33,11 @@
 #include <QOpenGLFunctions_2_1>
 #include <QOpenGLVersionFunctionsFactory>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSpinBox>
+#include <QTest>
 #include <QTimer>
 
 #include "TestEnvironment.h"
@@ -66,6 +70,7 @@
 #include "mdl/MapFormat.h"
 #include "mdl/Map_Assets.h"
 #include "mdl/Map_Groups.h"
+#include "mdl/Map_NativeVisgroups.h"
 #include "mdl/Map_Nodes.h"
 #include "mdl/Map_Selection.h"
 #include "mdl/VmfScene.h"
@@ -80,6 +85,8 @@
 #include "ui/MapViewToolBox.h"
 #include "ui/MapWindow.h"
 #include "ui/MaterialCollectionEditor.h"
+#include "ui/NativeVisgroupEditor.h"
+#include "ui/TabBook.h"
 
 #include <algorithm>
 #include <array>
@@ -112,6 +119,131 @@ public:
   }
   ~NativeGroupSettingsScope() { QSettings::setDefaultFormat(m_previous); }
 };
+
+TEST_CASE(
+  "NativeVisgroup UI actual MapWindow live inspector and history", "[vmf][visgroups]")
+{
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  const auto source = std::string{
+    "visgroups { visgroup { name Loaded visgroupid 7 color \"1 2 3\" } }\n"
+    "world { id 1 classname worldspawn }\n"
+    "entity { id 2 classname info_target editor { visgroupid 7 } }\n"};
+  {
+    auto stream = std::ofstream{env.dir() / "inspector.vmf", std::ios::binary};
+    stream << source;
+    REQUIRE(stream);
+  }
+  auto loaded = MapDocument::loadDocument(
+    app.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192},
+    env.dir() / "inspector.vmf",
+    app.taskManager(),
+    app.glManager().resourceManager());
+  REQUIRE(loaded.is_success());
+  auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+  auto& map = window.document().map();
+  auto* editor = window.findChild<NativeVisgroupEditor*>();
+  REQUIRE(editor);
+  auto* field = editor->findChild<QLineEdit*>("visgroupName");
+  auto* apply = editor->findChild<QPushButton*>("visgroupApply");
+  auto* hide = editor->findChild<QPushButton*>("visgroupHide");
+  REQUIRE(field);
+  REQUIRE(apply);
+  REQUIRE(hide);
+  auto* inspectorBook = window.findChild<TabBook*>("Inspector_TabBook");
+  REQUIRE(inspectorBook);
+  inspectorBook->switchToPage(0);
+  window.resize(1000, 700);
+  CHECK(window.minimumSizeHint().height() <= 700);
+  CHECK(window.minimumSizeHint().width() <= 1000);
+  auto* inspectorScroll = window.findChild<QScrollArea*>("mapInspectorScroll");
+  REQUIRE(inspectorScroll);
+  // Process the real window layout without putting a test window on the desktop.
+  window.setAttribute(Qt::WA_DontShowOnScreen);
+  window.show();
+  QApplication::processEvents();
+  CHECK(window.height() <= 700);
+  CHECK(window.width() <= 1000);
+  inspectorScroll->ensureWidgetVisible(editor);
+  CHECK(inspectorScroll->verticalScrollBar()->maximum() > 0);
+  auto* editorScroll = editor->findChild<QScrollArea*>();
+  REQUIRE(editorScroll);
+  editorScroll->ensureWidgetVisible(hide);
+  inspectorScroll->ensureWidgetVisible(hide, 0, 0);
+  const auto inside =
+    QRect{hide->mapTo(editorScroll->viewport(), QPoint{}), hide->size()};
+  const auto outside =
+    QRect{hide->mapTo(inspectorScroll->viewport(), QPoint{}), hide->size()};
+  INFO(
+    "inner viewport " << editorScroll->viewport()->width() << ","
+                      << editorScroll->viewport()->height() << " target " << inside.x()
+                      << "," << inside.y() << "," << inside.width() << ","
+                      << inside.height());
+  INFO(
+    "outer viewport " << inspectorScroll->viewport()->width() << ","
+                      << inspectorScroll->viewport()->height() << " target "
+                      << outside.x() << "," << outside.y() << "," << outside.width()
+                      << "," << outside.height());
+  CHECK(editorScroll->viewport()->rect().contains(inside.center()));
+  CHECK(inspectorScroll->viewport()->rect().contains(outside.center()));
+  CHECK(inside.top() >= 0);
+  CHECK(inside.bottom() < editorScroll->viewport()->height());
+  CHECK(outside.top() >= 0);
+  CHECK(outside.bottom() < inspectorScroll->viewport()->height());
+  auto* parentCombo = editor->findChild<QComboBox*>("visgroupParent");
+  REQUIRE(parentCombo);
+  CHECK(
+    parentCombo->sizeAdjustPolicy() == QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  const auto widthBefore = parentCombo->sizeHint().width();
+  parentCombo->addItem(QString(1024, 'x'));
+  CHECK(parentCombo->sizeHint().width() == widthBefore);
+  parentCombo->removeItem(parentCombo->count() - 1);
+  field->selectAll();
+  QTest::keyClicks(field, "Unsaved inspector");
+  apply->click();
+  CHECK(mdl::nativeVisgroups(map).records[0].name == "Unsaved inspector");
+  CHECK(
+    map.vmfScene()->serialize(map.worldNode()).find("Unsaved inspector")
+    != std::string::npos);
+  auto bytesOnDisk = std::ifstream{env.dir() / "inspector.vmf", std::ios::binary};
+  CHECK(std::string{std::istreambuf_iterator<char>{bytesOnDisk}, {}} == source);
+  map.undoCommand();
+  CHECK(field->text() == "Loaded");
+  map.redoCommand();
+  CHECK(field->text() == "Unsaved inspector");
+  auto* point = map.worldNode().defaultLayer()->children().front();
+  REQUIRE(point->visible());
+  mdl::selectNodes(map, {point});
+  hide->click();
+  CHECK_FALSE(point->visible());
+  CHECK(map.selection().nodes.empty());
+  map.undoCommand();
+  CHECK(point->visible());
+  CHECK(map.selection().nodes == std::vector<mdl::Node*>{point});
+  REQUIRE(map.saveAs(env.dir() / "saved.vmf").is_success());
+  field->selectAll();
+  QTest::keyClicks(field, "Continued inspector");
+  apply->click();
+  CHECK(mdl::nativeVisgroups(map).records[0].name == "Continued inspector");
+  map.undoCommand();
+  CHECK(field->text() == "Unsaved inspector");
+  REQUIRE(window.document()
+            .load(
+              app.environmentConfig(),
+              mdl::QuakeGameInfo,
+              mdl::MapFormat::SourceVMF,
+              vm::bbox3d{8192},
+              env.dir() / "inspector.vmf",
+              true)
+            .is_success());
+  CHECK_FALSE(editor->findChild<QPushButton*>("visgroupCreate")->isEnabled());
+  CHECK_FALSE(hide->isEnabled());
+}
 
 TEST_CASE("NativeGroup native action flow and capability safety")
 {

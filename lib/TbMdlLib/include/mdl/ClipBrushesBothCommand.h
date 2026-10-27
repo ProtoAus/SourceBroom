@@ -7,6 +7,7 @@
 #include "mdl/Brush.h"
 #include "mdl/NodeContents.h"
 #include "mdl/UndoableCommand.h"
+#include "mdl/VmfScene.h"
 
 #include "kd/flat_map.h"
 
@@ -35,6 +36,12 @@ private:
   std::unique_ptr<SelectionCommand> m_deselect;
   std::unique_ptr<SelectionCommand> m_select;
   bool m_registered = false;
+  VmfScene* m_scene = nullptr;
+  std::optional<PreparedVmfRemoval> m_removal;
+  std::optional<NativeVisgroupSnapshot> m_beforeVisgroups;
+  std::optional<NativeVisgroupSnapshot> m_afterVisgroups;
+  std::vector<size_t> m_keeperBindings;
+  std::vector<size_t> m_afterBindings;
 
 public:
   ClipBrushesBothCommand(

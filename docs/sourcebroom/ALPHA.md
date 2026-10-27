@@ -1,4 +1,4 @@
-# Try the Windows SourceBroom A5.20 native polygon-ownership candidate
+# Try the Windows SourceBroom A5.21 live native-visgroup candidate
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,49 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.20: duplicate and delete ordinary cached brushes
+## A5.21: live manual visgroups without converting the VMF
+
+In the **Map** inspector, scroll to **LIVE native manual visgroups**. This shows
+current UNSAVED state, separately from the saved-file metadata dialog. Create,
+rename, reparent or delete supported records; assign/unassign the current native
+selection or explicitly highlighted member rows. Moving a record appends it at its
+new parent while retained siblings keep their order. Save As/reopen and undo/redo
+preserve native identities, ordered direct references and untouched source bytes.
+
+**Show members / Hide members** are explicit manual actions on the supported
+current descendant/owning closure. Assigning later does not replay an old Hide.
+The panel reports own flags, inherited/effective native causes, ordinary session
+visibility and protected/unprojected rows; it does not invent a Hammer checkbox.
+Absent manual/automatic flags use the declared no-veto preview fallback, not a
+certification of every Hammer branch. Manual Show does not clear wrapper or
+automatic causes, ordinary session hiding, or protected/unknown data. Ordinary
+Show All cannot bypass native-hidden selection/rendering. Session hiding itself
+is transient and saves without changing native flags.
+
+Hidden unassigned supported members can be assigned through their explicit member
+rows, then targeted through a visgroup. This is metadata authoring, not permission
+to pick/edit hidden geometry. Ambiguous/opaque/unsupported rows refuse atomically;
+independent supported branches remain usable. RGB/color editing, wrapper/automatic
+flag authoring, automatic group classification, layers, linked instances and a
+reconstructed saved-Hammer checkbox are not implemented by this family.
+
+**Quick owner check (pending):** in the whole A5.21 kit, use a copied editable map.
+Create a group/child, assign one ordinary object, Hide then Show, and undo/redo.
+Move an early child to Root while another root exists; Save As a new VMF and
+reopen. Confirm the scrollable panel is usable and compare the copy in matching
+Hammer++. Keep the whole A5.20 kit as recovery; do not merge DLLs or overwrite an
+original to test refusal. These observations are not supplied by automated tests.
+
+Current production passes Model289, UI58, App50 and Render28 cases with zero new
+compiler warnings. Both real retained polygon-cache variants pass128 assertions;
+corpus document38/strict35/partial-preview38 and all original hashes are unchanged.
+The independent whole-family review exposed three real defects (reparent order,
+Both-clip stale replay and ordered-reference save); each was reproduced before
+repair. Focused independent post-fix re-review found no remaining blocker. A prior Windows
+preference-file rename failure remains untouched even though the current UI run
+passes. This is a bounded candidate, not full Source or human/Hammer acceptance.
+
+## Retained A5.20: duplicate and delete ordinary cached brushes
 
 Ordinary non-displacement brushes with validated Strata point_data or Hammer++
 vertices_plus can now be duplicated/deleted through the existing tools. Supported
@@ -129,7 +171,8 @@ inside the controller requires refusal rather than a guessed rewrite.
 Undo/redo and Save As/reopen retain native data and identities. This tool changes
 native metadata only: **it does not clip this viewport, create a gizmo, or guarantee
 an external compiler's region behavior**. Matching Hammer++/SDK interpretation is
-still a manual check. Visgroup/hidden authoring is not unlocked.
+still a manual check. A5.16 did not unlock visgroup/hidden authoring; the separate
+A5.21 manual-visgroup boundary is described above.
 
 **Quick owner check (pending):** on a copy, add/edit a cordon and a second box,
 Apply, undo/redo, Save As and inspect those bounds/flags in matching Hammer++.
@@ -442,7 +485,8 @@ Hammer++ performance advantage is claimed.
 - Save, then use **Run -> Compile -> Native metadata / Custom package…**. The
   metadata tab reads the **saved** snapshot: groups, visgroups, hidden state,
   cameras and cordons are read-only in THIS saved inspector. Live ordinary cordon
-  editing is separately available in the map inspector. **Go to camera eye** moves
+  editing and A5.21 manual-visgroup editing are separately available in the map
+  inspector. **Go to camera eye** moves
   only the eye, not full Hammer orientation. Reload the saved inspector after saving.
 - To test packaging, use a dedicated **custom-only** game-relative content root
   you have rights to distribute. Discover/review the exact plan, then approve it
@@ -479,18 +523,25 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
 
 - Basic plain-brush/point-entity creation, duplication, deletion and limited
   brush-entity ownership are enabled. Arbitrary face/vertex topology changes,
-  other CSG/arbitrary topology, native editor-group/layer authoring, displacement creation/sculpt/
-  power/sew, native nonuniform scale/shear/flip, overlays and instances remain unsupported. Common unsafe paths refuse before mutation;
+  other CSG/arbitrary topology, native layer/linked-instance authoring, displacement
+  creation/sculpt/power/sew, native nonuniform scale/shear/flip, overlays and instances
+  remain unsupported. Ordinary native groups, live cordons and manual visgroups
+  have the separate bounded paths above; cached-member group/clip/reparent guards remain. Common unsafe paths refuse before mutation;
   some upstream controls can remain visible and save guards stay authoritative.
-- Metadata interpretation is not group/visibility/cordon authoring. SourceBroom
-  does not apply cordon clipping itself; unchanged VMF is passed to external tools
-  whose behavior must be checked.
+- The saved-file metadata dialog is read-only; it is not the live group/cordon/
+  manual-visgroup authoring interface. SourceBroom does not apply cordon viewport
+  clipping; external compiler region behavior must be checked separately.
 - Base texture/static model preview is not full Source shader/game parity.
 - All 38 supplied maps pass lossless syntax/no-edit checks; **35/38** construct
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Full **201 model** and **50 App/tool** entries pass; existing **21 graphics**
+- Current **289 Model / 58 UI / 50 App / 28 Render** cases pass. Earlier preference
+  rename failures are retained/unfixed, not erased by a passing current run.
+  Installed-package evidence belongs to the matching receipt; source/build results
+  alone are not installation, manual appearance or full Source acceptance.
+- Historical A5.14/A5.11 evidence (not current suite totals): **201 model** and
+  **50 App/tool** entries passed; existing **21 graphics**
   evidence remains valid for unchanged graphics code. Both focus **9/9**, retained
   native/core **8/8**, and ClipTool **4/4** (670 assertions) pass. Independent focused
   review found no remaining blockers. Actual preview red24 (12 attribute mismatches
@@ -509,7 +560,9 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   targeted passes are not an all-UI-green or manual/Hammer acceptance claim. [VALIDATION.md](VALIDATION.md) and package
   receipts distinguish source checks, installed reruns and historical evidence.
 - The package includes no Valve assets, Source compilers or external user maps.
-  Keep prior A5.13/A5.12/A5.11/A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery packages; do not merge DLL sets.
+  Keep the whole A5.20 kit and prior A5.19/A5.18/A5.17/A5.16/A5.15/A5.14/
+  A5.13/A5.12/A5.11/A5.10/A5.9/A5.8/A5.7/A5.6/A5.5 and accepted A5.4 recovery
+  packages; do not merge DLL sets.
 
 For additional compatibility feedback, retry one previously refused copied VMF, accept the
 read-only preview and confirm the warning/counts and camera/selection behavior.

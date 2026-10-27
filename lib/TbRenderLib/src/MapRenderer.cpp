@@ -50,6 +50,7 @@
 #include "kd/overload.h"
 #include "kd/path_utils.h"
 
+#include <unordered_set>
 #include <vector>
 
 namespace tb::render
@@ -408,6 +409,10 @@ static bool selected(const mdl::Node& node)
 
 int MapRenderer::determineDesiredRenderers(mdl::Node& node)
 {
+  if (node.effectiveNativeVisibility().hidden())
+  {
+    return 0;
+  }
   int result = 0;
 
   node.accept(kdl::overload(
@@ -720,11 +725,35 @@ void MapRenderer::nodesDidChange(const std::vector<mdl::Node*>& nodes)
 
 void MapRenderer::nodeVisibilityDidChange(const std::vector<mdl::Node*>& nodes)
 {
+  auto visited = std::unordered_set<mdl::Node*>{};
+  const auto update = [&](auto&& self, mdl::Node& node) -> void {
+    if (!visited.insert(&node).second)
+    {
+      return;
+    }
+    updateAndInvalidateNode(node);
+    for (auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
   for (auto* node : nodes)
   {
-    updateAndInvalidateNodeRecursive(*node);
+    update(update, *node);
   }
+  for (auto* node : nodes)
+  {
+    for (auto* ancestor = node->parent(); ancestor; ancestor = ancestor->parent())
+    {
+      if (visited.insert(ancestor).second)
+      {
+        updateAndInvalidateNode(*ancestor);
+      }
+    }
+  }
+  invalidateGroupLinkRenderer();
   invalidateEntityLinkRenderer();
+  m_entityDecalRenderer->invalidate();
 }
 
 void MapRenderer::nodeLockingDidChange(const std::vector<mdl::Node*>& nodes)

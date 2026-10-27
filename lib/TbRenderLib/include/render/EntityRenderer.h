@@ -47,6 +47,9 @@ namespace render
 
 class EntityRenderer
 {
+  friend struct NativeVisibilityRendererTest;
+  bool visible(const mdl::EntityNode& entity) const;
+
 private:
   mdl::EntityModelManager& m_entityModelManager;
   const mdl::EditorContext& m_editorContext;

@@ -29,7 +29,10 @@
 namespace tb::mdl
 {
 
-void addNodesAndNotify(const kdl::flat_map<Node*, std::vector<Node*>>& nodes, Map& map)
+void addNodesAndNotify(
+  const kdl::flat_map<Node*, std::vector<Node*>>& nodes,
+  Map& map,
+  const std::function<void()>& afterTreeEdit)
 {
   auto addedNodes = std::vector<Node*>{};
   for (const auto& [parent, children] : nodes)
@@ -38,10 +41,15 @@ void addNodesAndNotify(const kdl::flat_map<Node*, std::vector<Node*>>& nodes, Ma
     kdl::vec_append(addedNodes, children);
   }
 
+  if (afterTreeEdit)
+    afterTreeEdit();
   map.nodesWereAddedNotifier(addedNodes);
 }
 
-void removeNodesAndNotify(const kdl::flat_map<Node*, std::vector<Node*>>& nodes, Map& map)
+void removeNodesAndNotify(
+  const kdl::flat_map<Node*, std::vector<Node*>>& nodes,
+  Map& map,
+  const std::function<void()>& afterTreeEdit)
 {
   const auto allChildren =
     nodes | std::views::values | std::views::join | kdl::ranges::to<std::vector>();
@@ -53,6 +61,8 @@ void removeNodesAndNotify(const kdl::flat_map<Node*, std::vector<Node*>>& nodes,
   {
     parent->removeChildren(std::begin(children), std::end(children));
   }
+  if (afterTreeEdit)
+    afterTreeEdit();
 }
 
 } // namespace tb::mdl

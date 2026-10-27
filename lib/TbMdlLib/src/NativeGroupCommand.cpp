@@ -121,7 +121,11 @@ void NativeGroupCommand::captureClosure(Node& node)
   }
 }
 
-NativeGroupCommand::~NativeGroupCommand() = default;
+NativeGroupCommand::~NativeGroupCommand()
+{
+  if (m_removal)
+    m_scene->disposeRemoval(*m_removal);
+}
 GroupNode* NativeGroupCommand::createdGroup() const
 {
   return m_grouping ? m_containers.front() : nullptr;
@@ -270,6 +274,29 @@ bool NativeGroupCommand::validate(Map& map, const std::vector<Placement>& expect
       }
     }
     const auto& destination = &expected == &m_before ? m_after : m_before;
+    if (m_performed)
+    {
+      auto bindings = m_containerBindings;
+      for (const auto& row : m_closure)
+        bindings.push_back(row.binding);
+      for (const auto& placement : expected)
+        for (auto* parent = placement.parent; parent; parent = parent->parent())
+          bindings.push_back(parent->lineNumber());
+      scene->validateVisgroupReplay(
+        &expected == &m_before ? *m_beforeVisgroups : *m_afterVisgroups, bindings);
+    }
+    if (m_removal)
+    {
+      auto placements = std::vector<std::pair<Node*, Node*>>{};
+      for (auto* container : m_containers)
+      {
+        const auto found = std::ranges::find(destination, container, &Placement::node);
+        if (found == destination.end() || !found->parent)
+          throw std::invalid_argument{"parked group has no intended live placement"};
+        placements.emplace_back(container, found->parent);
+      }
+      scene->validateActivation(*m_removal, placements);
+    }
     if (const auto* current = map.editorContext().currentGroup())
     {
       for (const auto& placement : destination)
@@ -316,11 +343,18 @@ void NativeGroupCommand::move(
 {
   try
   {
+    auto removed = std::vector<Node*>{};
+    for (const auto& placement : from)
+      if (placement.parent && std::ranges::none_of(from, [&](const auto& other) {
+            return other.parent && other.node->isAncestorOf(*placement.node);
+          }))
+        removed.push_back(placement.node);
+    map.nodesWillBeRemovedNotifier(removed);
     for (const auto& placement : from)
     {
       if (placement.parent)
       {
-        removeNodesAndNotify({{placement.parent, {placement.node}}}, map);
+        placement.parent->removeChild(placement.node);
         reconcileOwnership();
       }
     }
@@ -349,6 +383,18 @@ void NativeGroupCommand::move(
         added.push_back(placement.node);
       }
     }
+    if (m_removal)
+    {
+      const auto roots = std::vector<Node*>{m_containers.begin(), m_containers.end()};
+      if (m_containers.front()->parent())
+      {
+        m_scene->activateRemoval(*m_removal, roots);
+        m_removal.reset();
+      }
+      else
+        m_scene->publishRemoval(*m_removal, roots);
+    }
+    map.nodesWereRemovedNotifier(removed);
     map.nodesWereAddedNotifier(added);
   }
   catch (...)
@@ -387,8 +433,15 @@ bool NativeGroupCommand::doPerformDo(Map& map)
     }
     m_registered = true;
   }
+  m_scene = map.vmfScene();
+  if (!m_performed)
+    m_beforeVisgroups = m_scene->visgroups();
+  if (!m_grouping)
+    m_removal = m_scene->prepareGroupRemoval({m_containers.begin(), m_containers.end()});
   m_deselect->performDo(map);
   move(map, m_before, m_after);
+  m_afterVisgroups = m_scene->visgroups();
+  m_performed = true;
   m_select->performDo(map);
   return true;
 }
@@ -399,8 +452,11 @@ bool NativeGroupCommand::doPerformUndo(Map& map)
   {
     return false;
   }
+  if (m_grouping)
+    m_removal = m_scene->prepareGroupRemoval({m_containers.begin(), m_containers.end()});
   m_select->performUndo(map);
   move(map, m_after, m_before);
+  m_beforeVisgroups = m_scene->visgroups();
   m_deselect->performUndo(map);
   return true;
 }

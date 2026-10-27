@@ -4,6 +4,33 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.21 live manual visgroups — pending owner/Hammer check
+
+Use a **copied editable** CSS/Momentum VMF in the whole A5.21 kit. Keep the whole
+A5.20 kit as recovery; never overwrite an original or merge DLL sets. Automated
+Model289/UI58/App50/Render28, actual cache128 and preservation checks do not check
+these boxes. No new A5.21 owner observation has been received.
+
+- [ ] In **Map**, scroll to **LIVE native manual visgroups**. Create a root/child,
+  rename it and move an early child to Root while another root exists. Confirm
+  the panel remains usable at normal window size and the destination order is clear.
+- [ ] Assign one ordinary selected object; Hide members then Show members and
+  undo/redo. Inspect own/effective native versus ordinary session causes. If useful,
+  assign a highlighted hidden unassigned member row to a group then Show it.
+  This must not make protected/unsupported geometry pickable. Automatic/wrapper
+  causes are displayed but not authored by these controls.
+- [ ] Save As a NEW VMF, reopen and inspect the intended hierarchy/membership in
+  matching Hammer++. Report the actual tool/branch/diagnostic if it differs.
+  Do not infer a complete Hammer checkbox or automatic-visibility implementation.
+- [ ] Retry the previously reported ordinary cached brush on a COPY: move/duplicate,
+  undo/redo, Save As and reopen. Report any remaining refusal with the exact gesture;
+  cached group/clip/reparent/topology and terrain ownership remain separate guards.
+
+All are pending. A visual approval only confirms what was actually observed, not
+numerical performance, all-map compatibility or source-preservation measurements.
+
+## Retained A4 independent acceptance
+
 - [ ] **A4 independent Hammer++ reopening.** Open the native-edited authored room
   copy in the appropriate Hammer++ branch (no save needed). Confirm the room,
   ramp and brick texture orientation load without a parse/geometry error.

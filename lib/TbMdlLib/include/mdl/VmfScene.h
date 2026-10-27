@@ -5,6 +5,8 @@
 #pragma once
 
 #include "mdl/NativeCordons.h"
+#include "mdl/NativeVisgroups.h"
+#include "mdl/NativeVisibility.h"
 #include "mdl/VmfDocument.h"
 #include "mdl/WorldNode.h"
 
@@ -13,6 +15,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace tb::mdl
@@ -20,6 +23,17 @@ namespace tb::mdl
 class NodeContents;
 class BrushNode;
 class GroupNode;
+class PreparedVmfRemoval
+{
+private:
+  struct Data;
+  std::shared_ptr<Data> m_data;
+  explicit PreparedVmfRemoval(std::shared_ptr<Data> data)
+    : m_data{std::move(data)}
+  {
+  }
+  friend class VmfScene;
+};
 
 struct VmfSceneDiagnostic
 {
@@ -39,6 +53,25 @@ class VmfScene
 private:
   VmfDocument m_document;
   NativeCordons m_cordons;
+  NativeVisgroups m_visgroups;
+  std::shared_ptr<const void> m_lifecycleScope = std::make_shared<int>(0);
+  // Pointer-free committed deletion evidence survives history disposal.
+  std::map<size_t, NativeVisgroupMember> m_removals;
+  std::map<size_t, std::shared_ptr<PreparedVmfRemoval::Data>> m_parkedTickets;
+  std::map<size_t, NativeVisgroupMemberId> m_memberIds;
+  std::map<uint64_t, size_t> m_memberBindings;
+  // Compare addresses only against a freshly traversed live tree; never dereference.
+  std::map<size_t, const Node*> m_memberNodes;
+  mutable NativeVisgroupContext m_lastVisgroupContext;
+  mutable std::set<size_t> m_pendingMembers;
+  NativeVisgroupContext visgroupContext() const;
+  void projectVisgroups();
+  NativeVisibility memberVisibility(const NativeVisgroupMember& member) const;
+  // Visibility only for known, unambiguous source ancestry withheld from projection.
+  std::map<size_t, NativeVisibility> m_sourceNativeMasks;
+  void validateVisgroupProjection(const Node& node) const;
+  void registerVisgroupMembers(
+    const std::vector<std::tuple<Node*, size_t, std::string>>& members, bool copy);
   std::unique_ptr<WorldNode> m_world;
   std::unique_ptr<WorldNode> m_original;
   // Retains ancestry authority after takeWorld transfers ownership to Map.
@@ -74,6 +107,7 @@ private:
   void membershipEdits(
     VmfEntryId source,
     const Node& node,
+    const NativeVisgroupEmissionSession& session,
     std::vector<VmfValueEdit>& values,
     std::vector<VmfStructuralEdit>& structure,
     std::map<VmfEntryId, std::string>& appended) const;
@@ -98,7 +132,10 @@ private:
   std::optional<VmfEntryId> prototype(size_t binding) const;
   void checkGeometryReferences(VmfEntryId object) const;
   void validateSideState(const BrushNode& node) const;
-  void validateClipOwner(const BrushNode& node, bool clipping = true) const;
+  void validateReparentImpl(
+    const Node& parent, const std::vector<Node*>& nodes, bool operation) const;
+  void validateClipOwner(
+    const BrushNode& node, bool clipping = true, bool operation = true) const;
   void validateContentsImpl(
     const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const;
   void nodeEdits(
@@ -109,7 +146,9 @@ private:
     std::map<VmfEntryId, std::string>& appended,
     bool protectExistingGeometry) const;
   std::string emitNode(
-    const Node& node, const std::map<size_t, const Node*>& original) const;
+    const Node& node,
+    const std::map<size_t, const Node*>& original,
+    const NativeVisgroupEmissionSession& session) const;
 
 public:
   // Finite editor preview envelope, not an engine/branch compatibility claim.
@@ -139,6 +178,15 @@ public:
   const std::vector<VmfSceneDiagnostic>& diagnostics() const;
   std::string nativeId(const Node& node) const;
 
+  NativeVisgroupSnapshot visgroups() const;
+  std::optional<PreparedNativeVisgroupChange> prepareVisgroupChange(
+    const NativeVisgroupRequest& request) const;
+  std::vector<std::pair<Node*, NativeVisibility>> visgroupVisibility(
+    const PreparedNativeVisgroupChange& change, NativeVisgroupDirection direction) const;
+  // Complete projected visibility invalidation closure; no geometry changes.
+  std::vector<Node*> applyVisgroupChange(
+    PreparedNativeVisgroupChange& change, NativeVisgroupDirection direction);
+
   NativeCordonSnapshot cordons() const;
   std::optional<PreparedNativeCordonChange> prepareCordonChange(
     const NativeCordonRequest& request) const;
@@ -165,6 +213,22 @@ public:
   void registerGroupChanges(
     Node* created, const std::vector<std::pair<Node*, Node*>>& parents);
   void validateRemoval(const std::vector<Node*>& removalClosure) const;
+  PreparedVmfRemoval prepareRemoval(const std::vector<Node*>& roots) const;
+  PreparedVmfRemoval prepareGroupRemoval(const std::vector<Node*>& groups) const;
+  void validateVisgroupReplay(
+    const NativeVisgroupSnapshot& expected, const std::vector<size_t>& bindings) const;
+  bool hasVisgroupMember(const Node& node) const;
+  // Exact registered node identity, not a numeric native-ID lookup.
+  std::optional<NativeVisgroupMemberId> registeredVisgroupMember(const Node& node) const;
+  // Explicit command-owned detach boundary; preflight alone publishes nothing.
+  void publishRemoval(
+    const PreparedVmfRemoval& proof, const std::vector<Node*>& parkedRoots);
+  void validateActivation(
+    const PreparedVmfRemoval& proof,
+    const std::vector<std::pair<Node*, Node*>>& placements) const;
+  void activateRemoval(
+    const PreparedVmfRemoval& proof, const std::vector<Node*>& restoredRoots);
+  void disposeRemoval(const PreparedVmfRemoval& proof);
   void validateReparent(const Node& parent, const std::vector<Node*>& nodes) const;
   void validateContents(
     const Node& node, const NodeContents& contents, const vm::bbox3d& worldBounds) const;
@@ -189,9 +253,11 @@ public:
     const std::vector<BrushNode*>& siblings,
     const vm::bbox3d& worldBounds) const;
 
-  /** Immutable-source delta. Plain native additions/deletions and brush-entity
-   * wrapping retain unrelated bytes and opaque payloads. Unsupported edits fail
-   * closed with std::invalid_argument; no MAP re-export or filesystem writes. */
+  /** Immutable-source delta of the authoritative registered live scene, not a
+   * detached clone that merely reuses source IDs. Plain native additions/deletions
+   * and brush-entity wrapping retain unrelated bytes and opaque payloads. Unsupported
+   * edits fail closed with std::invalid_argument; no MAP re-export or filesystem writes.
+   */
   std::string serialize(const WorldNode& world) const;
 };
 } // namespace tb::mdl

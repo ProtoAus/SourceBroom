@@ -57,6 +57,8 @@ class RenderContext;
 
 class MapRenderer
 {
+  friend struct NativeVisibilityRendererTest;
+
 private:
   mdl::Map& m_map;
 

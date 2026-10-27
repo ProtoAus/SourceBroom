@@ -20,6 +20,9 @@
 #define CATCH_CONFIG_RUNNER
 
 #include <QApplication>
+#include <QDir>
+#include <QSettings>
+#include <QTemporaryDir>
 
 #include "TestPreferenceStore.h"
 #include "base/PreferenceManager.h"
@@ -49,6 +52,24 @@ void contractViolated(
 int main(int argc, char** argv)
 {
   kd::set_contract_violation_handler(contractViolated);
+
+  // Default QSettings (including RecentDocuments) must never use owner preferences.
+  // Keep the owned directory alive until QApplication and all tests are destroyed.
+  auto settingsDirectory = QTemporaryDir{QDir::currentPath() + "/owned-ui-XXXXXX"};
+  if (!settingsDirectory.isValid())
+  {
+    return 2;
+  }
+  struct RestoreSettingsFormat
+  {
+    QSettings::Format previous = QSettings::defaultFormat();
+    ~RestoreSettingsFormat() { QSettings::setDefaultFormat(previous); }
+  } restoreSettingsFormat;
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(
+    QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path() + "/user");
+  QSettings::setPath(
+    QSettings::IniFormat, QSettings::SystemScope, settingsDirectory.path() + "/system");
 
   // Needs to be set for the QSettings instance used by RecentDocuments
   QApplication::setApplicationName("TrenchBroom");

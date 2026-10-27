@@ -1685,7 +1685,8 @@ TEST_CASE("VmfScene", "[vmf]")
     auto clone = std::unique_ptr<WorldNode>{
       static_cast<WorldNode*>(scene.world().cloneRecursively(bounds))};
     CHECK(scene.nativeId(brush(*clone)) == "2");
-    CHECK(scene.serialize(*clone) == source);
+    CHECK_THROWS_AS(scene.serialize(*clone), std::invalid_argument);
+    CHECK(scene.serialize(scene.world()) == source);
     CHECK(
       *dynamic_cast<EntityNode*>(clone->defaultLayer()->children()[1])
          ->entity()
@@ -1696,9 +1697,9 @@ TEST_CASE("VmfScene", "[vmf]")
   {
     const auto source = fixture(true);
     auto scene = VmfScene::read(source, bounds);
-    auto undo = std::unique_ptr<WorldNode>{
-      static_cast<WorldNode*>(scene.world().cloneRecursively(bounds))};
-    translate(brush(scene.world()));
+    auto& live = brush(scene.world());
+    const auto before = live.brush();
+    translate(live);
     const auto saved = scene.serialize(scene.world());
     CHECK(saved != source);
     CHECK(saved.find("\"lightmapscale\" \"16\"") != std::string::npos);
@@ -1708,7 +1709,8 @@ TEST_CASE("VmfScene", "[vmf]")
     CHECK(
       brush(reopened.world()).brush().bounds() == vm::bbox3d{{16, 8, 4}, {80, 72, 68}});
     CHECK(scene.nativeId(brush(reopened.world())) == "2");
-    CHECK(scene.serialize(*undo) == source);
+    live.setBrush(before);
+    CHECK(scene.serialize(scene.world()) == source);
   }
   SECTION("near-integer native ramp survives command transform save reopen and undo")
   {
@@ -1842,7 +1844,8 @@ TEST_CASE("VmfScene", "[vmf]")
     const auto source =
       fixture(true, "sourcebroom_opaque_geometry { key \"preserved\" }", true);
     auto scene = VmfScene::read(source, bounds);
-    CHECK(brush(scene.world()).visibilityState() == VisibilityState::Hidden);
+    CHECK(brush(scene.world()).visibilityState() == VisibilityState::Inherited);
+    CHECK(brush(scene.world()).nativeVisibility().wrapper);
     CHECK_FALSE(scene.diagnostics().empty());
     CHECK(scene.serialize(scene.world()) == source);
     translate(brush(scene.world()));
@@ -2019,10 +2022,11 @@ TEST_CASE("VmfScene", "[vmf]")
       CHECK(acted.cordons[0].boxes == snapshot.cordons[0].boxes);
       CHECK(
         brush(reopened.world()).brush().bounds() == vm::bbox3d{{16, 8, 4}, {80, 72, 68}});
-      brush(reopened.world())
-        .setVisibilityState(
-          hidden ? VisibilityState::Inherited : VisibilityState::Hidden);
-      CHECK_THROWS_AS(reopened.serialize(reopened.world()), std::invalid_argument);
+      CHECK(brush(reopened.world()).nativeVisibility().wrapper == hidden);
+      brush(reopened.world()).setVisibilityState(VisibilityState::Hidden);
+      // Session hiding must not author or erase the independently saved native wrapper.
+      CHECK(reopened.serialize(reopened.world()) == saved);
+      CHECK(brush(reopened.world()).nativeVisibility().wrapper == hidden);
     }
     // Interpreting metadata does not make geometry-bearing opaque blocks editable.
     auto opaque = VmfScene::read(
@@ -2337,7 +2341,8 @@ TEST_CASE("VmfScene generated clip exact states and live owner guards", "[vmf]")
       CHECK_THROWS_AS(
         scene.validateClipContents(*node, NodeContents{initialBrush}, bounds),
         std::invalid_argument);
-      CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+      // Session visibility is transient; native persistence bytes do not change.
+      CHECK(scene.serialize(scene.world()) == saved);
       layer->setVisibilityState(VisibilityState::Inherited);
     }
     else
@@ -2480,7 +2485,8 @@ TEST_CASE("VmfScene generated clip exact states and live owner guards", "[vmf]")
     CHECK_THROWS_AS(
       scene.validateClipContents(*node, NodeContents{firstBrush}, bounds),
       std::invalid_argument);
-    CHECK_THROWS_AS(scene.serialize(scene.world()), std::invalid_argument);
+    // Session visibility is transient; native persistence bytes do not change.
+    CHECK(scene.serialize(scene.world()) == saved);
     node->setVisibilityState(VisibilityState::Inherited);
     layer->removeChild(node);
     CHECK_THROWS_AS(
@@ -2611,7 +2617,9 @@ TEST_CASE("VmfScene Both stages provenance siblings and keeper identities once",
   }
   CHECK_NOTHROW(VmfScene::read(saved, bounds));
   auto* parent = back->parent();
+  auto removal = scene.prepareRemoval({back});
   parent->removeChild(back);
+  scene.publishRemoval(removal, {back});
   sibling.reset(back);
   node.setBrush(before);
   CHECK(scene.serialize(scene.world()) == original);
@@ -2625,6 +2633,7 @@ TEST_CASE("VmfScene Both stages provenance siblings and keeper identities once",
   sibling->setBrush(savedBack);
   CHECK_NOTHROW(scene.validateBothClipReplay({&node}, keepers, siblings, bounds));
   parent->addChild(sibling.release());
+  scene.activateRemoval(removal, {back});
   node.setBrush(front);
   CHECK(scene.serialize(scene.world()) == saved);
 }
@@ -2851,8 +2860,9 @@ TEST_CASE(
   CHECK(scene.serialize(scene.world()) == source);
   auto preview = VmfScene::readReadOnlyPreview(source, vm::bbox3d{4096});
   auto* parent = preview.world().defaultLayer();
-  REQUIRE(parent->childCount() == 1);
-  auto* group = dynamic_cast<GroupNode*>(parent->children().front());
+  REQUIRE(parent->childCount() == 2);
+  CHECK(parent->children().front()->nativeVisibility().manual);
+  auto* group = dynamic_cast<GroupNode*>(parent->children().back());
   REQUIRE(group);
   parent->removeChild(group);
   auto owner = std::unique_ptr<GroupNode>{group};
@@ -2925,7 +2935,9 @@ TEST_CASE(
       "cordons { active 0 cordon { name \"saved\" box { mins \"(0 0 0)\" maxs \"(72 83 94)\" } } }";
   auto scene = VmfScene::read(source, bounds);
   auto& node = brush(scene.world());
-  REQUIRE(node.visibilityState() == VisibilityState::Hidden);
+  REQUIRE(node.visibilityState() == VisibilityState::Inherited);
+  CHECK(node.nativeVisibility().wrapper);
+  CHECK(node.effectiveNativeVisibility().hidden());
   CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
   auto request = NativeCordonRequest{scene.cordons()};
   request.records[0].boxes[0].maxs = {172, 183, 194};
@@ -2939,7 +2951,9 @@ TEST_CASE(
   expected.replace(
     expected.find("\"saved\""), std::string{"\"saved\""}.size(), "\"live\"");
   CHECK(scene.serialize(scene.world()) == expected);
-  CHECK(node.visibilityState() == VisibilityState::Hidden);
+  CHECK(node.visibilityState() == VisibilityState::Inherited);
+  CHECK(node.nativeVisibility().wrapper);
+  CHECK(node.effectiveNativeVisibility().hidden());
   CHECK_THROWS_AS(scene.validateRemoval({&node}), std::invalid_argument);
   const auto metadata = SourceEditorMetadata::read(scene.document());
   REQUIRE(metadata.cordons.size() == 1);
@@ -2948,6 +2962,9 @@ TEST_CASE(
   CHECK(scene.document().source() == source);
   scene.applyCordonChange(*change, NativeCordonDirection::Backward);
   CHECK(scene.serialize(scene.world()) == source);
+  CHECK(node.visibilityState() == VisibilityState::Inherited);
+  CHECK(node.nativeVisibility().wrapper);
+  CHECK(node.effectiveNativeVisibility().hidden());
 }
 
 } // namespace tb::mdl

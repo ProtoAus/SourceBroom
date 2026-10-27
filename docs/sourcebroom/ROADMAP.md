@@ -33,7 +33,20 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.20 candidate:** ordinary validated NON-displacement point_data/vertices_plus
+- **A5.21 candidate:** loaded/new manual-visgroup tree CRUD, ordered direct
+  assignment/unassignment and explicit manual Show/Hide through owning scoped
+  snapshots and the LIVE UNSAVED Map inspector. Native wrapper/manual/automatic
+  causes remain independent of ordinary session visibility; native-hidden bodies
+  are not picked, selected through aggregates or submitted through showHidden.
+  Protected/unprojected rows remain explicit, hidden-member recovery uses metadata
+  handles, and ordinary session hiding saves without changing native flags.
+  Full Model289/UI58/App50/Render28 and actual cached-ownership128 assertions pass,
+  zero new compiler warnings; corpus38/35/38 and every original hash unchanged.
+  Whole-family review findings were reproduced and fixed; focused independent
+  re-review reports no remaining blocker. Human/Hammer acceptance is pending.
+  No automatic classification, RGB/wrapper/automatic authoring or reconstructed
+  Hammer checkbox; unsupported geometry/cache ownership remains guarded.
+- **Retained A5.20 candidate:** ordinary validated NON-displacement point_data/vertices_plus
   ownership: duplicate/delete, whole/partial plain brush entities and safe entity
   parent additions. Generated copies continue move/save/reopen/further ownership;
   no cache/ID stripping or global opaque allowance. Exact source closure, original
@@ -289,8 +302,11 @@ Existing native entities have typed FGD hints and an ordered output table;
 supported props have a static root/default-pose preview.
 Ordinary native groups now have bounded scene Group/Ungroup authoring (A5.15).
 The saved-file metadata inspector stays read-only. A5.16 separately admits live
-ordinary cordon authoring in map properties; visgroups and hidden state are not
-visibility authoring. A camera action moves the eye only.
+ordinary cordon authoring in map properties. A5.21 separately adds manual-visgroup
+hierarchy/direct membership and explicit manual visibility intent, without
+wrapper/automatic flag authoring, RGB editing, automatic classification or a
+reconstructed Hammer checkbox. The saved-file inspector is still read-only and
+a camera action moves the eye only.
 Custom dependency discovery is incomplete and writes an explicitly reviewed
 new distribution ZIP, not a BSP pak lump. Generic Source remains configurable
 without certifying arbitrary branches. [Tool limits](SOURCE_TOOLS.md) and

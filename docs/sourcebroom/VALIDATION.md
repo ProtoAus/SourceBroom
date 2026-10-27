@@ -1,11 +1,60 @@
-# SourceBroom validation — A5.20 ordinary polygon-cache ownership
+# SourceBroom validation — A5.21 live native manual visgroups
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.20 — closed ordinary polygon-cache ownership
+## A5.21 — manual visgroups, native visibility and replay
+
+Current final post-review production:
+
+- Full **Model289/289**, **UI58/58**, **App50/50**, **Render28/28** pass. Existing
+  product/checker/API targets build with zero new MSVC diagnostics. Source and
+  executable hashes identify the tested cut; later installation is a separate gate.
+- Four serial model/projection/Map/UI leases were individually parent-reviewed.
+  A fresh whole-family code review blocked on two P1s and one P2. Actual compiled
+  pre-fix controls reproduced them: early-child UI reparent9 assertions/7controls/
+  2fail; Both stale metadata replay64/46/18; ordered-reference save10/8/2. Parent
+  fixed the request order, operational+semantic replay preflight, and reference
+  emission order. Focused independent post-fix review found no remaining blocker.
+- Source0002/canonical2 and numeric-duplicate rows resolve by registered scoped
+  handles, not numeric aliases. Actual selection assignment, live observations,
+  protected duplicates and raw original ID spelling are covered. Press/release
+  document/row/button changes refuse, hidden-member metadata recovery is explicit,
+  and the actual MapWindow's scroll/bounded-name controls act at normal bounds.
+- Native wrapper/manual/automatic and inherited causes remain separate from
+  ordinary session visibility. Actual session Hide/save/Undo updates the UI and
+  preserves source/native revision. Three obsolete legacy save-throw expectations
+  were corrected ONLY to exact-byte persistence; native-wrapper and operational
+  clip/opaque/provenance negatives remain. No default failure-policy waiver.
+- Terminal removal, parked activation, stale/foreign handles, semantic replay,
+  true no-op, unknown/protected branch locality, native selected/showHidden vetoes,
+  tree append order, membership8,7 roundtrip and exact full undo have acting controls.
+- Both original point_data and Hammer++ vertices_plus cached ownership chains
+  pass **128 assertions** on current production (move/clone/further move/reclone/
+  delete/save/reopen/undo/redo). All original input hashes remain unchanged.
+- Current read-only corpus: **38/38 document**, **35/38 strict scene** (identical
+  three refusals), **38/38 explicitly partial preview**. The in-memory surgical
+  value-edit control acts; all38 original SHA256 values remain unchanged. This is
+  load/metadata evidence, NOT universal geometry/Hammer/branch acceptance.
+
+Historical intermediate failures remain evidence, not final passes: the first
+whole Model286/287 exposed two obsolete session-save generator expectations;
+UI source gates included composed runs and one known untouched QPreferenceStore
+Windows rename AccessDenied failure. The current full58 pass does NOT establish
+that preference bug is fixed. Clangd parses current ASTs without source errors,
+but its feature self-tests exit nonzero; this is not a clean-LSP claim. Test-only
+parked-Back lifetime and hidden-ancestor layout oracle mistakes were corrected,
+not converted into product RED or policy exceptions.
+
+RGB/wrapper/automatic flag authoring, automatic classification and reconstructed
+Hammer-checkbox semantics remain unsupported. Protected/opaque/cache geometry
+guards are not widened. Owner/Hammer appearance, real-map authoring feel and
+independent compiler behavior remain pending in ../../lextest.md. Source/build,
+commit/push, installed receipt and manual observation must be recorded separately.
+
+## Retained A5.20 — closed ordinary polygon-cache ownership
 
 Ordinary NON-displacement point_data/vertices_plus duplication/removal and safe
 whole/partial brush-entity/addition paths use forced unchanged cache validation,

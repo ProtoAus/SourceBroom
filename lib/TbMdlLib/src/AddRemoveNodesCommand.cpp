@@ -19,12 +19,15 @@
 
 #include "mdl/AddRemoveNodesCommand.h"
 
+#include "base/Logger.h"
 #include "base/Macros.h"
 #include "mdl/AddRemoveNodesUtils.h"
 #include "mdl/Map.h"
 #include "mdl/Node.h"
 
 #include "kd/map_utils.h"
+
+#include <algorithm>
 
 namespace tb::mdl
 {
@@ -43,6 +46,8 @@ std::unique_ptr<AddRemoveNodesCommand> AddRemoveNodesCommand::remove(
 
 AddRemoveNodesCommand::~AddRemoveNodesCommand()
 {
+  if (m_removal)
+    m_scene->disposeRemoval(*m_removal);
   kdl::map_clear_and_delete(m_nodesToAdd);
 }
 
@@ -77,46 +82,77 @@ std::string AddRemoveNodesCommand::makeName(const Action action)
 
 bool AddRemoveNodesCommand::doPerformDo(Map& map)
 {
-  doAction(map);
-  return true;
+  return apply(map, m_action == Action::Add);
 }
-
 bool AddRemoveNodesCommand::doPerformUndo(Map& map)
 {
-  undoAction(map);
+  return apply(map, m_action == Action::Remove);
+}
+bool AddRemoveNodesCommand::apply(Map& map, const bool adding)
+{
+  const auto& nodes = adding ? m_nodesToAdd : m_nodesToRemove;
+  auto roots = std::vector<Node*>{};
+  auto placements = std::vector<std::pair<Node*, Node*>>{};
+  for (const auto& [parent, children] : nodes)
+    for (auto* node : children)
+    {
+      roots.push_back(node);
+      placements.emplace_back(node, parent);
+    }
+  try
+  {
+    if (auto* scene = map.vmfScene())
+    {
+      auto closure = std::vector<Node*>{};
+      const auto collect = [&](auto&& self, Node& node) -> void {
+        closure.push_back(&node);
+        for (auto* child : node.children())
+          self(self, *child);
+      };
+      for (auto* root : roots)
+        collect(collect, *root);
+      const auto registered = std::ranges::count_if(
+        closure, [&](const auto* node) { return scene->hasVisgroupMember(*node); });
+      if (!m_managed)
+      {
+        if (
+          adding && registered != 0
+          && registered != static_cast<ptrdiff_t>(closure.size()))
+          throw std::invalid_argument{"mixed managed/unmanaged native additions"};
+        m_managed = !adding || registered != 0;
+      }
+      if (!*m_managed && registered != 0)
+        throw std::invalid_argument{"unmanaged native command became registered"};
+      if (*m_managed && adding && m_removal)
+        scene->validateActivation(*m_removal, placements);
+      else if (*m_managed && !adding)
+        m_removal = scene->prepareRemoval(roots);
+      m_scene = scene;
+    }
+  }
+  catch (const std::invalid_argument& e)
+  {
+    map.logger().error() << "Native node lifecycle refused: " << e.what();
+    return false;
+  }
+  if (adding)
+  {
+    addNodesAndNotify(nodes, map, [&] {
+      if (m_removal)
+      {
+        m_scene->activateRemoval(*m_removal, roots);
+        m_removal.reset();
+      }
+    });
+  }
+  else
+  {
+    removeNodesAndNotify(nodes, map, [&] {
+      if (m_removal)
+        m_scene->publishRemoval(*m_removal, roots);
+    });
+  }
+  std::swap(m_nodesToAdd, m_nodesToRemove);
   return true;
 }
-
-void AddRemoveNodesCommand::doAction(Map& map)
-{
-  switch (m_action)
-  {
-  case Action::Add:
-    addNodesAndNotify(m_nodesToAdd, map);
-    break;
-  case Action::Remove:
-    removeNodesAndNotify(m_nodesToRemove, map);
-    break;
-  }
-
-  using std::swap;
-  swap(m_nodesToAdd, m_nodesToRemove);
-}
-
-void AddRemoveNodesCommand::undoAction(Map& map)
-{
-  switch (m_action)
-  {
-  case Action::Add:
-    removeNodesAndNotify(m_nodesToRemove, map);
-    break;
-  case Action::Remove:
-    addNodesAndNotify(m_nodesToAdd, map);
-    break;
-  }
-
-  using std::swap;
-  swap(m_nodesToAdd, m_nodesToRemove);
-}
-
 } // namespace tb::mdl

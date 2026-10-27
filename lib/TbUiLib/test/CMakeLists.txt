@@ -19,6 +19,7 @@ target_sources(TbUiLibTest
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_LaunchGameEngineDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_MapWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeCordonEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_NativeVisgroupEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_MultiCompletionLineEdit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_QPathUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tst_QPreferenceStore.cpp

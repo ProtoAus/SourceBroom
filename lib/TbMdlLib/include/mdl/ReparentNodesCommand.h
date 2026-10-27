@@ -20,6 +20,7 @@
 #pragma once
 
 #include "base/Macros.h"
+#include "mdl/NativeVisgroups.h"
 #include "mdl/UpdateLinkedGroupsCommandBase.h"
 
 #include "kd/flat_map.h"
@@ -38,6 +39,19 @@ class ReparentNodesCommand : public UpdateLinkedGroupsCommandBase
 private:
   kdl::flat_map<Node*, std::vector<Node*>> m_nodesToAdd;
   kdl::flat_map<Node*, std::vector<Node*>> m_nodesToRemove;
+  std::optional<NativeVisgroupSnapshot> m_beforeVisgroups, m_afterVisgroups;
+  struct ReplayNode
+  {
+    Node* node;
+    size_t binding;
+    Node* parent;
+    std::vector<Node*> children;
+  };
+  std::vector<ReplayNode> m_beforeNodes, m_afterNodes;
+  std::vector<size_t> m_bindings;
+  std::vector<ReplayNode> captureReplayNodes(Map& map) const;
+  bool preflight(Map& map, bool forward);
+  void moveNative(Map& map, bool forward);
 
 public:
   static std::unique_ptr<ReparentNodesCommand> reparent(

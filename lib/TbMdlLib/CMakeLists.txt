@@ -18,6 +18,9 @@ target_sources(TbMdlLib
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CircleShape.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ClipBrushesBothCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeCordons.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeVisgroups.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeVisgroupCommand.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Map_NativeVisgroups.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeCordonCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NativeGroupCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ColorRange.cpp

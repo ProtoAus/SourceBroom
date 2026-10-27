@@ -48,6 +48,9 @@ struct ShaderConfig;
 
 class EntityModelRenderer
 {
+  friend struct NativeVisibilityRendererTest;
+  bool visible(const mdl::EntityNode& entity) const;
+
 private:
   /**
    * Draws either the opaque or the transparent subset of m_entities as an independent

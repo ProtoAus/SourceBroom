@@ -21,7 +21,60 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Validated ordinary polygon-cache ownership — A5.20
+## Live native manual visgroups — A5.21
+
+NativeVisgroups owns separate scene-scoped record/member handles, request-local
+creation keys, immutable contextual identity/admission and complete desired tree
+state. Stage/emit uses a document-scoped session and the existing combined root
+append. Retained siblings keep order; moved/new records append at the destination.
+Ordered membership remove/re-add likewise persists the live append order while
+untouched reference lexemes/unknown data survive. No-op/refusal/full undo retain
+exact source. Do not substitute a name, native number, Node pointer or row index
+for scoped authority; decimal source0002 and canonical2 are not a safe identity join.
+
+Scene registration, parked activation, terminal removal/disposal and relevant
+semantic replay use exact admitted bindings and pointer-free tombstones. Metadata
+alone does not prove geometry eligibility. Map commands publish authored state,
+native masks and selection together through existing history. Both clip captures
+before/after relevant metadata expectations and validates Front operation admission
+BEFORE any selection, Back removal or geometry mutation on replay. Failed undo/
+redo policies are unchanged; no compound retry certificate was introduced.
+
+Node's native wrapper/manual/automatic causes veto ordinary session visibility.
+All typed selection/picking paths, aggregate closure and renderer showHidden paths
+honor that veto. Session visibility is not authored VMF: serialization ignores its
+state while operation=true clip/reparent geometry guards remain intact. Manual
+Show/Hide acts on current supported descendant/owning closure; later assignment
+never replays historical Hide. Missing flags use the declared no-veto preview
+fallback, malformed/unknown data is protected rather than guessed.
+
+The LIVE UNSAVED inspector uses one owning immutable binding frame and complete
+press-time intent. Row/document/button mismatch refuses rather than retargeting.
+Existing nonmodifying visibility notifications refresh ordinary session reasons.
+Map observations/selection use the exact registered scoped member handle, with
+active/projected checks; unproven rows retain unknown optional observations.
+QScrollArea and bounded combo sizing keep the actual inspector reachable. The UI
+test runner redirects BOTH Ini User/System QSettings paths before any QApplication
+or settings construction; no owner/default registry is a fixture. Startup cannot
+use fs::TestEnvironment before Catch result capture exists.
+
+Before fixes, actual dispatch RED17/13controls/4fail, session-persistence ModelRED31/
+22controls/9fail and scoped-ID join RED71/68controls/3fail were retained. Independent
+whole-family review then found early-child reparent, stale Both replay and ordered
+reference emission defects: compiled actual REDs9/7/2,64/46/18,10/8/2 respectively.
+The surgical fixes passed focused re-review. Current full Model289/UI58/App50/
+Render28 and BOTH real cache variants128 pass, actual product/checker0newwarnings,
+corpus document38/strict35/partial38 and original hashes unchanged. Source-derived
+review, runtime controls, corpus, package receipts and manual acceptance are separate.
+Prior preference rename failures remain untouched despite a passing current UI;
+clangd AST parsing is not a clean exit (feature self-tests still fail).
+
+No automatic group predicates, RGB editing, wrapper/automatic flag authoring,
+saved-Hammer checkbox truth, general Node lifetime/epoch framework, arbitrary
+observer/OOM atomicity or widened cached/opaque geometry is promised. Human/Hammer
+checks remain pending in ../../lextest.md; generic Source1 is not Source2 support.
+
+## Retained validated ordinary polygon-cache ownership — A5.20
 
 `polygonCacheEdits` has an explicit forced-unchanged validation mode; the default
 content no-op fastpath remains, before any canonical Brush copy. Ownership uses

@@ -125,6 +125,7 @@ Node* Node::cloneRecursively(const vm::bbox3d& worldBounds) const
 void Node::cloneAttributes(Node& node) const
 {
   node.setVisibilityState(m_visibilityState);
+  node.setNativeVisibility(m_nativeVisibility);
   node.setLockState(m_lockState);
   node.setFilePosition(m_lineNumber, m_lineCount);
 }
@@ -714,10 +715,38 @@ bool Node::selectable() const
 
 bool Node::visible() const
 {
+  return !effectiveNativeVisibility().hidden() && sessionVisible();
+}
+
+NativeVisibility Node::nativeVisibility() const
+{
+  return m_nativeVisibility;
+}
+
+NativeVisibility Node::effectiveNativeVisibility() const
+{
+  auto result = m_nativeVisibility;
+  for (const auto* ancestor = m_parent; ancestor; ancestor = ancestor->parent())
+  {
+    const auto own = ancestor->nativeVisibility();
+    result.wrapper = result.wrapper || own.wrapper;
+    result.manual = result.manual || own.manual;
+    result.automatic = result.automatic || own.automatic;
+  }
+  return result;
+}
+
+void Node::setNativeVisibility(const NativeVisibility visibility)
+{
+  m_nativeVisibility = visibility;
+}
+
+bool Node::sessionVisible() const
+{
   switch (m_visibilityState)
   {
   case VisibilityState::Inherited:
-    return !m_parent || m_parent->visible();
+    return !m_parent || m_parent->sessionVisible();
   case VisibilityState::Hidden:
     return false;
   case VisibilityState::Shown:

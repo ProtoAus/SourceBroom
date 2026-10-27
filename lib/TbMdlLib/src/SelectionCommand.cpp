@@ -138,7 +138,20 @@ void doSelectNodes(const std::vector<Node*>& nodes, Map& map)
 
   for (auto* initialNode : nodes)
   {
+    const auto nativeClosureVisible = [&](auto&& self, const Node& node) -> bool {
+      return !node.effectiveNativeVisibility().hidden()
+             && std::ranges::all_of(
+               node.children(), [&](const auto* child) { return self(self, *child); });
+    };
     const auto nodesToSelect = initialNode->nodesRequiredForViewSelection();
+    if (
+      !nativeClosureVisible(nativeClosureVisible, *initialNode)
+      || !std::ranges::all_of(nodesToSelect, [&](const auto* node) {
+           return nativeClosureVisible(nativeClosureVisible, *node);
+         }))
+    {
+      continue;
+    }
     for (auto* node : nodesToSelect)
     {
       if (!node->selected() /* && m_editorContext->selectable(node) remove check to allow issue objects to be selected */)
@@ -160,10 +173,18 @@ void doSelectNodes(const std::vector<Node*>& nodes, Map& map)
 
 void doSelectBrushFaces(const std::vector<BrushFaceHandle>& faces, Map& map)
 {
+  const auto nativeFaces = faces | std::views::filter([](const auto& face) {
+                             return !face.node().effectiveNativeVisibility().hidden();
+                           })
+                           | kdl::ranges::to<std::vector>();
+  if (!faces.empty() && nativeFaces.empty())
+  {
+    return;
+  }
   map.selectionWillChangeNotifier();
 
   const auto constrained =
-    faceSelectionWithLinkedGroupConstraints(map.worldNode(), faces);
+    faceSelectionWithLinkedGroupConstraints(map.worldNode(), nativeFaces);
 
   for (auto* node : constrained.groupsToLock)
   {

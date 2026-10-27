@@ -21,6 +21,7 @@
 
 #include "base/Macros.h"
 #include "mdl/UpdateLinkedGroupsCommandBase.h"
+#include "mdl/VmfScene.h"
 
 #include "kd/flat_map.h"
 
@@ -41,6 +42,9 @@ private:
   };
 
   Action m_action;
+  VmfScene* m_scene = nullptr;
+  std::optional<bool> m_managed;
+  std::optional<PreparedVmfRemoval> m_removal;
   kdl::flat_map<Node*, std::vector<Node*>> m_nodesToAdd;
   kdl::flat_map<Node*, std::vector<Node*>> m_nodesToRemove;
 
@@ -60,8 +64,7 @@ private:
   bool doPerformDo(Map& map) override;
   bool doPerformUndo(Map& map) override;
 
-  void doAction(Map& map);
-  void undoAction(Map& map);
+  bool apply(Map& map, bool adding);
 
   deleteCopyAndMove(AddRemoveNodesCommand);
 };

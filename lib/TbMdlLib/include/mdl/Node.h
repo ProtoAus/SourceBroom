@@ -21,6 +21,7 @@
 
 #include "mdl/IssueType.h"
 #include "mdl/LockState.h"
+#include "mdl/NativeVisibility.h"
 #include "mdl/NodeVisitor.h"
 #include "mdl/Tag.h"
 #include "mdl/VisibilityState.h"
@@ -68,6 +69,7 @@ private:
   size_t m_descendantSelectionCount = 0;
 
   VisibilityState m_visibilityState = VisibilityState::Inherited;
+  NativeVisibility m_nativeVisibility;
   LockState m_lockState = LockState::Inherited;
   bool m_lockedByOtherSelection = false;
 
@@ -327,6 +329,10 @@ private:
 
 public: // visibility, locking
   bool visible() const;
+  bool sessionVisible() const;
+  NativeVisibility nativeVisibility() const;
+  NativeVisibility effectiveNativeVisibility() const;
+  void setNativeVisibility(NativeVisibility visibility);
   bool shown() const;
   bool hidden() const;
   VisibilityState visibilityState() const;
