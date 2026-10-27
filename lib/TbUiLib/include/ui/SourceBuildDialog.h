@@ -32,6 +32,7 @@ public:
 
 signals:
   void navigateToPosition(const QVector3D& position);
+  void navigateToCameraView(const QVector3D& position, const QVector3D& direction);
   void showLeak(const QString& path);
 
 protected:

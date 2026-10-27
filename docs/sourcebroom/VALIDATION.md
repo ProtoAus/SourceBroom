@@ -1,11 +1,39 @@
-# SourceBroom validation — A5.27 explicit translucent material opacity
+# SourceBroom validation — A5.28 saved camera eye-and-look navigation
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.27 — bounded scalar opacity in demanded material rendering
+## A5.28 — readonly saved camera view navigation
+
+- Actual proto/default-only Tools78/80: old eye/control forwarding acts; new
+  buttons absent. Concrete MapWindow19/22: actual eye position moves but two
+  requested headings remain unchanged. The third failure is a fixture oracle,
+  not product corruption: text-mode TestEnvironment creates CRLF while expected
+  source was LF. Binary native fixture fixes only that mismatch; logs retained.
+- After wiring, Tools118 and actual MapWindow26 assertions pass. Known eye+look
+  direction is normalized in double before float conversion. Safe oblique,
+  vertical, close-at-large-eye and tiny valid targets act; invalid/out-of-range/
+  missing/degenerate/nonfinite targets do not emit. Legacy eye-only stays separate.
+- Concrete camera checks cover opposite/vertical heading, existing world-up
+  fallback, pending position-animation replacement, zoom preservation, legacy
+  calls and unchanged map modification count/native serialization/file bytes.
+  Qt dialog forwarding and root API are separate actual arms, not a claimed
+  single clicked-through GUI/whole-Hammer camera-state acceptance.
+- Two actual product/UI consumers build with zero compiler warning/error lines.
+  Full UI60/60 and App50/50 pass on18 matching code fingerprints. UTF8 changed-range
+  format/diff checks and complete direct parent review are not independent review,
+  clean clang-tidy or new human/Hammer acceptance. Preference issue remains open.
+- This writes no camera metadata, active-camera field or native model/history.
+  Projection/FOV are not imported. Compile/read-only/source budgets remain as
+  before. No new native-authoring, rendering/performance or all-map claim.
+
+A5.27 Model299/Render28/GL21/GPU2693 and A5.26 VMF38/35+same3/38 remain retained
+unchanged-boundary evidence, not new/re-dated A5.28 runs. Current portable proof
+and optional owner view check are separate; full Source support is not complete.
+
+## Retained A5.27 — bounded scalar opacity in demanded material rendering
 
 - Before semantics, only defaulted schema fields/tests: actual Model64/81,17
   expected scalar-admission failures with ordinary translucency/raw-image controls

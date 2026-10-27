@@ -246,9 +246,11 @@ void SwitchableMapViewContainer::focusCameraOnSelection(const bool animate)
 }
 
 void SwitchableMapViewContainer::moveCameraToPosition(
-  const vm::vec3f& position, const bool animate)
+  const vm::vec3f& position,
+  const bool animate,
+  const std::optional<vm::vec3f>& viewDirection)
 {
-  m_mapView->moveCameraToPosition(position, animate);
+  m_mapView->moveCameraToPosition(position, animate, viewDirection);
 }
 
 void SwitchableMapViewContainer::moveCameraToCurrentTracePoint()

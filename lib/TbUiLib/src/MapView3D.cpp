@@ -74,6 +74,8 @@
 
 #include "vm/util.h"
 
+#include <cmath>
+
 namespace tb::ui
 {
 
@@ -430,8 +432,22 @@ vm::vec3f MapView3D::focusCameraOnObjectsPosition(const std::vector<mdl::Node*>&
   return newPosition - m_camera->direction() * offset;
 }
 
-void MapView3D::moveCameraToPosition(const vm::vec3f& position, const bool animate)
+void MapView3D::moveCameraToPosition(
+  const vm::vec3f& position,
+  const bool animate,
+  const std::optional<vm::vec3f>& viewDirection)
 {
+  if (viewDirection)
+  {
+    const auto lengthSquared = vm::dot(*viewDirection, *viewDirection);
+    if (!std::isfinite(lengthSquared) || lengthSquared <= 0.0f)
+    {
+      return;
+    }
+    // Orient first so the existing position tween cannot lerp opposite headings through
+    // zero.
+    m_camera->setDirection(*viewDirection / std::sqrt(lengthSquared), vm::vec3f{0, 0, 1});
+  }
   if (animate)
   {
     animateCamera(position, m_camera->direction(), m_camera->up(), m_camera->zoom());

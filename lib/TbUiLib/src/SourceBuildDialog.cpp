@@ -289,6 +289,11 @@ SourceBuildDialog::SourceBuildDialog(
       &SourceToolsDialog::navigateToPosition,
       this,
       &SourceBuildDialog::navigateToPosition);
+    connect(
+      dialog,
+      &SourceToolsDialog::navigateToCameraView,
+      this,
+      &SourceBuildDialog::navigateToCameraView);
     dialog->show();
   });
   connect(m_build, &SourceBuild::output, this, [log](const QString& text) {

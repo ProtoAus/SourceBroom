@@ -97,7 +97,10 @@ private: // implement MapView interface
   void reset2dCameras(const gl::Camera& masterCamera, bool animate) override;
   void focusCameraOnSelection(bool animate) override;
 
-  void moveCameraToPosition(const vm::vec3f& position, bool animate) override;
+  void moveCameraToPosition(
+    const vm::vec3f& position,
+    bool animate,
+    const std::optional<vm::vec3f>& viewDirection = std::nullopt) override;
   void animateCamera(
     const vm::vec3f& position,
     const vm::vec3f& direction,

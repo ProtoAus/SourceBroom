@@ -35,6 +35,7 @@ private:
   QPlainTextEdit* m_metadataText;
   QComboBox* m_cameras;
   QPushButton* m_goCamera;
+  QPushButton* m_goCameraView;
   QLineEdit* m_customRoot;
   QLineEdit* m_bsp;
   QCheckBox* m_rights;
@@ -48,6 +49,7 @@ public:
 
 signals:
   void navigateToPosition(const QVector3D& position);
+  void navigateToCameraView(const QVector3D& position, const QVector3D& direction);
 
 private:
   void reloadDocument();
@@ -57,6 +59,8 @@ private:
   void exportPlan();
   void updateCameraButton();
   void navigateCamera();
+  void navigateCameraView();
   std::optional<QVector3D> cameraEye() const;
+  std::optional<QVector3D> cameraViewDirection() const;
 };
 } // namespace tb::ui

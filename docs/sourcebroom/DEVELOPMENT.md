@@ -21,7 +21,47 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Explicit translucent material opacity — A5.27
+## Saved camera eye-and-look navigation — A5.28
+
+New Go to camera view is separate from legacy eye-only navigation. Saved-file
+SourceTools metadata emits eye+unit direction, forwarded through SourceBuildDialog
+to MapWindow. Existing finite/nondegenerate snapshot and ±1e6 eye safety guard
+remain. Scale/normalize the double delta before casting to float; nearby large
+eyes or tiny valid look vectors cannot collapse from float-coordinate subtraction.
+No metadata/model/history/native-file writes, active-camera/projection/FOV/zoom
+import or read-only-preview compile authority.
+
+Use the existing moveCameraToPosition chain with optional default-nullopt heading
+through the five overrides. Only perspective orientation changes; orthographic
+orientation and legacy calls keep their behavior. Perspective applies normalized
+heading/world-up before the existing position tween, avoiding opposite-heading
+interpolation through zero. Existing same-type animation replacement remains,
+not a new animation framework or general cancellation-policy repair.
+
+Actual default/proto-only UI controls: Tools78/80, two missing-new-button failures
+while old eye navigation/forwarding act. Actual MapWindow19/22: eye moves but two
+requested headings fail; the third failure was a WRONG original-file oracle:
+TestEnvironment::createFile uses text-mode ostream, making CRLF on Windows while
+the expected string was LF. Source verified; fixture now explicitly binary like
+existing native tests. That was not native file corruption. Failed logs remain.
+
+After wiring, Tools118 and actual MapWindow26 assertions pass, including safe/
+unsafe/degenerate/nonfinite/large-close/tiny/vertical data, legacy eye behavior,
+opposite/vertical camera, pending tween replacement and unchanged native/file
+bytes/modification count. Qt dialog forwarding and concrete root API are tested
+arms; the final simple MapWindow callback is direct-source reviewed, not a single
+clicked-through full GUI/Hammer proof. Current full UI60/App50 pass; two actual
+product/UI build targets have zero compiler warning/error lines, same18 code
+fingerprints/UTF8 changed-range format/diff0 and complete direct parent review.
+LSP returned another checkout's navigation location; current inspected source was
+reread, not that path trusted/edited. No independent/clean-tidy/human claim.
+
+A5.27 Model299/Render28/GL21/GPU2693 and A5.26 VMF38/35+same3/38 remain unchanged
+boundaries, not rerun/re-dated. Existing preference issue remains unproven fixed.
+Portable deployment and small owner 3D-view check are separate. Full native camera
+authoring, camera persistence and complete Source support remain unimplemented.
+
+## Retained explicit translucent material opacity — A5.27
 
 Admit finite scalar `$alpha`0..1 only on supported basic preview shaders with
 explicit translucency and no alpha test/terrain layers. Strict/default policy,

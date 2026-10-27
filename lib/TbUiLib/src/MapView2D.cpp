@@ -247,7 +247,8 @@ void MapView2D::focusCameraOnSelection(const bool animate)
   moveCameraToPosition(m_camera->position() + delta, animate);
 }
 
-void MapView2D::moveCameraToPosition(const vm::vec3f& position, const bool animate)
+void MapView2D::moveCameraToPosition(
+  const vm::vec3f& position, const bool animate, const std::optional<vm::vec3f>&)
 {
   if (animate)
   {

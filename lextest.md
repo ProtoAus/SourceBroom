@@ -4,6 +4,23 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.28 saved camera view navigation — pending small 3D owner check
+
+Use whole A5.28 on a COPY; keep whole A5.27/A5.26 and owner-confirmed A5.25
+recovery. No A5.28 owner observation received. Tools118, actual MapWindow26 and
+full UI60/App50 are not human/full-Hammer-camera-state acceptance.
+
+- [ ] If the copied map has a saved camera, open **Run -> Compile -> Native
+  metadata / Custom package…**. In3D compare **Go to camera eye** (heading stays)
+  with **Go to camera view** (also faces its saved look target). No edit/save or
+  hunting for a case is needed. Reload the saved snapshot only when appropriate.
+- [ ] If convenient, compare that saved eye/look in matching Hammer. Current
+  projection/FOV/zoom are deliberately not imported; camera records/active-camera
+  and map history remain read-only. Unsafe/degenerate targets stay disabled.
+
+All pending. Does not enable camera authoring, compile a read-only preview, certify
+all layouts/maps/branches or establish performance/new render acceptance.
+
 ## A5.27 translucent scalar material opacity — pending small owner view check
 
 Use whole A5.27 on a COPY; keep whole A5.26 and owner-confirmed A5.25 as recovery.

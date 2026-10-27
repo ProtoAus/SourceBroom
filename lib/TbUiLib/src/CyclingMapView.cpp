@@ -144,11 +144,14 @@ void CyclingMapView::focusCameraOnSelection(const bool animate)
   }
 }
 
-void CyclingMapView::moveCameraToPosition(const vm::vec3f& position, const bool animate)
+void CyclingMapView::moveCameraToPosition(
+  const vm::vec3f& position,
+  const bool animate,
+  const std::optional<vm::vec3f>& viewDirection)
 {
   for (auto* mapView : m_mapViews)
   {
-    mapView->moveCameraToPosition(position, animate);
+    mapView->moveCameraToPosition(position, animate, viewDirection);
   }
 }
 

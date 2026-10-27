@@ -48,6 +48,7 @@
 #include "gl/MaterialCollection.h"
 #include "gl/MaterialManager.h"
 #include "gl/MaterialRenderFunc.h"
+#include "gl/PerspectiveCamera.h"
 #include "gl/Resource.h"
 #include "gl/ResourceManager.h"
 #include "gl/ShaderManager.h"
@@ -90,6 +91,7 @@
 #include "ui/MapWindow.h"
 #include "ui/MaterialCollectionEditor.h"
 #include "ui/NativeVisgroupEditor.h"
+#include "ui/SwitchableMapViewContainer.h"
 #include "ui/TabBook.h"
 
 #include <algorithm>
@@ -99,6 +101,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -124,6 +127,75 @@ public:
   }
   ~NativeGroupSettingsScope() { QSettings::setDefaultFormat(m_previous); }
 };
+
+TEST_CASE("Source camera view actual MapWindow moves eye and heading without map edits")
+{
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  const auto source = std::string{
+    "world { id 1 classname worldspawn }\n"
+    "cameras { activecamera 0 camera { position \"[8 16 24]\" look \"[32 32 32]\" } }\n"};
+  {
+    auto stream = std::ofstream{env.dir() / "camera-view.vmf", std::ios::binary};
+    stream << source;
+    REQUIRE(stream);
+  }
+  auto loaded = MapDocument::loadDocument(
+    app.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192},
+    env.dir() / "camera-view.vmf",
+    app.taskManager(),
+    app.glManager().resourceManager());
+  REQUIRE(loaded.is_success());
+  auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+  auto& map = window.document().map();
+  auto* views = window.findChild<SwitchableMapViewContainer*>();
+  REQUIRE(views);
+  const auto& camera = views->perspectiveCamera();
+  const auto oldDirection = camera.direction();
+  const auto oldZoom = camera.zoom();
+  const auto modifications = map.modificationCount();
+  const auto before = map.vmfScene()->serialize(map.worldNode());
+  views->moveCameraToPosition(vm::vec3f{8, 16, 24}, false);
+  CHECK(camera.position() == vm::vec3f{8, 16, 24});
+  CHECK(camera.direction() == oldDirection);
+  auto step = 1.0f;
+  for (const auto& direction : {-oldDirection, vm::vec3f{0, 0, 1}})
+  {
+    const auto position = vm::vec3f{32, 64, 96} * step;
+    views->moveCameraToPosition(position, false, direction);
+    CHECK(camera.position() == position);
+    CHECK(vm::length(camera.direction() - direction) < 0.00001f);
+    CHECK(std::isfinite(camera.up().x()));
+    CHECK(std::isfinite(camera.up().y()));
+    CHECK(std::isfinite(camera.up().z()));
+    CHECK(std::abs(vm::length(camera.up()) - 1.0f) < 0.00001f);
+    CHECK(camera.zoom() == oldZoom);
+    step += 1.0f;
+  }
+  views->moveCameraToPosition(vm::vec3f{512, -512, 256}, true);
+  const auto destination = vm::vec3f{128, 64, 32};
+  const auto requestedHeading = vm::vec3f{-1, 0, 0};
+  views->moveCameraToPosition(destination, true, requestedHeading);
+  QTest::qWait(MapViewBase::DefaultCameraAnimationDuration + 80);
+  CHECK(vm::length(camera.position() - destination) < 0.0001f);
+  CHECK(vm::length(camera.direction() - requestedHeading) < 0.00001f);
+  CHECK(camera.zoom() == oldZoom);
+  const auto heading = camera.direction();
+  views->moveCameraToPosition(vm::vec3f{24, 16, 8}, false);
+  CHECK(camera.direction() == heading);
+  CHECK(map.modificationCount() == modifications);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+  auto original = std::ifstream{env.dir() / "camera-view.vmf", std::ios::binary};
+  CHECK(
+    std::string{
+      std::istreambuf_iterator<char>{original}, std::istreambuf_iterator<char>{}}
+    == source);
+}
 
 TEST_CASE(
   "NativeVisgroup UI actual MapWindow live inspector and history", "[vmf][visgroups]")

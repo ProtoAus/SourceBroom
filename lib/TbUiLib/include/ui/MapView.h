@@ -22,6 +22,8 @@
 #include "vm/bbox.h"
 #include "vm/vec.h"
 
+#include <optional>
+
 namespace tb
 {
 namespace gl
@@ -57,7 +59,11 @@ public:
 
   virtual void reset2dCameras(const gl::Camera& masterCamera, bool animate) = 0;
   virtual void focusCameraOnSelection(bool animate) = 0;
-  virtual void moveCameraToPosition(const vm::vec3f& position, bool animate) = 0;
+  /** Optional direction affects the perspective view only; legacy calls keep it. */
+  virtual void moveCameraToPosition(
+    const vm::vec3f& position,
+    bool animate,
+    const std::optional<vm::vec3f>& viewDirection = std::nullopt) = 0;
 
   virtual void moveCameraToCurrentTracePoint() = 0;
 

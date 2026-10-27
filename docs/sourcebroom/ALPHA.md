@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.27 — explicit translucent material opacity
+# Try Windows SourceBroom A5.28 — saved camera eye-and-look navigation
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,34 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.27: basic translucent VMT scalar opacity
+## A5.28: go to the saved camera view, not only its eye
+
+On a saved native VMF, open **Run -> Compile -> Native metadata / Custom
+package…**, choose a valid camera and press **Go to camera view**. It uses the
+saved eye and look direction; the old **Go to camera eye** still preserves your
+current direction. These are saved-file snapshot tools: reload after saving.
+No camera records, active-camera metadata, map history, geometry or file bytes
+are written. Current projection/FOV/zoom remain; this is not camera authoring,
+full Hammer state import or permission to compile a read-only preview.
+
+Invalid, missing, degenerate/nonfinite or outside-preview-range eyes remain
+non-targets under the existing policy. Double-before-float direction math handles
+close targets near1,000,000 and tiny valid look vectors without collapse. Existing
+world-up fallback handles vertical views; applying heading before the position
+tween avoids interpolating opposite directions through zero.
+
+Actual product/UI builds have no compiler warning/error lines. Tools118 and
+actual MapWindow26 assertions pass; full UI60/App50 pass. Retained A5.27
+Model299/Render28/GL21/GPU2693 are not newly run A5.28 claims. Complete direct
+parent review is not independent/Hammer or new human acceptance. Keep whole
+A5.27/A5.26 and owner-confirmed A5.25 recovery; avoid A5.24.
+
+**Small optional owner check (pending):** if the copied map has a saved camera,
+compare **Go to camera eye** and **Go to camera view** in3D. The latter should
+also face its saved look target. No edit/save is needed; no need to hunt for a
+case. Metadata/native-authoring gates remain; see [lextest](../../lextest.md).
+
+## Retained A5.27: basic translucent VMT scalar opacity
 
 Supported basic `LightmappedGeneric`, `UnlitGeneric` and `VertexLitGeneric`
 previews now accept finite scalar `$alpha`0..1 when `$translucent 1` is explicit
@@ -686,11 +713,12 @@ Owner Hammer++/in-game observations remain pending in [lextest.md](../../lextest
   strict editable scenes. **38/38** open with explicit read-only preview, where
   omitted solids remain in the original document but are not scene geometry.
   This is not all-map compatibility or editable repair.
-- Current A5.27 full **299 Model / 59 UI / 50 App / 28 Render / 21 GL** cases
-  pass. Earlier preference rename failures are retained/unfixed, not erased by
-  a passing current run. Packed production GPU2693 is current A5.27; standalone
-  upload141 and A5.26 VMF corpus38/35+same3/38 are retained unchanged-boundary
-  evidence, not newly measured A5.27 counts.
+- Current A5.28 full **60 UI / 50 App** cases pass; A5.27 **299 Model / 28
+  Render / 21 GL** are retained unchanged-boundary evidence, not new runs.
+  Earlier preference rename failures remain unfixed, not erased by a passing
+  current run. Packed production GPU2693 is retained A5.27; standalone upload141
+  and A5.26 VMF corpus38/35+same3/38 are retained unchanged-boundary evidence,
+  not newly measured A5.28 counts.
   Installed-package evidence belongs to the matching receipt; source/build results
   alone are not installation, manual appearance or full Source acceptance.
 - Historical A5.14/A5.11 evidence (not current suite totals): **201 model** and

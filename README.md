@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.27 explicit translucent material opacity:
+**Status:** Windows A5.28 saved camera eye-and-look navigation:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,8 +39,22 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.27 previews finite scalar VMT `$alpha`0..1 on supported basic shaders with
-explicit `$translucent 1` and no cutout/terrain layers. The multiplier travels
+A5.28 adds **Go to camera view** beside the unchanged **Go to camera eye** in
+saved native metadata. It uses the saved eye and look direction without editing
+camera records, active camera, geometry, history or file bytes. Projection/zoom
+stay current; unsafe/missing/degenerate targets remain disabled. Direction is
+normalized in double before float conversion, including close targets at large
+eye coordinates. Opposite/vertical views and pending position animation act.
+
+Actual product/UI consumers build with no compiler warning/error lines. Focused
+Tools118 and actual MapWindow camera26 assertions, full UI60/App50 pass on18
+compiled code fingerprints. Model299/Render28/GL21/GPU2693 are retained A5.27
+unchanged-boundary evidence, not new counts. Parent review is not independent or
+new human/Hammer acceptance. Use whole A5.28 on copies; keep whole A5.27/A5.26
+and owner-confirmed A5.25 recovery. Full Source support remains in progress.
+
+Retained A5.27 previews finite scalar VMT `$alpha`0..1 on supported basic shaders
+with explicit `$translucent 1` and no cutout/terrain layers. The multiplier travels
 with demanded brush and prop pixels, including inherited Patch values; image
 bytes/budgets and native geometry/save permissions stay unchanged. Strict mode,
 missing translucency, cutout/terrain combinations, invalid/repeated/block values

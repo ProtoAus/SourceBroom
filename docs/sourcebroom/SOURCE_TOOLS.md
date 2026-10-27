@@ -5,7 +5,22 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Explicit translucent material opacity — A5.27
+## Saved camera eye-and-look navigation — A5.28
+
+In the saved native metadata tab, **Go to camera view** uses the selected camera's
+safe eye and look direction. **Go to camera eye** remains separate and preserves
+the current heading. Directions are computed in double before float conversion;
+projection/FOV/zoom remain current. Existing unsafe/degenerate/missing/invalid
+snapshot guards stay. No metadata, active-camera, history, geometry or file writes;
+no new permission to compile a read-only preview or full Hammer state import.
+
+Tools118, actual MapWindow26 and full UI60/App50 pass with no compiler warning/
+error lines. A5.27 Model299/Render28/GL21/GPU2693 are retained unchanged boundaries,
+not new runs. Parent review is not independent/Hammer or new human acceptance.
+If a copied map has a saved camera, the small owner 3D-eye-versus-view check needs
+no edit/save; see [lextest](../../lextest.md). Keep whole A5.27/A5.26/A5.25 recovery.
+
+## Retained explicit translucent material opacity — A5.27
 
 Basic LightmappedGeneric/UnlitGeneric/VertexLitGeneric previews admit finite VMT
 `$alpha`0..1 only with explicit `$translucent 1` and no alpha test/terrain layers.
@@ -423,7 +438,7 @@ visible mesh is not proof of the game's collision hull or runtime behavior.
 Invalid/out-of-range skin/frame numbers fall back safely without rewriting the
 original native property; this is not validation of every model's skin table.
 
-## Read-only editor metadata and camera eyes
+## Read-only editor metadata and camera navigation
 
 Save the VMF, then open **Run -> Compile** and choose
 **Native metadata / Custom package…**. These tools read a snapshot of the
@@ -443,10 +458,15 @@ remains read-only. It does not grant wrapper/automatic visibility authoring.
 SourceBroom does not apply cordon clipping itself; native metadata
 is passed to external tools whose actual region behavior must be tested.
 
-**Go to camera eye** moves only the eye and preserves the current view direction;
-it does not import Hammer's whole camera state. Invalid/degenerate cameras or
-eyes outside the safe preview-navigation range are not targets. The range is a
-UI safety policy, not a Source branch/world-bound assertion.
+**Go to camera eye** moves only the eye and preserves the current view direction.
+**Go to camera view** additionally uses the saved look direction in the perspective
+view. It normalizes the delta in double before converting to float, so nearby
+large coordinates do not collapse. Existing world-up fallback handles vertical
+views; orientation applies before the normal position tween. Neither imports
+Hammer's whole camera state or edits camera/active-camera records; current
+projection/FOV/zoom remain. Invalid/degenerate/missing/nonfinite cameras or eyes
+outside the safe preview-navigation range are not targets. The range is a UI
+safety policy, not a Source branch/world-bound assertion.
 
 ## Capability preflight before external compilers
 

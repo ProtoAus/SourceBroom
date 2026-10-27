@@ -33,7 +33,16 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.27 candidate:** finite scalar VMT opacity0..1 only for explicit
+- **A5.28 candidate:** separate saved camera eye+look navigation, retaining
+  eye-only behavior and existing unsafe-target guards. Double-before-float
+  direction, opposite/vertical heading, pending position animation, Qt forwarding
+  and original map/file preservation act. Tools118/actual MapWindow26 and full
+  UI60/App50 pass; actual product/UI builds have no compiler warning/error lines.
+  Model299/Render28/GL21/GPU2693 remain A5.27 unchanged-boundary evidence. Parent
+  review only; new human/Hammer pending. No camera/native-metadata authoring,
+  active-camera persistence, build authority or full Hammer camera state import.
+  Full Source support continues; keep whole A5.27/A5.26/A5.25 recovery.
+- **Retained A5.27 candidate:** finite scalar VMT opacity0..1 only for explicit
   translucent, noncutout basic previews. Both brush/prop demanded metadata and
   Patch inheritance act; strict/nontranslucent/cutout/terrain/invalid/proxy paths
   remain refused. Native packed production GPU2693, material136 and brush/prop10224

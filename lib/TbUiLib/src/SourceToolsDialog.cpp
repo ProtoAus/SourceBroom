@@ -21,6 +21,7 @@
 #include "ui/QPathUtils.h"
 #include "ui/SourceDocumentReader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <exception>
 #include <utility>
@@ -100,8 +101,13 @@ SourceToolsDialog::SourceToolsDialog(
   m_cameras->setObjectName("sourceMetadataCameras");
   m_goCamera = new QPushButton{tr("Go to camera eye"), metadataPage};
   m_goCamera->setObjectName("sourceMetadataGoCamera");
+  m_goCameraView = new QPushButton{tr("Go to camera view"), metadataPage};
+  m_goCameraView->setObjectName("sourceMetadataGoCameraView");
+  m_goCameraView->setToolTip(tr(
+    "Uses the saved eye and look direction; keeps projection and zoom. No VMF changes."));
   cameraRow->addWidget(m_cameras, 1);
   cameraRow->addWidget(m_goCamera);
+  cameraRow->addWidget(m_goCameraView);
   metadataLayout->addLayout(cameraRow);
   tabs->addTab(metadataPage, tr("Native metadata (read-only)"));
 
@@ -178,6 +184,8 @@ SourceToolsDialog::SourceToolsDialog(
     this,
     &SourceToolsDialog::updateCameraButton);
   connect(m_goCamera, &QPushButton::clicked, this, &SourceToolsDialog::navigateCamera);
+  connect(
+    m_goCameraView, &QPushButton::clicked, this, &SourceToolsDialog::navigateCameraView);
   connect(
     m_customRoot, &QLineEdit::textChanged, this, &SourceToolsDialog::invalidatePlan);
   connect(m_bsp, &QLineEdit::textChanged, this, &SourceToolsDialog::invalidatePlan);
@@ -339,9 +347,32 @@ std::optional<QVector3D> SourceToolsDialog::cameraEye() const
     static_cast<float>(eye.y()),
     static_cast<float>(eye.z())};
 }
+std::optional<QVector3D> SourceToolsDialog::cameraViewDirection() const
+{
+  if (!cameraEye())
+  {
+    return std::nullopt;
+  }
+  const auto& camera = m_metadata.cameras[static_cast<size_t>(m_cameras->currentIndex())];
+  const auto delta = *camera.look - *camera.eye;
+  // Normalize before converting coordinates to float: nearby large targets would
+  // collapse.
+  const auto scale =
+    std::max({std::abs(delta.x()), std::abs(delta.y()), std::abs(delta.z())});
+  if (!std::isfinite(scale) || scale <= 0.0)
+  {
+    return std::nullopt;
+  }
+  const auto scaled = delta / scale;
+  const auto direction = scaled / vm::length(scaled);
+  return QVector3D{float(direction.x()), float(direction.y()), float(direction.z())}
+    .normalized();
+}
+
 void SourceToolsDialog::updateCameraButton()
 {
   m_goCamera->setEnabled(cameraEye().has_value());
+  m_goCameraView->setEnabled(cameraViewDirection().has_value());
   m_goCamera->setToolTip(tr(
     "Moves to the eye only; preserves the current view direction. Unsafe/degenerate "
     "cameras and eyes beyond ±1,000,000 preview units are not navigation targets."));
@@ -351,6 +382,16 @@ void SourceToolsDialog::navigateCamera()
   if (const auto eye = cameraEye())
   {
     emit navigateToPosition(*eye);
+  }
+}
+
+void SourceToolsDialog::navigateCameraView()
+{
+  const auto eye = cameraEye();
+  const auto direction = cameraViewDirection();
+  if (eye && direction)
+  {
+    emit navigateToCameraView(*eye, *direction);
   }
 }
 
