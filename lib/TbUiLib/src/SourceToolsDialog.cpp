@@ -69,7 +69,6 @@ SourceToolsDialog::SourceToolsDialog(
   QWidget* parent, QString savedVmf, const SourceBspTarget target)
   : QDialog{parent}
   , m_savedVmf{std::move(savedVmf)}
-  , m_target{target}
 {
   setWindowTitle(tr("Native Source tools — saved VMF snapshot"));
   resize(850, 650);
@@ -128,6 +127,14 @@ SourceToolsDialog::SourceToolsDialog(
   packLayout->addWidget(policy);
   auto* form = new QFormLayout{};
   packLayout->addLayout(form);
+  m_packTarget = new QComboBox{packPage};
+  m_packTarget->setObjectName("sourcePackTarget");
+  m_packTarget->addItems(
+    {tr("Generic / unknown compatibility"),
+     tr("Classic CSS — VBSP 20"),
+     tr("Strata — VBSP 25")});
+  m_packTarget->setCurrentIndex(static_cast<int>(target));
+  form->addRow(tr("Optional BSP contract (not VMF version)"), m_packTarget);
   auto* rootRow = new QWidget{packPage};
   auto* rootLayout = new QHBoxLayout{rootRow};
   rootLayout->setContentsMargins(0, 0, 0, 0);
@@ -189,6 +196,11 @@ SourceToolsDialog::SourceToolsDialog(
   connect(
     m_customRoot, &QLineEdit::textChanged, this, &SourceToolsDialog::invalidatePlan);
   connect(m_bsp, &QLineEdit::textChanged, this, &SourceToolsDialog::invalidatePlan);
+  connect(
+    m_packTarget,
+    &QComboBox::currentIndexChanged,
+    this,
+    &SourceToolsDialog::invalidatePlan);
   connect(m_rights, &QCheckBox::toggled, this, &SourceToolsDialog::invalidatePlan);
   connect(m_approval, &QCheckBox::toggled, this, &SourceToolsDialog::updateExportEnabled);
   connect(m_review, &QPushButton::clicked, this, &SourceToolsDialog::createPlan);
@@ -403,7 +415,7 @@ void SourceToolsDialog::invalidatePlan()
   m_export->setEnabled(false);
   m_review->setEnabled(
     m_document.has_value() && m_rights->isChecked()
-    && !m_customRoot->text().trimmed().isEmpty());
+    && !m_customRoot->text().trimmed().isEmpty() && m_packTarget->currentIndex() >= 0);
   m_packText->setPlainText(tr(
     "No reviewed plan. Choose custom-only content, acknowledge rights, then "
     "discover.\nInstalled stock assets are not automatically "
@@ -430,18 +442,19 @@ void SourceToolsDialog::createPlan()
     options.redistributionRightsAcknowledged = m_rights->isChecked();
     if (!m_bsp->text().trimmed().isEmpty())
     {
+      const auto target = static_cast<SourceBspTarget>(m_packTarget->currentIndex());
       auto error = QString{};
-      if (!SourceBuild::validateBsp(m_bsp->text(), m_target, error))
+      if (!SourceBuild::validateBsp(m_bsp->text(), target, error))
       {
         m_packText->setPlainText("BSP refused: " + error);
         return;
       }
       options.compiledBsp = pathFromQString(m_bsp->text());
-      if (m_target == SourceBspTarget::Css20)
+      if (target == SourceBspTarget::Css20)
       {
         options.compiledBspExpectedVersion = 20;
       }
-      else if (m_target == SourceBspTarget::Strata25)
+      else if (target == SourceBspTarget::Strata25)
       {
         options.compiledBspExpectedVersion = 25;
       }

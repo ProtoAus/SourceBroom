@@ -41,6 +41,7 @@ class QLabel;
 class QSplitter;
 class QTimer;
 class QToolBar;
+class QVector3D;
 
 namespace tb
 {
@@ -365,6 +366,8 @@ public:
   void toggleMaximizeCurrentView();
   bool currentViewMaximized() const;
 
+  bool canInspectSourceTools() const;
+  void showSourceToolsDialog();
   void showCompileDialog();
   bool closeCompileDialog();
   void rerunLastCompilation();
@@ -390,6 +393,8 @@ public:
   MapViewBase* currentMapViewBase();
 
 private:
+  void navigateSourcePosition(const QVector3D& position);
+  void navigateSourceCameraView(const QVector3D& position, const QVector3D& direction);
   const mdl::CompilationProfile* lastCompilationProfile() const;
   void setLastCompilationProfileName(std::string name);
   void loadLastCompilationProfileName();

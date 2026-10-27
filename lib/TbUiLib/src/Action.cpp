@@ -57,6 +57,7 @@ bool readOnlyVmfActionAllowed(const std::filesystem::path& preferencePath)
         "Menu/View/Toggle Info Panel",
         "Menu/View/Toggle Inspector",
         "Menu/View/Maximize Current View",
+        "Menu/Run/Source Tools...",
         "Controls/Map view/Reveal in texture browser",
         "Controls/Map view/Cycle map view",
         "Controls/Map view/Reset camera zoom",

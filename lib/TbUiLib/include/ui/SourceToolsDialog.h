@@ -28,7 +28,6 @@ class SourceToolsDialog : public QDialog
   Q_OBJECT
 private:
   QString m_savedVmf;
-  SourceBspTarget m_target;
   std::optional<mdl::VmfDocument> m_document;
   mdl::SourceEditorMetadata m_metadata;
   std::optional<mdl::SourceDependencyPackPlan> m_plan;
@@ -38,6 +37,7 @@ private:
   QPushButton* m_goCameraView;
   QLineEdit* m_customRoot;
   QLineEdit* m_bsp;
+  QComboBox* m_packTarget;
   QCheckBox* m_rights;
   QCheckBox* m_approval;
   QPlainTextEdit* m_packText;
@@ -46,6 +46,7 @@ private:
 
 public:
   SourceToolsDialog(QWidget* parent, QString savedVmf, SourceBspTarget target);
+  const QString& savedVmf() const { return m_savedVmf; }
 
 signals:
   void navigateToPosition(const QVector3D& position);

@@ -106,7 +106,9 @@
 #include "ui/RenderView.h"
 #include "ui/ReplaceMaterialDialog.h"
 #include "ui/SignalDelayer.h"
+#include "ui/SourceBuild.h"
 #include "ui/SourceBuildDialog.h"
+#include "ui/SourceToolsDialog.h"
 #include "ui/Splitter.h"
 #include "ui/SwitchableMapViewContainer.h"
 #include "ui/VertexTool.h"
@@ -2151,6 +2153,62 @@ bool MapWindow::currentViewMaximized() const
   return m_mapView->currentViewMaximized();
 }
 
+bool MapWindow::canInspectSourceTools() const
+{
+  const auto& map = m_document->map();
+  return map.persistent() && map.worldNode().mapFormat() == mdl::MapFormat::SourceVMF;
+}
+
+void MapWindow::showSourceToolsDialog()
+{
+  if (!canInspectSourceTools())
+  {
+    return;
+  }
+  const auto savedVmf = pathAsQString(m_document->map().path());
+  for (auto* dialog :
+       findChildren<SourceToolsDialog*>(QString{}, Qt::FindDirectChildrenOnly))
+  {
+    if (dialog->savedVmf() == savedVmf)
+    {
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+  }
+  // Inspect the saved snapshot; never autosave the live document or create a builder.
+  auto* dialog =
+    new SourceToolsDialog{this, savedVmf, loadSourceBuildSettings().bspTarget};
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  connect(
+    dialog,
+    &SourceToolsDialog::navigateToPosition,
+    this,
+    &MapWindow::navigateSourcePosition);
+  connect(
+    dialog,
+    &SourceToolsDialog::navigateToCameraView,
+    this,
+    &MapWindow::navigateSourceCameraView);
+  dialog->show();
+}
+
+void MapWindow::navigateSourcePosition(const QVector3D& position)
+{
+  m_mapView->moveCameraToPosition(
+    vm::vec3f{position.x(), position.y(), position.z()}, true);
+}
+
+void MapWindow::navigateSourceCameraView(
+  const QVector3D& position, const QVector3D& direction)
+{
+  m_mapView->moveCameraToPosition(
+    vm::vec3f{position.x(), position.y(), position.z()},
+    true,
+    vm::vec3f{direction.x(), direction.y(), direction.z()});
+}
+
 void MapWindow::showCompileDialog()
 {
   if (m_document->map().isReadOnlyVmfPreview())
@@ -2165,19 +2223,15 @@ void MapWindow::showCompileDialog()
       auto* dialog =
         showSourceBuildDialog(this, pathAsQString(m_document->map().path()), false);
       connect(
-        dialog, &SourceBuildDialog::navigateToPosition, this, [this](const QVector3D& p) {
-          m_mapView->moveCameraToPosition(vm::vec3f{p.x(), p.y(), p.z()}, true);
-        });
+        dialog,
+        &SourceBuildDialog::navigateToPosition,
+        this,
+        &MapWindow::navigateSourcePosition);
       connect(
         dialog,
         &SourceBuildDialog::navigateToCameraView,
         this,
-        [this](const QVector3D& position, const QVector3D& direction) {
-          m_mapView->moveCameraToPosition(
-            vm::vec3f{position.x(), position.y(), position.z()},
-            true,
-            vm::vec3f{direction.x(), direction.y(), direction.z()});
-        });
+        &MapWindow::navigateSourceCameraView);
       connect(dialog, &SourceBuildDialog::showLeak, this, [this](const QString& path) {
         m_document->loadPointFile(pathFromQString(path));
         if (m_document->isPointFileLoaded())

@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.28 — saved camera eye-and-look navigation
+# Try Windows SourceBroom A5.29 — direct saved Source tools
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,11 +20,39 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.28: go to the saved camera view, not only its eye
+## A5.29: inspect saved native tools without opening Compile
 
-On a saved native VMF, open **Run -> Compile -> Native metadata / Custom
-package…**, choose a valid camera and press **Go to camera view**. It uses the
-saved eye and look direction; the old **Go to camera eye** still preserves your
+Open a saved native VMF and choose **Run -> Source Tools (Saved VMF)...**. This
+works in normal editing and an explicitly chosen read-only compatibility preview.
+It reads the SAVED snapshot, not current unsaved drafts, and does not autosave,
+create a compiler or enable Compile/Launch. Reopening reuses that saved path's
+dialog; use its explicit reload when appropriate. New unsaved and non-native maps
+have no saved-tools authority. Metadata and camera records remain read-only.
+
+The custom-package tab exposes the optional BSP's **output contract (not VMF
+version)**: Generic/unknown, CSS20 or Strata25. It initially uses saved build
+preferences but a local change does not save them. Changing the contract clears
+plan approval; an invalid selection disables discovery. Explicit custom-only
+rights, immutable-plan review, bounded readers and new-ZIP-only writing remain.
+Generic is not a game/branch certification or automatic installed-asset packing.
+
+Actual builds have zero compiler warning/error lines. Tools132 and native Qt
+menu -> dialog -> camera75 assertions pass, including readonly compile denial,
+legacy eye/view behavior, dialog reuse and unchanged live/native/file state.
+Regular offscreen UI61/61 passes. App50 and Model299/Render28/GL21/GPU2693 are
+retained prior boundaries, not new A5.29 runs. Parent review is not independent,
+new human/Hammer or all-layout acceptance. Keep whole A5.28/A5.25 recovery.
+
+**Small optional owner check (pending):** on a copied saved VMF, open this direct
+menu and confirm it is reachable without a save/compile step. If the map offers
+an explicit read-only preview, the tools should still open while Compile/Launch
+remain disabled. No edit/save or hunt for a map is needed. See [lextest](../../lextest.md).
+
+## Retained A5.28: go to the saved camera view, not only its eye
+
+On a saved native VMF, use the direct Source Tools menu above (the older Compile
+route remains for editable VMFs), choose a valid camera and press **Go to camera
+view**. It uses the saved eye and look direction; the old **Go to camera eye** still preserves your
 current direction. These are saved-file snapshot tools: reload after saving.
 No camera records, active-camera metadata, map history, geometry or file bytes
 are written. Current projection/FOV/zoom remain; this is not camera authoring,

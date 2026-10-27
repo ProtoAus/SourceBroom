@@ -33,7 +33,17 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.28 candidate:** separate saved camera eye+look navigation, retaining
+- **A5.29 candidate:** direct saved native Source Tools entry, including explicit
+  read-only previews, without autosaving current drafts or creating/enabling a
+  compiler/launcher. New/non-native documents remain refused; repeated entry
+  preserves the same-path dialog/review. Local optional-BSP target changes clear
+  approval without saving build settings; existing rights/header/budget gates
+  remain. Tools132, native Qt menu-to-root75 and regular offscreen UI61/61 pass;
+  product/UI builds have zero compiler warning/error lines on eight fingerprints.
+  App50 and Model299/Render28/GL21/GPU2693 are retained prior boundaries, not new
+  runs. Direct parent review only; owner/Hammer acceptance pending. No camera
+  authoring/persistence or full Source claim. Keep whole A5.28/A5.25 recovery.
+- **Retained A5.28 candidate:** separate saved camera eye+look navigation, retaining
   eye-only behavior and existing unsafe-target guards. Double-before-float
   direction, opposite/vertical heading, pending position animation, Qt forwarding
   and original map/file preservation act. Tools118/actual MapWindow26 and full

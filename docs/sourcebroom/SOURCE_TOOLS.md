@@ -5,7 +5,30 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Saved camera eye-and-look navigation — A5.28
+## Direct saved-source entry — A5.29
+
+**Run -> Source Tools (Saved VMF)...** opens the saved native snapshot directly,
+including on explicit read-only compatibility previews. It does not autosave
+current drafts, edit metadata, create a builder or enable Compile/Launch. New
+unsaved and non-native documents are refused by both menu and controller. Repeat
+entry reuses the same saved path's dialog/review state; reload is explicit. The
+older Compile-dialog tools entry remains for editable VMFs.
+
+The package tab's local optional-BSP contract uses the existing Generic/unknown,
+CSS20 and Strata25 validation policies. It initially reflects saved build settings
+but changes are not persisted there. A target change invalidates reviewed-plan
+approval; no selection disables discovery. Rights acknowledgement, bounded saved
+reader, exact immutable inputs, incomplete-assessment warning and new-ZIP-only
+writing remain. No branch certification or installed stock-asset resolver added.
+
+Native Qt menu -> dialog -> root eye/view75 and Tools132 assertions pass. Regular
+offscreen UI61/61 and actual product/UI builds pass with zero compiler warning/
+error lines; eight code fingerprints/direct parent review are not independent,
+human/Hammer or all-layout proof. App50 and Model299/Render28/GL21/GPU2693 are
+retained boundaries, not new runs. The small direct-menu owner check remains
+pending in [lextest](../../lextest.md). Keep whole A5.28/A5.25 recovery kits.
+
+## Retained saved camera eye-and-look navigation — A5.28
 
 In the saved native metadata tab, **Go to camera view** uses the selected camera's
 safe eye and look direction. **Go to camera eye** remains separate and preserves

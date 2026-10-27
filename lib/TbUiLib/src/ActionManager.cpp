@@ -1930,6 +1930,17 @@ void ActionManager::createViewMenu()
 void ActionManager::createRunMenu()
 {
   auto& runMenu = createMainMenu("Run");
+  runMenu.addItem(addAction(
+    Action{
+      "Menu/Run/Source Tools...",
+      "Source Tools (Saved VMF)...",
+      ActionContext::Any,
+      KeySequence{},
+      [](auto& context) { context.mapWindow().showSourceToolsDialog(); },
+      [](const auto& context) {
+        return context.hasDocument() && context.mapWindow().canInspectSourceTools();
+      },
+    }));
   runMenu.addItem(addAction(Action{
     "Menu/Run/Compile...",
     "Compile Map...",

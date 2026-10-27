@@ -21,7 +21,46 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Saved camera eye-and-look navigation — A5.28
+## Direct saved SourceTools access — A5.29
+
+The Run menu's Source Tools (Saved VMF) entry requires a persistent native VMF,
+not editable-scene authority. Controller repeats the guard and NEVER calls save,
+build or launch. Add ONLY its exact action path to readOnlyVmfActionAllowed, not
+the Run prefix: Compile/Launch remain denied. Reuse direct-child dialogs by their
+immutable saved path; a different Save As path does not discard an old review.
+Both this entry and SourceBuildDialog use the same typed MapWindow eye/pose
+handlers; navigation has no new metadata/history/native-write authority.
+
+SourceTools receives the existing saved build target (default Generic/unknown).
+Its explicit local combo replaces duplicated stored target state. The same BSP
+header/version validators apply. Changing target invalidates the immutable plan
+and approval, invalid no-selection disables discovery, and no build settings are
+saved. Metadata remains independent of optional BSP contract and pack consent.
+
+Actual tests-only RED: Tools115/116 (new selector absent), corrected Root18/22
+(four missing-action checks across normal/readonly and new native/non-native).
+First native-new fixture lacked its required starter; an OWN binary starter fixes
+only the oracle. Initial Qt PATH failure was Catch discovery0xc0000135, not RED.
+First implemented Root53/54 exposed the missing exact readonly whitelist; only
+that path was added. Tools132 and native Qt clicked-through Root75 now pass,
+including unchanged unsaved scene/modification count/original binary bytes.
+
+Final actual product/UI build has zero compiler warning/error lines; own test
+path-shadow warning was renamed, not suppressed. Full regular UI61/61 passes.
+This suite's EXISTING contract is QT_QPA_PLATFORM=offscreen with configured Qt bin
+on PATH and source cwd. Omitting offscreen made the existing shown-visgroup test
+try native shader lookup; its test target copies images, not shader resources,
+so kdl::with_istream failed. Exact A5.28 working invocation was recovered; no
+product fix or claim of intermittent preferences repair. Keep failed logs and
+distinguish this from opt-in native GPU tests/whole-kit native smoke evidence.
+
+Eight compiled code fingerprints, changed-range UTF8 format/diff and complete
+direct parent review are not independent, clean-tidy, human/Hammer or all-layout
+proof. App50 (A5.28), Model299/Render28/GL21/GPU2693 (A5.27) and native corpus
+controls (A5.26) are retained unchanged-boundary evidence, not re-dated runs.
+No full native camera authoring/persistence or complete Source support claim.
+
+## Retained saved camera eye-and-look navigation — A5.28
 
 New Go to camera view is separate from legacy eye-only navigation. Saved-file
 SourceTools metadata emits eye+unit direction, forwarded through SourceBuildDialog

@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.28 saved camera eye-and-look navigation:
+**Status:** Windows A5.29 direct saved Source tools, including read-only previews:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,19 +39,33 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.28 adds **Go to camera view** beside the unchanged **Go to camera eye** in
+A5.29 adds **Run -> Source Tools (Saved VMF)...**, independent of Compile, for
+saved native VMFs including explicitly read-only previews. It inspects the saved
+snapshot without saving current drafts, creating a builder or enabling Compile /
+Launch. Reopening the entry reuses that path's dialog and review state. New unsaved
+and non-native maps are refused. The custom-package tab now exposes its local
+Generic/unknown, CSS20 or Strata25 optional-BSP contract; changing it invalidates
+plan approval, not global build settings. Existing rights/budget/header guards stay.
+
+Actual product/UI builds have zero compiler warning/error lines. Tools132 and
+native Qt menu-to-dialog-to-root camera75 assertions pass; the regular offscreen
+UI suite is61/61. Eight compiled code fingerprints and direct parent review do
+not establish independent/Hammer, human, all-layout or performance acceptance.
+App50 is retained A5.28 evidence; Model299/Render28/GL21/GPU2693 are retained
+A5.27 boundaries, not new runs. Use the whole A5.29 kit on copies and retain whole
+A5.28 and owner-confirmed A5.25 recovery. Full Source support remains in progress.
+
+Retained A5.28 adds **Go to camera view** beside the unchanged **Go to camera eye** in
 saved native metadata. It uses the saved eye and look direction without editing
 camera records, active camera, geometry, history or file bytes. Projection/zoom
 stay current; unsafe/missing/degenerate targets remain disabled. Direction is
 normalized in double before float conversion, including close targets at large
 eye coordinates. Opposite/vertical views and pending position animation act.
 
-Actual product/UI consumers build with no compiler warning/error lines. Focused
-Tools118 and actual MapWindow camera26 assertions, full UI60/App50 pass on18
-compiled code fingerprints. Model299/Render28/GL21/GPU2693 are retained A5.27
-unchanged-boundary evidence, not new counts. Parent review is not independent or
-new human/Hammer acceptance. Use whole A5.28 on copies; keep whole A5.27/A5.26
-and owner-confirmed A5.25 recovery. Full Source support remains in progress.
+Historical A5.28 product/UI builds, Tools118/MapWindow26 and full UI60/App50
+pass on18 compiled fingerprints. Its separate dialog/root arms did not establish
+a single clicked-through GUI path; A5.29 above now covers that direct entry in
+both editable and read-only modes. These are not human/Hammer acceptance.
 
 Retained A5.27 previews finite scalar VMT `$alpha`0..1 on supported basic shaders
 with explicit `$translucent 1` and no cutout/terrain layers. The multiplier travels

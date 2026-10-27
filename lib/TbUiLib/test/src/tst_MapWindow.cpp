@@ -73,6 +73,7 @@
 #include "mdl/Map.h"
 #include "mdl/MapFormat.h"
 #include "mdl/Map_Assets.h"
+#include "mdl/Map_Entities.h"
 #include "mdl/Map_Groups.h"
 #include "mdl/Map_NativeVisgroups.h"
 #include "mdl/Map_Nodes.h"
@@ -91,6 +92,10 @@
 #include "ui/MapWindow.h"
 #include "ui/MaterialCollectionEditor.h"
 #include "ui/NativeVisgroupEditor.h"
+#include "ui/QPathUtils.h"
+#include "ui/SourceBuild.h"
+#include "ui/SourceBuildDialog.h"
+#include "ui/SourceToolsDialog.h"
 #include "ui/SwitchableMapViewContainer.h"
 #include "ui/TabBook.h"
 
@@ -127,6 +132,174 @@ public:
   }
   ~NativeGroupSettingsScope() { QSettings::setDefaultFormat(m_previous); }
 };
+
+TEST_CASE("Source tools direct saved action is safe for read-only and unsaved maps")
+{
+  auto env = fs::TestEnvironment{};
+  auto settings = NativeGroupSettingsScope{env.dir()};
+  auto fixture = AppControllerFixture{};
+  auto& app = fixture.appController();
+  SECTION("saved native snapshots work in editable and explicit read-only modes")
+  {
+    const auto preview = GENERATE(false, true);
+    INFO("read-only snapshot preview: " << preview);
+    const auto source = std::string{
+      "world { id 1 classname worldspawn }\n"
+      "cameras { activecamera 0 camera { position \"[40 50 60]\" look \"[40 60 60]\" } "
+      "}\n"};
+    const auto path = env.dir() / "source-tools.vmf";
+    {
+      auto stream = std::ofstream{path, std::ios::binary};
+      stream << source;
+      REQUIRE(stream);
+    }
+    auto loaded = MapDocument::loadDocument(
+      app.environmentConfig(),
+      mdl::QuakeGameInfo,
+      mdl::MapFormat::SourceVMF,
+      vm::bbox3d{8192},
+      path,
+      app.taskManager(),
+      app.glManager().resourceManager(),
+      preview);
+    REQUIRE(loaded.is_success());
+    auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+    auto& map = window.document().map();
+    REQUIRE(map.isReadOnlyVmfPreview() == preview);
+    if (!preview)
+    {
+      REQUIRE(mdl::setEntityProperty(map, "unsaved_tools_probe", "draft"));
+    }
+    const auto modifications = map.modificationCount();
+    const auto before = map.vmfScene()->serialize(map.worldNode());
+    if (preview)
+    {
+      for (const auto* actionPath : {"Menu/Run/Compile...", "Menu/Run/Launch..."})
+      {
+        auto* blocked = window.findAction(actionPath);
+        REQUIRE(blocked);
+        CHECK_FALSE(blocked->isEnabled());
+      }
+      window.showCompileDialog();
+      CHECK_FALSE(window.findChild<SourceBuildDialog*>());
+      CHECK_FALSE(window.findChild<SourceBuild*>());
+    }
+    auto legacy =
+      SourceToolsDialog{nullptr, pathAsQString(path), SourceBspTarget::Generic};
+    auto* oldEye = legacy.findChild<QPushButton*>("sourceMetadataGoCamera");
+    REQUIRE(oldEye);
+    REQUIRE(oldEye->isEnabled());
+    auto* action = window.findAction("Menu/Run/Source Tools...");
+    CHECK(action);
+    if (action)
+    {
+      REQUIRE(action->isEnabled());
+      action->trigger();
+      QApplication::processEvents();
+      auto* tools = window.findChild<SourceToolsDialog*>();
+      REQUIRE(tools);
+      CHECK(window.findChildren<SourceToolsDialog*>().size() == 1);
+      action->trigger();
+      QApplication::processEvents();
+      CHECK(window.findChild<SourceToolsDialog*>() == tools);
+      CHECK(window.findChildren<SourceToolsDialog*>().size() == 1);
+      CHECK_FALSE(window.findChild<SourceBuildDialog*>());
+      CHECK_FALSE(window.findChild<SourceBuild*>());
+      auto* target = tools->findChild<QComboBox*>("sourcePackTarget");
+      REQUIRE(target);
+      CHECK(
+        target->currentIndex() == static_cast<int>(loadSourceBuildSettings().bspTarget));
+      auto* views = window.findChild<SwitchableMapViewContainer*>();
+      REQUIRE(views);
+      views->moveCameraToPosition(vm::vec3f{}, false, vm::vec3f{-1, 0, 0});
+      auto* eye = tools->findChild<QPushButton*>("sourceMetadataGoCamera");
+      auto* view = tools->findChild<QPushButton*>("sourceMetadataGoCameraView");
+      REQUIRE(eye);
+      REQUIRE(view);
+      eye->click();
+      QTest::qWait(MapViewBase::DefaultCameraAnimationDuration + 80);
+      CHECK(
+        vm::length(views->perspectiveCamera().position() - vm::vec3f{40, 50, 60})
+        < 0.0001f);
+      CHECK(views->perspectiveCamera().direction() == vm::vec3f{-1, 0, 0});
+      view->click();
+      QTest::qWait(MapViewBase::DefaultCameraAnimationDuration + 80);
+      CHECK(
+        vm::length(views->perspectiveCamera().direction() - vm::vec3f{0, 1, 0})
+        < 0.00001f);
+      CHECK(map.modificationCount() == modifications);
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == before);
+      auto original = std::ifstream{path, std::ios::binary};
+      CHECK(
+        std::string{
+          std::istreambuf_iterator<char>{original}, std::istreambuf_iterator<char>{}}
+        == source);
+    }
+  }
+  SECTION("unsaved native and non-native documents have no saved-tools entry authority")
+  {
+    const auto format = GENERATE(mdl::MapFormat::SourceVMF, mdl::MapFormat::Standard);
+    auto gameInfo = mdl::QuakeGameInfo;
+    if (format == mdl::MapFormat::SourceVMF)
+    {
+      const auto starter = env.dir() / "starter.vmf";
+      auto stream = std::ofstream{starter, std::ios::binary};
+      stream << "world { id 1 classname worldspawn }";
+      REQUIRE(stream);
+      stream.close();
+      gameInfo.gameConfig.fileFormats = {{"Source VMF", starter}};
+    }
+    auto created = MapDocument::createDocument(
+      app.environmentConfig(),
+      gameInfo,
+      format,
+      vm::bbox3d{8192},
+      app.taskManager(),
+      app.glManager().resourceManager());
+    REQUIRE(created.is_success());
+    auto window = MapWindow{app, std::move(created) | kdl::value()};
+    CHECK_FALSE(window.document().map().persistent());
+    auto* action = window.findAction("Menu/Run/Source Tools...");
+    CHECK(action);
+    if (action)
+    {
+      CHECK_FALSE(action->isEnabled());
+      action->trigger();
+      window.showSourceToolsDialog();
+      QApplication::processEvents();
+      CHECK_FALSE(window.findChild<SourceToolsDialog*>());
+      CHECK_FALSE(window.findChild<SourceBuild*>());
+    }
+  }
+  SECTION("saved non-native maps are refused by menu and controller")
+  {
+    const auto path = env.dir() / "other.map";
+    {
+      auto stream = std::ofstream{path, std::ios::binary};
+      stream << "{\n\"classname\" \"worldspawn\"\n}\n";
+      REQUIRE(stream);
+    }
+    auto loaded = MapDocument::loadDocument(
+      app.environmentConfig(),
+      mdl::QuakeGameInfo,
+      mdl::MapFormat::Standard,
+      vm::bbox3d{8192},
+      path,
+      app.taskManager(),
+      app.glManager().resourceManager());
+    REQUIRE(loaded.is_success());
+    auto window = MapWindow{app, std::move(loaded) | kdl::value()};
+    REQUIRE(window.document().map().persistent());
+    auto* action = window.findAction("Menu/Run/Source Tools...");
+    REQUIRE(action);
+    CHECK_FALSE(action->isEnabled());
+    action->trigger();
+    window.showSourceToolsDialog();
+    QApplication::processEvents();
+    CHECK_FALSE(window.findChild<SourceToolsDialog*>());
+    CHECK_FALSE(window.findChild<SourceBuild*>());
+  }
+}
 
 TEST_CASE("Source camera view actual MapWindow moves eye and heading without map edits")
 {

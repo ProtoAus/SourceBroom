@@ -4,6 +4,21 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.29 direct saved Source tools — pending small owner check
+
+Use whole A5.29 on a COPY; keep whole A5.28 and owner-confirmed A5.25 recovery.
+No A5.29 owner observation received. Tools132, native Qt menu-to-root75 and
+regular offscreen UI61/61 are not human or matching-Hammer acceptance.
+
+- [ ] On a saved copied VMF, choose **Run -> Source Tools (Saved VMF)...** and
+  confirm the tools open without a save/compile step. If that map offers explicit
+  read-only preview, this entry should still open while Compile/Launch stay
+  disabled. No edit/save or hunt for a special map is needed.
+- [ ] If it already has a valid saved camera, the A5.28 eye-versus-view comparison
+  below can use this direct entry. This does not author cameras or import FOV.
+
+All pending; no all-map/layout/branch or measured performance claim.
+
 ## A5.28 saved camera view navigation — pending small 3D owner check
 
 Use whole A5.28 on a COPY; keep whole A5.27/A5.26 and owner-confirmed A5.25

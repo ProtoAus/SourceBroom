@@ -1,11 +1,43 @@
-# SourceBroom validation — A5.28 saved camera eye-and-look navigation
+# SourceBroom validation — A5.29 direct saved Source tools
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.28 — readonly saved camera view navigation
+## A5.29 — direct saved tools without compile or autosave authority
+
+- Actual tests-only Tools115/116 reaches real rights/discovery/approval before
+  failing the absent target selector. Corrected Root18/22 has four missing-action
+  failures across saved editable/readonly and new native/non-native documents.
+  The first new-native fixture lacked the required profile starter; adding an
+  owned binary starter fixes the fixture, not the product. Failed logs remain.
+- First implementation Tools132 passes; Root53/54 exposes the genuine exact-path
+  readonly filter omission. Whitelist ONLY Source Tools, not Run/Compile/Launch.
+  Final native Qt QAction -> SourceTools -> root camera75 assertions pass: saved
+  eye and view act, repeat entry reuses the dialog, readonly build commands stay
+  denied, new/non-native guard works even on direct controller calls. Unsaved
+  live serialization/modification count and original binary file stay unchanged.
+- Target changes clear plan approval, invalid target blocks discovery, existing
+  Generic/CSS20/Strata25 validators remain and global build settings stay unchanged.
+  Metadata reading does not need compiler/launch or rights consent.
+- Final product/UI build has zero compiler warning/error lines. The own shadowed
+  test variable was renamed without suppression. Full regular offscreen UI61/61
+  passes on eight compiled code fingerprints and complete direct parent review.
+  Initial Catch discovery without Qt PATH and empty-hunk formatter range errors
+  were infrastructure, not feature RED. Omitting the prior offscreen UI contract
+  caused the existing shown-visgroup test to lack native shader resources; the
+  supported invocation was recovered and restored. This was NOT established as
+  intermittent preference IO; old failures remain, no unrelated product repair.
+- No new metadata/activecamera/native-authoring, geometry, rendering/performance,
+  full-Hammer or all-layout acceptance. Prior App50 (A5.28), Model299/Render28/GL21/
+  GPU2693 (A5.27) and native38/35+same3/38 controls (A5.26) remain retained, not new
+  or re-dated measurements. Existing preference rename issue is not proven fixed.
+
+Whole-kit native smoke, exact source/artifact receipt and small owner direct-menu
+check are separate boundaries; see lextest.md. Full Source support is not complete.
+
+## Retained A5.28 — readonly saved camera view navigation
 
 - Actual proto/default-only Tools78/80: old eye/control forwarding acts; new
   buttons absent. Concrete MapWindow19/22: actual eye position moves but two
