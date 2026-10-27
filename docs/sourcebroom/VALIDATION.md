@@ -1,11 +1,37 @@
-# SourceBroom validation — A5.32 active3D camera draft capture
+# SourceBroom validation — A5.33 native displacement position seams
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.32 — read-only capture into a live camera draft
+## A5.33 — same-power single-edge position seams
+
+- Tests-only actual inspector build0 and runtime missing-button RED after120
+  acting legacy/native base movement/height controls. No compile-failure credit.
+- Model177/2 passes: same/reversed unique edge, absent offset initialization,
+  unchanged interiors/distance/alpha/baseUV/triangles, lexical save/reopen, no-op,
+  ambiguous/disconnected/partial/aliased/self/power refusal, maximum65x65 and
+  atomic later bounds failure. Planner admission is not SDK neighbor/topology proof.
+- Actual inspector170/1 includes one-command edge averaging, idempotence, Undo/
+  Redo, stale selection before queued refresh, Save As/reopen/repeat save and
+  actual readonly UI/backend refusal. New button starts disabled until valid
+  selection notification/deferred refresh; tests connect before selection.
+- Full Model314/App50 pass on eight held compiled fingerprints. Earlier UI64
+  passed; latest full UI63/64 only has untouched known QPreferenceStore245 Unicode
+  rename AccessDenied. No skip/suppression/fix or new isolated claim; seam170 still
+  passes in that actual full run. Current targets build without compiler diagnostics. Own test-shadow warning renamed,
+  not suppressed; failure/default-state/setup logs retained. Changed-range format,
+  diff-check/direct parent review are not independent/clean-LSP/tidy/human/Hammer.
+- Reader and serializer function bodies match A5.31 exactly; retain corpus
+  document38/strict35+same3 reasons/preview38, not fresh runs. New batch seam
+  writes use its existing offsets and structural emitter; loader proof is separate.
+  A527 renderer/GPU results remain retained boundaries, not new equivalence.
+
+No smooth-normal weld, neighbor generation, general sculpt/power/topology editing,
+performance/compiler or full Source claim. Owner check pending in lextest.md.
+
+## Retained A5.32 — read-only capture into a live camera draft
 
 - Tests-only Root UI build0 and missing-capture runtime RED after35 acting native
   camera/history/view/input assertions; no compile failure or test toggle.

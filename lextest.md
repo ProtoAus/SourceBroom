@@ -4,6 +4,20 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.33 displacement position seams — pending small owner check
+
+No new owner observation. Whole A5.33 on COPY only; keep A5.32/A5.31/A5.25 recovery.
+Model177/inspector170, full Model314/App50, current UI63/64 known unrelated
+preference rename (earlier64pass retained) and old corpus are not human/Hammer proof.
+
+- [ ] Select two same-power native displacement faces with one shared base edge
+  but differing edge heights. Sew selected displacement position seam, then Undo:
+  positions should meet and return, without changing stored distance/alpha.
+- [ ] Optional separate Save As a NEW copy and matching-Hammer check. No smooth
+  normal weld, neighbor metadata or guaranteed compiler validity is claimed.
+
+Pending only; no general sculpt, all-layout/full-branch or performance acceptance.
+
 ## A5.32 current3D camera draft — pending small owner check
 
 No new owner observation. Whole A5.32 on copies; retain A5.31/A5.30/A5.25 recovery.

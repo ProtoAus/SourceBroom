@@ -109,6 +109,8 @@ private:
   QAbstractButton* m_applyDisplacementOffset = nullptr;
   QAbstractButton* m_initializeDisplacementOffsets = nullptr;
   QLabel* m_displacementOffsetStatus = nullptr;
+  QAbstractButton* m_sewDisplacements = nullptr;
+  std::optional<std::size_t> m_sewIntent;
   struct DisplacementOffsetIntent
   {
     std::size_t generation;

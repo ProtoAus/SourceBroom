@@ -5,7 +5,39 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Read the active3D view into a camera draft — A5.32
+## Bounded displacement position-seam sewing — A5.33
+
+Select exactly two compatible native displacement faces; **Sew selected displacement
+position seam** averages their corresponding edge positions using XYZ offsets.
+The pure planner requires same power, one unambiguous full shared base edge and
+all base samples within existing1e-6 TransformEpsilon; reverse orientation works.
+Self/overlapping ambiguity, vertex-only/disconnected/partial overlap, different
+power or protected offset data refuse. Already-close position seams are no-ops.
+
+Sew stages both meshes, uses overflow-safe scalar midpoints, explicitly initializes
+absent zero rows only for a changed seam, rebuilds once per copy and checks native
+representability before two nothrow assignments. Later bounds failure cannot edit
+only one mesh. Distance/alpha, other positions, base UV, triangles, IDs and unknown
+metadata stay independent. Derived normals/bounds/picking follow actual positions.
+
+Production multi-face preflight/content swap provides one non-collating command,
+Undo/Redo, Save As/reopen/repeat save. UI starts disabled, invalidates synchronously
+on selection/backend changes before deferred refresh and rejects stale releases.
+Read-only preview cannot obtain either UI or backend sewing authority.
+
+Model177/2 and actual inspector170/1 pass, including acting movement/height controls,
+rotated correspondence,65x65 maximum, rejection/atomic rollback, no-op/Undo/Redo,
+Save As/reopen and preview. Full Model314/App50 pass. Earlier UI64 passed; latest
+UI63/64 has only the untouched known preference rename failure, no skip/suppression
+or fix. Zero compiler diagnostics on eight compiled fingerprints. Direct parent review is not independent/clean-LSP/
+tidy, all-layout/human/Hammer. Exact reader/serializer bodies remain A5.31; retain
+its corpus38/35+same3/38, no rerun/re-date. Current installed-loader proof is separate.
+
+This is a POSITION seam, not smooth-normal welding, SDK neighbor data, general
+sculpt/sew or power/topology changes, nor guaranteed compiler validity. Pending
+[owner check](../../lextest.md); keep whole A5.32/A5.31/A5.25 recovery.
+
+## Retained active3D camera draft capture — A5.32
 
 The LIVE native camera panel can read this MapWindow's current perspective eye
 and an absolute look target64 units along its heading into the editable draft.

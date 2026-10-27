@@ -115,6 +115,9 @@ public:
   bool canInitializeOffsets() const;
   void initializeOffsets();
   void setOffset(size_t row, size_t column, const vm::vec3d& offset);
+  bool canSewWith(const SourceDisplacement& other) const;
+  /** Same-power, unique full base edge only. Stages both meshes; false is a no-op. */
+  bool sewWith(SourceDisplacement& other);
   bool canEditDistances() const;
   bool canEditAlphas() const;
   bool canInitializeAlphas() const;

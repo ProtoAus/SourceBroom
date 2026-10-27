@@ -63,6 +63,8 @@ bool initializeSourceDisplacementAlphas(Map& map);
 bool setSourceDisplacementOffset(
   Map& map, size_t row, size_t column, const vm::vec3d& offset);
 bool initializeSourceDisplacementOffsets(Map& map);
+bool canSewSourceDisplacements(const Map& map);
+bool sewSourceDisplacements(Map& map);
 
 bool copyUv(
   Map& map,

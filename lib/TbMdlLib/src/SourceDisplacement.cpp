@@ -13,10 +13,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include <iomanip>
 #include <limits>
 #include <locale>
+#include <numeric>
 #include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <type_traits>
 
 namespace tb::mdl
 {
@@ -178,6 +180,68 @@ std::string numberText(const double value)
   out.imbue(std::locale::classic());
   out << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
   return out.str();
+}
+using SewEdge = std::vector<size_t>;
+using SewPlan = std::array<SewEdge, 2>;
+std::optional<SewPlan> planSew(
+  const SourceDisplacement& first, const SourceDisplacement& second)
+{
+  const auto size = first.size();
+  if (
+    &first == &second || size < 5
+    || size > (size_t{1} << SourceDisplacement::MaxPower) + 1 || size != second.size()
+    || first.power() != second.power() || first.positions().size() != size * size
+    || second.positions().size() != size * size
+    || first.basePositions().size() != size * size
+    || second.basePositions().size() != size * size
+    || !(first.canEditOffsets() || first.canInitializeOffsets())
+    || !(second.canEditOffsets() || second.canInitializeOffsets()))
+  {
+    return std::nullopt;
+  }
+  auto edges = std::array<SewEdge, 4>{};
+  for (size_t i = 0; i < size; ++i)
+  {
+    edges[0].push_back(i);
+    edges[1].push_back(i * size + size - 1);
+    edges[2].push_back((size - 1) * size + size - 1 - i);
+    edges[3].push_back((size - 1 - i) * size);
+  }
+  auto result = std::optional<SewPlan>{};
+  for (const auto& a : edges)
+  {
+    for (const auto& b : edges)
+    {
+      for (const auto reverse : {false, true})
+      {
+        auto candidate = b;
+        if (reverse)
+        {
+          std::reverse(candidate.begin(), candidate.end());
+        }
+        auto matches = true;
+        for (size_t i = 0; i < size; ++i)
+        {
+          if (
+            vm::length(first.basePositions()[a[i]] - second.basePositions()[candidate[i]])
+            > SourceDisplacement::TransformEpsilon)
+          {
+            matches = false;
+            break;
+          }
+        }
+        if (matches)
+        {
+          if (result)
+          {
+            return std::nullopt;
+          }
+          result = SewPlan{a, std::move(candidate)};
+        }
+      }
+    }
+  }
+  return result;
 }
 } // namespace
 
@@ -647,6 +711,75 @@ void SourceDisplacement::setOffset(
     rebuild();
     throw;
   }
+}
+bool SourceDisplacement::canSewWith(const SourceDisplacement& other) const
+{
+  return bool(planSew(*this, other));
+}
+bool SourceDisplacement::sewWith(SourceDisplacement& other)
+{
+  const auto plan = planSew(*this, other);
+  if (!plan)
+  {
+    invalid(
+      m_entry,
+      "sew requires two supported same-power meshes with one full shared base edge");
+  }
+  auto first = *this;
+  auto second = other;
+  auto changed = false;
+  for (size_t i = 0; i < m_size; ++i)
+  {
+    const auto a = (*plan)[0][i];
+    const auto b = (*plan)[1][i];
+    const auto& p = m_positions[a];
+    const auto& q = other.m_positions[b];
+    if (vm::length(p - q) <= TransformEpsilon)
+    {
+      continue;
+    }
+    if (!changed)
+    {
+      if (first.canInitializeOffsets())
+      {
+        first.initializeOffsets();
+      }
+      if (second.canInitializeOffsets())
+      {
+        second.initializeOffsets();
+      }
+    }
+    const auto midpoint = vm::vec3d{
+      std::midpoint(p.x(), q.x()),
+      std::midpoint(p.y(), q.y()),
+      std::midpoint(p.z(), q.z())};
+    first.m_offsets[a] = first.m_offsets[a] + (midpoint - p);
+    second.m_offsets[b] = second.m_offsets[b] + (midpoint - q);
+    if (!vm::is_finite(first.m_offsets[a]) || !vm::is_finite(second.m_offsets[b]))
+    {
+      invalid(m_entry, "sewn native offsets are not finite");
+    }
+    changed = true;
+  }
+  if (!changed)
+  {
+    return false;
+  }
+  first.rebuild();
+  second.rebuild();
+  for (size_t i = 0; i < m_size; ++i)
+  {
+    if (
+      vm::length(first.m_positions[(*plan)[0][i]] - second.m_positions[(*plan)[1][i]])
+      > TransformEpsilon)
+    {
+      invalid(m_entry, "seam cannot be represented with native offsets");
+    }
+  }
+  static_assert(std::is_nothrow_move_assignable_v<SourceDisplacement>);
+  *this = std::move(first);
+  other = std::move(second);
+  return true;
 }
 SourceDisplacement SourceDisplacement::translated(const vm::vec3d& delta) const
 {

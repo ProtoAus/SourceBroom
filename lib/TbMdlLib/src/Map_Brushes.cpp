@@ -317,6 +317,75 @@ bool initializeSourceDisplacementOffsets(Map& map)
     false); // Explicit table creation is its own undo boundary.
 }
 
+namespace
+{
+std::vector<BrushFaceHandle> selectedDisplacementFaces(const Map& map)
+{
+  auto result = std::vector<BrushFaceHandle>{};
+  for (const auto& face : map.selection().allBrushFaces())
+  {
+    if (face.face().sourceDisplacement())
+    {
+      result.push_back(face);
+    }
+  }
+  return result;
+}
+} // namespace
+bool canSewSourceDisplacements(const Map& map)
+{
+  if (!map.vmfScene() || map.isReadOnlyVmfPreview())
+  {
+    return false;
+  }
+  const auto faces = selectedDisplacementFaces(map);
+  return faces.size() == 2 && faces[0] != faces[1]
+         && faces[0].face().sourceDisplacement()->canSewWith(
+           *faces[1].face().sourceDisplacement());
+}
+bool sewSourceDisplacements(Map& map)
+{
+  if (!canSewSourceDisplacements(map))
+  {
+    return false;
+  }
+  const auto faces = selectedDisplacementFaces(map);
+  const auto& beforeFirst = *faces[0].face().sourceDisplacement();
+  const auto& beforeSecond = *faces[1].face().sourceDisplacement();
+  auto first = beforeFirst;
+  auto second = beforeSecond;
+  try
+  {
+    if (!first.sewWith(second))
+    {
+      return true; // No new tables, command or pending-redo loss for an existing seam.
+    }
+    return applyAndSwap(
+      map,
+      "Sew Displacement Position Seam",
+      faces,
+      [&](auto& face) {
+        if (*face.sourceDisplacement() == beforeFirst)
+        {
+          face.setSourceDisplacement(first);
+          return true;
+        }
+        if (*face.sourceDisplacement() == beforeSecond)
+        {
+          face.setSourceDisplacement(second);
+          return true;
+        }
+        return false;
+      },
+      false);
+  }
+  catch (const std::exception& error)
+  {
+    map.logger().error() << "Could not sew displacement seam: " << error.what();
+    return false;
+  }
+}
+
 bool initializeSourceDisplacementAlphas(Map& map)
 {
   const auto faces = map.selection().allBrushFaces();

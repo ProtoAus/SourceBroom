@@ -76,6 +76,7 @@
 #include "mdl/Map_Assets.h"
 #include "mdl/Map_Brushes.h"
 #include "mdl/Map_Entities.h"
+#include "mdl/Map_Geometry.h"
 #include "mdl/Map_Groups.h"
 #include "mdl/Map_NativeCameras.h"
 #include "mdl/Map_NativeVisgroups.h"
@@ -1665,6 +1666,134 @@ TEST_CASE(
   CHECK(
     sparse->brush().face(*sparseFace).sourceDisplacement()->offset(2, 2)
     == vm::vec3d{0, 0, 2});
+  mdl::deselectAll(map);
+  mdl::selectNodes(map, {sparse});
+  REQUIRE(
+    mdl::transformSelection(
+      map,
+      "Move adjacent displacement control",
+      vm::translation_matrix(vm::vec3d{64, 0, 0})));
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*small, *smallFace}});
+  const auto& smallMesh = *small->brush().face(*smallFace).sourceDisplacement();
+  const auto edge = std::find(
+    smallMesh.basePositions().begin(),
+    smallMesh.basePositions().end(),
+    vm::vec3d{64, 32, 64});
+  REQUIRE(edge != smallMesh.basePositions().end());
+  const auto edgeIndex = size_t(edge - smallMesh.basePositions().begin());
+  REQUIRE(
+    mdl::setSourceDisplacementDistance(
+      map, edgeIndex / smallMesh.size(), edgeIndex % smallMesh.size(), 16));
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->positions()[edgeIndex].z()
+    == 80);
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(
+    map,
+    {mdl::BrushFaceHandle{*small, *smallFace},
+     mdl::BrushFaceHandle{*sparse, *sparseFace}});
+  QApplication::processEvents();
+  auto* sew = editor.findChild<QPushButton*>("sourceDisplacementSew");
+  REQUIRE(sew); // Actual native base/height controls act before missing seam workflow.
+  REQUIRE(sew->isEnabled());
+  const auto smallBeforeSew = *small->brush().face(*smallFace).sourceDisplacement();
+  const auto sparseBeforeSew = *sparse->brush().face(*sparseFace).sourceDisplacement();
+  const auto otherEdge = std::find(
+    sparseBeforeSew.basePositions().begin(),
+    sparseBeforeSew.basePositions().end(),
+    vm::vec3d{64, 32, 64});
+  REQUIRE(otherEdge != sparseBeforeSew.basePositions().end());
+  const auto otherIndex = size_t(otherEdge - sparseBeforeSew.basePositions().begin());
+  const auto beforeSew = map.vmfScene()->serialize(map.worldNode());
+  const auto sewCount = map.modificationCount();
+  sew->click();
+  CHECK(map.modificationCount() == sewCount + 1);
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->positions()[edgeIndex].z()
+    == 72);
+  CHECK(
+    sparse->brush().face(*sparseFace).sourceDisplacement()->positions()[otherIndex].z()
+    == 72);
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->basePositions()
+    == smallBeforeSew.basePositions());
+  CHECK(
+    small->brush().face(*smallFace).sourceDisplacement()->alphas()
+    == smallBeforeSew.alphas());
+  CHECK(
+    sparse->brush().face(*sparseFace).sourceDisplacement()->positions()[12]
+    == sparseBeforeSew.positions()[12]);
+  const auto sewn = map.vmfScene()->serialize(map.worldNode());
+  REQUIRE(sewn != beforeSew);
+  sew->click();
+  CHECK(map.modificationCount() == sewCount + 1); // Idempotent; no extra table/history.
+  map.undoCommand();
+  QApplication::processEvents();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == beforeSew);
+  CHECK(*small->brush().face(*smallFace).sourceDisplacement() == smallBeforeSew);
+  CHECK(*sparse->brush().face(*sparseFace).sourceDisplacement() == sparseBeforeSew);
+  map.redoCommand();
+  QApplication::processEvents();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == sewn);
+  REQUIRE(QMetaObject::invokeMethod(sew, "pressed"));
+  mdl::deselectAll(map);
+  mdl::selectBrushFaces(map, {mdl::BrushFaceHandle{*small, *smallFace}});
+  CHECK_FALSE(sew->isEnabled()); // Before queued refresh, never retarget a pending sew.
+  REQUIRE(QMetaObject::invokeMethod(sew, "clicked"));
+  CHECK(map.modificationCount() == sewCount + 1);
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == sewn);
+  const auto savePath = env.dir() / "sewn-copy.vmf";
+  REQUIRE(map.saveAs(savePath).is_success());
+  for (const auto preview : {false, true})
+  {
+    auto reopenedResult = MapDocument::loadDocument(
+      appController.environmentConfig(),
+      mdl::QuakeGameInfo,
+      mdl::MapFormat::SourceVMF,
+      vm::bbox3d{8192.0},
+      savePath,
+      appController.taskManager(),
+      appController.glManager().resourceManager(),
+      preview);
+    REQUIRE(reopenedResult.is_success());
+    auto reopened = std::move(reopenedResult) | kdl::value();
+    auto& reopenedMap = reopened->map();
+    const auto reopenedNodes = reopenedMap.worldNode().defaultLayer()->children();
+    auto* reopenedSmall = dynamic_cast<mdl::BrushNode*>(reopenedNodes[1]);
+    auto* reopenedSparse = dynamic_cast<mdl::BrushNode*>(reopenedNodes[2]);
+    REQUIRE(reopenedSmall);
+    REQUIRE(reopenedSparse);
+    const auto f = reopenedSmall->brush().findFace(vm::vec3d{0, 0, 1});
+    const auto g = reopenedSparse->brush().findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(f);
+    REQUIRE(g);
+    CHECK(
+      reopenedSmall->brush().face(*f).sourceDisplacement()->positions()[edgeIndex].z()
+      == 72);
+    CHECK(
+      reopenedSparse->brush().face(*g).sourceDisplacement()->positions()[otherIndex].z()
+      == 72);
+    auto reopenedEditor = FaceAttribsEditor{appController, *reopened};
+    mdl::selectBrushFaces(
+      reopenedMap,
+      {mdl::BrushFaceHandle{*reopenedSmall, *f},
+       mdl::BrushFaceHandle{*reopenedSparse, *g}});
+    auto* reopenedSew = reopenedEditor.findChild<QPushButton*>("sourceDisplacementSew");
+    REQUIRE(reopenedSew);
+    CHECK_FALSE(reopenedSew->isEnabled());
+    QApplication::processEvents();
+    CHECK(reopenedSew->isEnabled() == !preview);
+    CHECK(mdl::canSewSourceDisplacements(reopenedMap) == !preview);
+    const auto reopenedCount = reopenedMap.modificationCount();
+    CHECK(mdl::sewSourceDisplacements(reopenedMap) == !preview);
+    CHECK(reopenedMap.modificationCount() == reopenedCount);
+    CHECK(reopenedMap.vmfScene()->serialize(reopenedMap.worldNode()) == sewn);
+    if (!preview)
+    {
+      REQUIRE(reopenedMap.saveAs(savePath).is_success());
+    }
+  }
 }
 
 TEST_CASE("Source material settings group game mounts without changing the catalog")

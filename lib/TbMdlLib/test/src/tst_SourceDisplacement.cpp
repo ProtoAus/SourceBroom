@@ -80,6 +80,171 @@ std::string offsetFixture(const size_t rowCount = 5)
 }
 } // namespace
 
+TEST_CASE("SourceDisplacement sews only one supported same-power base edge")
+{
+  const auto rotated = GENERATE(false, true);
+  const auto source = displacementFixture();
+  const auto document = VmfDocument::parse(source);
+  const auto original = loadDisplacement(source);
+  auto first = original;
+  auto second = original;
+  auto rotation = vm::mat4x4d::identity();
+  if (rotated)
+  {
+    rotation[0][0] = 0;
+    rotation[1][1] = 0;
+    rotation[0][1] = 1;
+    rotation[1][0] = -1;
+    second = second.rigidlyTransformed(rotation).translated({128, 0, 0});
+  }
+  else
+  {
+    second = second.translated({64, 0, 0});
+  }
+  first.setDistance(2, 4, 16);
+  REQUIRE(first.positions()[14].z() == 16);
+  REQUIRE(document.serialize(first.editsFrom(original)) != source);
+  REQUIRE(first.canSewWith(second));
+  const auto firstBefore = first;
+  const auto secondBefore = second;
+  auto controlFirst = first;
+  auto controlSecond = second;
+  REQUIRE(controlFirst.sewWith(controlSecond));
+  REQUIRE(controlFirst.offset(2, 4).z() == -8);
+  SECTION("staged offset surgery preserves interiors and round trips rotated orientation")
+  {
+    REQUIRE(first.sewWith(second));
+    CHECK(first.positions()[14].z() == 8);
+    CHECK(first.canEditOffsets());
+    CHECK(second.canEditOffsets());
+    CHECK(first.basePositions() == firstBefore.basePositions());
+    CHECK(second.basePositions() == secondBefore.basePositions());
+    CHECK(first.indices() == firstBefore.indices());
+    CHECK(second.indices() == secondBefore.indices());
+    CHECK(first.alphas() == firstBefore.alphas());
+    CHECK(second.alphas() == secondBefore.alphas());
+    auto unchanged = true;
+    for (size_t i = 0; i < 25; ++i)
+    {
+      unchanged &= first.distance(i / 5, i % 5) == firstBefore.distance(i / 5, i % 5);
+      unchanged &= second.distance(i / 5, i % 5) == secondBefore.distance(i / 5, i % 5);
+      if (first.basePositions()[i].x() != 64)
+      {
+        unchanged &= first.positions()[i] == firstBefore.positions()[i];
+      }
+      if (second.basePositions()[i].x() != 64)
+      {
+        unchanged &= second.positions()[i] == secondBefore.positions()[i];
+      }
+    }
+    CHECK(unchanged);
+    auto structure = std::vector<VmfStructuralEdit>{};
+    const auto values = first.editsFrom(original, structure);
+    REQUIRE(structure.size() == 1);
+    const auto saved = document.serialize(values, structure);
+    CHECK(loadDisplacement(saved).positions() == first.positions());
+    structure.clear();
+    const auto otherValues = second.editsFrom(original, structure);
+    REQUIRE(structure.size() == 1);
+    const auto otherSaved = document.serialize(otherValues, structure);
+    auto newCorners = corners;
+    for (auto& corner : newCorners)
+    {
+      corner =
+        rotated ? rotation * corner + vm::vec3d{128, 0, 0} : corner + vm::vec3d{64, 0, 0};
+    }
+    const auto parsed = VmfDocument::parse(otherSaved);
+    const auto reopened =
+      SourceDisplacement::read(parsed, parsed.roots()[0], newCorners, {0, 0, 1}, bounds);
+    REQUIRE(reopened);
+    CHECK(reopened->positions() == second.positions());
+    CHECK(otherSaved.find("future { key \"opaque\" }") != std::string::npos);
+    const auto sameFirst = first;
+    const auto sameSecond = second;
+    CHECK_FALSE(first.sewWith(second));
+    CHECK(first == sameFirst);
+    CHECK(second == sameSecond);
+  }
+  SECTION("ambiguous disconnected partial aliased and different-power sources refuse")
+  {
+    const auto smaller =
+      original.uniformlyScaled(vm::scaling_matrix(vm::vec3d{0.5, 0.5, 0.5}));
+    const auto differentPower =
+      loadDisplacement("side { dispinfo { power 3 startposition \"[0 0 0]\" } }");
+    for (auto invalid : std::vector<SourceDisplacement>{
+           original,
+           original.translated({64, 64, 0}),
+           smaller.translated({65, 0, 0}),
+           loadDisplacement(offsetFixture(1)).translated({64, 0, 0}),
+           loadDisplacement(replaceOnce(offsetFixture(), "offsets {", "Offsets {"))
+             .translated({64, 0, 0}),
+           differentPower.translated({64, 0, 0}),
+           SourceDisplacement{}})
+    {
+      const auto before = invalid;
+      CHECK_FALSE(first.canSewWith(invalid));
+      CHECK_THROWS(first.sewWith(invalid));
+      CHECK(first == firstBefore);
+      CHECK(invalid == before);
+    }
+    CHECK_FALSE(first.canSewWith(first));
+    CHECK_THROWS(first.sewWith(first));
+    CHECK(first == firstBefore);
+  }
+  SECTION("already-close missing tables are lexical noops without initialization")
+  {
+    first = original;
+    CHECK_FALSE(first.sewWith(second));
+    CHECK(first == original);
+    CHECK(second == secondBefore);
+    CHECK(first.canInitializeOffsets());
+    CHECK(document.serialize(first.editsFrom(original)) == source);
+  }
+  SECTION("maximum65 grid uses its full shared edge without topology edits")
+  {
+    auto large =
+      loadDisplacement("side { dispinfo { power 6 startposition \"[0 0 0]\" } }");
+    auto adjacent = large.translated({64, 0, 0});
+    large.initializeOffsets();
+    large.setOffset(32, 64, {0, 0, 8});
+    const auto topology = large.indices();
+    REQUIRE(large.canSewWith(adjacent));
+    REQUIRE(large.sewWith(adjacent));
+    CHECK(large.positions()[32 * 65 + 64].z() == 4);
+    CHECK(adjacent.positions()[32 * 65].z() == 4);
+    CHECK(large.indices() == topology);
+    CHECK(adjacent.indices() == topology);
+  }
+}
+
+TEST_CASE("SourceDisplacement seam staging is atomic on a later world-bound failure")
+{
+  const auto source = displacementFixture();
+  const auto parsed = VmfDocument::parse(source);
+  const auto smallCorners =
+    std::vector<vm::vec3d>{{0, 0, 0}, {8, 0, 0}, {8, 8, 0}, {0, 8, 0}};
+  const auto read = [&](const double extent) {
+    return *SourceDisplacement::read(
+      parsed, parsed.roots()[0], smallCorners, {0, 0, 1}, vm::bbox3d{extent});
+  };
+  auto first = read(128);
+  auto second = read(16).translated({8, 0, 0});
+  auto controlFirst = first;
+  auto controlSecond = second;
+  controlFirst.setDistance(2, 4, 8);
+  REQUIRE(controlFirst.sewWith(controlSecond));
+  REQUIRE(controlFirst.positions()[14].z() == 4);
+  first.initializeOffsets();
+  first.setOffset(2, 4, {70, 0, 0});
+  REQUIRE(first.positions()[14].x() == 78);
+  REQUIRE(first.canSewWith(second));
+  const auto beforeFirst = first;
+  const auto beforeSecond = second;
+  CHECK_THROWS(first.sewWith(second)); // Midpoint43 fits first, not second's16-unit box.
+  CHECK(first == beforeFirst);
+  CHECK(second == beforeSecond);
+}
+
 TEST_CASE("SourceDisplacement XYZ offset edits preserve native bindings")
 {
   const auto source = offsetFixture();

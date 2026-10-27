@@ -21,7 +21,44 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Active3D camera draft capture — A5.32
+## Bounded native displacement position seams — A5.33
+
+Pure planner matches exactly one full same-power base edge, all corresponding
+samples within existing TransformEpsilon1e-6, including reversed ordering. Native
+offset edit/absent-init eligibility is mandatory; no nearest/disconnected guesses.
+Sew stages both values, uses std::midpoint per component, updates only needed edge
+offsets, initializes absent rows only after finding a changed seam, rebuilds once
+each and verifies representability. Two assignments statically require nothrow.
+Already-close seams are exact lexical/history no-ops, no new zero tables.
+
+The Map facade filters native selected faces, preflights one non-collating content
+swap, preserving unknown data/IDs and normal command/history/save contracts.
+Source reader and preserving serializer bodies are byte-identical to A5.31;
+new methods use the existing XYZ-offset representation, not new raw formats.
+UI generation/pressed intent and synchronous notification protect deferred refresh;
+new button starts disabled. Inspector construction does not initially refresh:
+tests attach observers BEFORE selecting, exercising the real notification route.
+Do not mislabel a missed test notification as a backend refusal or suppress it.
+
+Tests-only missing-button runtime RED follows120 acting legacy/native movement/
+height controls; consumers compile0. Final Model177/2 and actual inspector170/1,
+full Model314/App50 pass. Earlier UI64 passed; latest full UI63/64 retains only
+the known untouched preference245 Unicode-fixture rename. No skip/suppression or
+fix. Current builds have zero compiler diagnostics on eight fingerprints. Own temporary vector += was corrected to vm value addition
+before the first build; own test local-count shadow warning was renamed, not
+suppressed. Raw failure logs retained. Default-disabled and real notification-order
+checks replace an unsafe default-enabled assumption, not a hidden test toggle.
+For failure classification, normalize CRCRLF empty records and inspect actual FAILED
+source lines: a prefix search for Testing: QPreferenceStore also matches a different
+successful case. Preserve raw logs; wrapper assertions are not feature evidence.
+
+Direct parent review/format/diff-check is not independent or clean-LSP/tidy.
+Retain A531corpus38/35same3/38 on exact unchanged bodies and A527GPU boundaries,
+not new runs/equivalence. No performance, smooth-normal/neighbor metadata, general
+sculpt/power, arbitrary compiler or human/Hammer/full Source acceptance. Owner
+check remains pending in lextest.
+
+## Retained active3D camera draft capture — A5.32
 
 UI-only NativeCameraCapture carries owned eye/look values, no native IDs/scope.
 The owning MapWindow uses currentMapViewBase's existing current/fallback policy,

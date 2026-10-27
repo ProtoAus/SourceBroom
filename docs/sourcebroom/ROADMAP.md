@@ -33,7 +33,15 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.32 candidate:** current3D-view eye/look capture into a LIVE camera draft,
+- **A5.33 candidate:** same-power single-shared-edge native displacement POSITION
+  seams via staged XYZ offsets, one undo and preserving Save As/reopen. Partial,
+  ambiguous/disconnected/power/readonly guards stay; no normals/neighbor/topology
+  or general sculpt/sew claim. Model177/UI170 and full Model314/App50 pass.
+  Earlier UI64 passed; latest63/64 only known untouched preference rename, no fix/
+  skip/suppression. Zero compiler diagnostics on8fingerprints/direct parent review. Exact reader/
+  serializer bodies unchanged: A531corpus retained, not re-dated. Human/Hammer/
+  arbitrary compiler/full Source pending; keep A5.32/A5.31/A5.25 recovery.
+- **Retained A5.32 candidate:** current3D-view eye/look capture into a LIVE camera draft,
   not an automatic native write or viewport/FOV/roll change. Owned provider and
   existing scoped Add/Apply/history; active2D/invalid/guarded modes refuse.
   UI175/3, full UI64/App50 pass on9compiled UI fingerprints; intermittent preference
@@ -434,7 +442,9 @@ reported before a misleading successful build.
 The current foundation admits bounded native meshes, distance samples, selected
 proper similarity transforms and separately stored alpha samples (A5.23).
 A5.26 adds explicit absent-alpha-table initialization; A5.31 adds independent
-per-sample XYZ offsets and explicit absent-offset-table initialization. A5.27's
+per-sample XYZ offsets and explicit absent-offset-table initialization. A5.33
+adds bounded same-power position-seam sewing, not smooth-normal/SDK neighbor or
+general sew support. A5.27's
 bounded scalar VMT opacity is distinct from displacement weights or shader parity. This foundation
 does not complete A6: stored blend-weight editing is not full shader blending,
 paint/smoothing or topology/power/sew, and independent native acceptance remains

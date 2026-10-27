@@ -678,6 +678,30 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   displacementLayout->addWidget(m_initializeDisplacementOffsets, 9, 0, 1, 4);
   displacementLayout->addWidget(m_displacementOffsetStatus, 10, 0, 1, 4);
   faceAttribsLayout->addWidget(m_displacementEditor, r, 0, 1, 4);
+  m_sewDisplacements = new QPushButton{tr("Sew selected displacement position seam")};
+  m_sewDisplacements->setObjectName("sourceDisplacementSew");
+  m_sewDisplacements->setEnabled(false); // Fail closed until the first deferred refresh.
+  m_sewDisplacements->setToolTip(tr(
+    "Two same-power native meshes and one full shared base edge only. Explicit Sew may "
+    "initialize absent offset rows. Does not weld normals, change power or repair "
+    "partial data."));
+  faceAttribsLayout->addWidget(m_sewDisplacements, r + 1, 0, 1, 4);
+  connect(m_sewDisplacements, &QAbstractButton::pressed, this, [this] {
+    m_sewIntent = m_sewDisplacements->isEnabled()
+                    ? std::optional<std::size_t>{m_displacementGeneration}
+                    : std::nullopt;
+  });
+  connect(m_sewDisplacements, &QAbstractButton::clicked, this, [this] {
+    const auto generation = std::exchange(m_sewIntent, std::nullopt);
+    if (
+      !generation || !m_sewDisplacements->isEnabled()
+      || *generation != m_displacementGeneration)
+    {
+      return;
+    }
+    mdl::sewSourceDisplacements(m_document.map());
+    updateControls();
+  });
   connect(m_displacementRow, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
     updateDisplacementSample();
   });
@@ -839,6 +863,7 @@ void FaceAttribsEditor::refresh()
   invalidateDisplacementOffsetIntent();
   m_applyDisplacementOffset->setEnabled(false);
   m_initializeDisplacementOffsets->setEnabled(false);
+  m_sewDisplacements->setEnabled(false);
   for (auto* box : m_displacementOffset)
   {
     box->setEnabled(false);
@@ -871,6 +896,7 @@ void FaceAttribsEditor::invalidateDisplacementOffsetIntent()
 {
   ++m_displacementGeneration;
   m_displacementOffsetIntent.reset();
+  m_sewIntent.reset();
 }
 
 void FaceAttribsEditor::prepareDisplacementOffset(const bool initialize)
@@ -976,6 +1002,8 @@ void FaceAttribsEditor::updateControls()
   const auto faceHandles = m_document.map().selection().allBrushFaces();
   const auto displacement =
     faceHandles.size() == 1 ? faceHandles[0].face().sourceDisplacement() : nullptr;
+  m_sewDisplacements->setVisible(bool(m_document.map().vmfScene()));
+  m_sewDisplacements->setEnabled(mdl::canSewSourceDisplacements(m_document.map()));
   m_displacementEditor->setVisible(bool(displacement));
   const auto writable = displacement && !m_document.map().isReadOnlyVmfPreview();
   const auto distanceEditable = writable && displacement->canEditDistances();
@@ -1001,7 +1029,7 @@ void FaceAttribsEditor::updateControls()
       ? tr("Incomplete offset rows are preserved; other tools are independent.")
       : tr(
           "Stored per-vertex XYZ offset; distance and alpha are independent. No "
-          "sculpt/sew."));
+          "general sculpting."));
   m_displacementDistance->setEnabled(distanceEditable);
   m_applyDisplacement->setEnabled(distanceEditable);
   m_displacementAlpha->setEnabled(alphaEditable);

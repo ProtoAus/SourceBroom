@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.32 — capture a 3D camera draft
+# Try Windows SourceBroom A5.33 — sew a native displacement position seam
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,30 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.32: read the current 3D view before explicitly writing a camera
+## A5.33: join one compatible pair of displacement edges
+
+On a COPY, select two native displacement faces with the SAME power and one full
+shared BASE edge, then use **Sew selected displacement position seam** in the face
+inspector. It averages corresponding edge positions using stored XYZ offsets.
+If needed, Sew explicitly initializes genuinely absent zero-offset rows; existing
+partial/aliased data is never repaired or overwritten. Already-close seams are
+no-ops, including no new table/history. One Undo restores both meshes.
+
+Only one full shared edge within the existing1e-6 base tolerance is admitted, with
+reversed orientation supported. Disconnected, vertex-only, ambiguous overlapping,
+different-power and read-only selections refuse. No topology/power/ID change,
+normal welding, neighbor metadata generation, general sculpt or compiler guarantee.
+
+Model177/2 and actual inspector170/1, full Model314/App50 pass. Earlier UI64
+passed; latest full UI63/64 has only the known untouched preference rename failure,
+no skip/suppression or fix. Zero compiler diagnostics on eight fingerprints. Read/serializer bodies are unchanged A5.31;
+retain its corpus38/35+same3/38, not fresh results. Human/Hammer/full Source pending.
+
+**Small owner check (pending):** on a copy, Sew two matching edges with differing
+heights, then Undo. Positions should meet and return; do not expect smooth-normal
+welding. See [lextest](../../lextest.md). Keep whole A5.32/A5.31/A5.25 recovery.
+
+## Retained A5.32: read the current 3D view before explicitly writing a camera
 
 On a COPY, activate a 3D viewport, then use the Map inspector's LIVE native cameras
 **Read current 3D view into draft**. Eye/look fields fill from that window's current

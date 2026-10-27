@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.32 active-3D-view camera draft capture:
+**Status:** Windows A5.33 bounded native displacement position-seam sewing:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,24 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.32 adds **Read current 3D view into draft** to LIVE native cameras. It reads
+A5.33 adds **Sew selected displacement position seam** in the face inspector.
+Select two compatible native displacement faces with one full shared base edge
+and the same power. Sew averages corresponding edge positions using XYZ offsets;
+other positions, distance/alpha, base UVs, triangles and IDs stay independent.
+Absent offset rows initialize only for a changed seam. Ambiguous, disconnected,
+partial/aliased, different-power and read-only data refuse. One Undo restores both;
+Save As/reopen and an already-sewn no-op preserve native state/history.
+
+Model177/2 and actual inspector170/1 pass; full Model314/App50 pass. Earlier
+UI64 passed; the latest full UI63/64 retains only the untouched known Windows
+preference rename failure. No skip/suppression or fix claimed. Current builds
+have zero compiler diagnostics on eight fingerprints. The reader/serializer bodies
+remain byte-identical to A5.31, whose corpus38/35+same3/38 is retained, not rerun.
+No smooth-normal weld, general sculpt/power changes, SDK/compiler/Hammer or human
+acceptance is claimed. Full Source support continues; use whole A5.33 on copies,
+keep A5.32/A5.31/A5.25 recovery.
+
+Retained A5.32 adds **Read current 3D view into draft** to LIVE native cameras. It reads
 this window's active perspective eye and a look target64 units along its heading;
 explicit Add/Apply is still required to write. Capture does not move the viewport,
 create a record, change active choice, dirty the map or consume pending redo.
