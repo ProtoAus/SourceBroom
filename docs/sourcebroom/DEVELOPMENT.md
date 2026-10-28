@@ -21,7 +21,60 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Bounded static RGB material modulation — A5.35
+## Connected displacement position-seam batches — A5.36
+
+The existing facade now accepts a connected set of2..64 supported same-power
+native displacement faces, retaining the two-face executor. The cap bounds UI
+pair planning; it is not a Source branch limit or performance claim. Full BASE
+edges still match all samples within TransformEpsilon, including reverse order.
+A separate ambiguity result distinguishes an absent edge from overlapping
+matches. Duplicate/null inputs, multiple selected partners per edge, disconnected
+sets, mixed powers, protected data and a tolerance-chained wider corner refuse.
+
+Equivalent boundary samples form groups before any edit. Each changed group uses
+ONE mean of ORIGINAL world coordinates; sorted components make selection order
+irrelevant, with std::midpoint for two-member groups. Only actual offset deltas
+initialize absent tables. Copies rebuild and verify seam positions before all
+nothrow assignments; the multi-face executor also checks the common target.
+Later world-bound/numeric failure leaves every original
+unchanged. Distance/alpha/directions, base UV/triangles/IDs and unknown data stay;
+no normal weld, neighbor generation, mixed-power resampling or topology authoring.
+
+Map preflights the whole batch through the existing content-swap path as one
+non-collating command. The inspector keeps existing pressed-generation/backend/
+selection invalidation and read-only guards. Save As/reopen uses the unchanged
+native serializer, not a new export format. Object fields before public remain
+identical to A5.31; only static members/methods are added.
+
+Tests-only OLD-production runtime199 has198 acting controls and ONE desired
+connected-three eligibility failure; build0. The EXACT SAME inspector test SHA
+then passes281 before formatting; after whitespace-only array formatting, current
+inspector281 still passes, including pair ACT/Undo, three/four junctions, one
+command, stale eligible selection, Save As/reopen and read-only refusal. Original
+red/green test bytes are retained. No compile/stale/silence credit.
+
+Focused core2888/13 passes, including six new cases plus old pair controls:
+selection order, no-op/unchanged mean member, lexical native reopen, rejected
+seam graphs,64-mesh strip ACT/65-cap refusal, maximum65 grids and later THIRD
+world-box failure. First core2644/2639pass/5fail were OWN bad new checks/fixture:
+four expected a table for original8 already at mean8; one one-component vec was
+not a uniform scale. Corrected independent expectations/explicitXYZ scale; product
+unchanged, no feature-red credit. Earlier own shadow warning was renamed, not
+suppressed; LSP caught own unsupported vec+= before compilation.
+
+Current full Model322/App50/GL21/Render28 pass; UI63/64 only known untouched
+QPreferenceStore Unicode rename AccessDenied, no skip/fix/retry. Seven actual
+builds0 compiler diagnostics on six held fingerprints. Changed-range format,
+explicit LSP and complete direct parent review are not independent/clean-LSP/tidy
+or human/Hammer. Current LastTest records, not stale LastTestsFailed, classify it.
+Whole VmfDocument/File/Scene plus SourceDisplacement read, derived rebuild and
+transform/native-edit-serializer suffix match A5.31 after SOURCE checkout-EOL
+comparison only; the whole displacement file DOES change. Retain corpus38/
+strict35same3reasons/preview38 without rerun/re-date. Original hashes/installed
+loader/whole-kit checks are separate fresh delivery boundaries. No new shader/
+GPU layout; A5.35 RGB proof is retained. Full native Source work continues.
+
+## Retained bounded static RGB material modulation — A5.35
 
 $color/$color2 were admitted but OMITTED in preview. Known basic preview shaders
 now parse three finite normalized literals (optional[]) or byte-scale{} triples,
@@ -50,7 +103,7 @@ client arrays, not five whole production pipelines. No inactive-uniform/compile/
 silence/abort credit.
 
 Initial full Model315/316 exposed only2 legacy scalar1 checks. After production
-compatibility fix, CURRENT Model316/UI64/App50/GL21/Render28 match actual Passed
+compatibility fix, A5.35 Model316/UI64/App50/GL21/Render28 match actual Passed
 records/zeroFailed, seven builds0 compiler diagnostics on12 held code fingerprints.
 GPU host/stages/test unchanged after parser-only compatibility fix, reuse3847 result
 without rerun/re-date. Explicit LSP/direct parent review, not independent/tidy clean.

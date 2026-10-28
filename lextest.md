@@ -4,6 +4,21 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.36 connected displacement position seams — pending small owner check
+
+No new owner observation. Whole A5.36 on a COPY; keep whole A5.35/A5.33/A5.25.
+Inspector281/core2888, full Model322/App50/GL21/Render28 and current UI63/64 known
+untouched preference rename are automated, not human/Hammer/SDK acceptance.
+
+- [ ] Only if the usual copied map already has three/four same-power terrain faces
+  meeting at a corner: select those faces, Sew selected displacement position
+  seams, then Undo. They should meet and return. No hunt or original-file save.
+- [ ] Optional separate Save As a NEW copy/reopen in matching Hammer; compare that
+  corner and unchanged distance/alpha/other records. Never overwrite an original.
+
+Pending only. Connected2..64 POSITION seams, not normal welding, neighbor data,
+mixed-power sewing, arbitrary compiler validity or complete Source acceptance.
+
 ## A5.35 static material RGB — pending small owner check
 
 No new owner observation. Whole A5.35 on copies, keep A5.34/A5.33/A5.25.

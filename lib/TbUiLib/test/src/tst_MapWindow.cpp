@@ -1794,6 +1794,171 @@ TEST_CASE(
       REQUIRE(reopenedMap.saveAs(savePath).is_success());
     }
   }
+  env.createFile(
+    "batch-displacement.vmf",
+    "world { id 1 classname worldspawn\n" + solid(2, 2, false) + solid(20, 2, false)
+      + solid(40, 2, false) + solid(60, 2, false) + "}\n");
+  auto batchResult = MapDocument::loadDocument(
+    appController.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192.0},
+    env.dir() / "batch-displacement.vmf",
+    appController.taskManager(),
+    appController.glManager().resourceManager());
+  REQUIRE(batchResult.is_success());
+  auto batchDocument = std::move(batchResult) | kdl::value();
+  auto& batchMap = batchDocument->map();
+  batchMap.setIsCommandCollationEnabled(false);
+  auto batchEditor = FaceAttribsEditor{appController, *batchDocument};
+  const auto batchNodes = batchMap.worldNode().defaultLayer()->children();
+  REQUIRE(batchNodes.size() == 4);
+  const auto shifts =
+    std::array<vm::vec3d, 4>{vm::vec3d{0, 0, 0}, {64, 0, 0}, {0, 64, 0}, {64, 64, 0}};
+  auto batchFaces = std::vector<mdl::BrushFaceHandle>{};
+  auto cornerIndices = std::vector<size_t>{};
+  auto beforeMeshes = std::vector<mdl::SourceDisplacement>{};
+  for (size_t i = 0; i < batchNodes.size(); ++i)
+  {
+    auto* brush = dynamic_cast<mdl::BrushNode*>(batchNodes[i]);
+    REQUIRE(brush);
+    if (i != 0)
+    {
+      mdl::deselectAll(batchMap);
+      mdl::selectNodes(batchMap, {brush});
+      REQUIRE(
+        mdl::transformSelection(
+          batchMap, "Place authored batch tile", vm::translation_matrix(shifts[i])));
+    }
+    const auto face = brush->brush().findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(face);
+    batchFaces.emplace_back(*brush, *face);
+    mdl::deselectAll(batchMap);
+    mdl::selectBrushFaces(batchMap, {batchFaces.back()});
+    const auto& mesh = *batchFaces.back().face().sourceDisplacement();
+    const auto corner = std::find(
+      mesh.basePositions().begin(), mesh.basePositions().end(), vm::vec3d{64, 64, 64});
+    REQUIRE(corner != mesh.basePositions().end());
+    const auto index = size_t(corner - mesh.basePositions().begin());
+    cornerIndices.push_back(index);
+    REQUIRE(
+      mdl::setSourceDisplacementDistance(
+        batchMap, index / mesh.size(), index % mesh.size(), 4.0 * double(i + 1)));
+    beforeMeshes.push_back(*batchFaces.back().face().sourceDisplacement());
+  }
+  const auto height = [&](const size_t i) {
+    return batchFaces[i].face().sourceDisplacement()->positions()[cornerIndices[i]].z();
+  };
+  auto* batchSew = batchEditor.findChild<QPushButton*>("sourceDisplacementSew");
+  REQUIRE(batchSew);
+  const auto beforeBatch = batchMap.vmfScene()->serialize(batchMap.worldNode());
+  mdl::deselectAll(batchMap);
+  mdl::selectBrushFaces(batchMap, {batchFaces[0], batchFaces[1]});
+  QApplication::processEvents();
+  REQUIRE(batchSew->isEnabled());
+  batchSew->click();
+  REQUIRE(height(0) == 70); // Legacy pair ACTS: base64 + mean(4,8).
+  REQUIRE(height(1) == 70);
+  CHECK(height(2) == 76);
+  CHECK(height(3) == 80);
+  batchMap.undoCommand();
+  QApplication::processEvents();
+  REQUIRE(batchMap.vmfScene()->serialize(batchMap.worldNode()) == beforeBatch);
+  mdl::deselectAll(batchMap);
+  mdl::selectBrushFaces(batchMap, {batchFaces[0], batchFaces[1], batchFaces[2]});
+  QApplication::processEvents();
+  REQUIRE(mdl::canSewSourceDisplacements(batchMap)); // Old exactly-two guard is RED.
+  REQUIRE(batchSew->isEnabled());
+  const auto threeCount = batchMap.modificationCount();
+  batchSew->click();
+  CHECK(batchMap.modificationCount() == threeCount + 1);
+  CHECK(height(0) == 72); // One common mean(4,8,12), not sequential pair bias.
+  CHECK(height(1) == 72);
+  CHECK(height(2) == 72);
+  CHECK(height(3) == 80);
+  batchMap.undoCommand();
+  QApplication::processEvents();
+  CHECK(batchMap.vmfScene()->serialize(batchMap.worldNode()) == beforeBatch);
+  batchMap.redoCommand();
+  CHECK(height(2) == 72);
+  batchMap.undoCommand();
+  mdl::deselectAll(batchMap);
+  mdl::selectBrushFaces(
+    batchMap, {batchFaces[2], batchFaces[0], batchFaces[3], batchFaces[1]});
+  QApplication::processEvents();
+  REQUIRE(batchSew->isEnabled());
+  const auto fourCount = batchMap.modificationCount();
+  batchSew->click();
+  CHECK(batchMap.modificationCount() == fourCount + 1);
+  for (size_t i = 0; i < 4; ++i)
+  {
+    const auto& mesh = *batchFaces[i].face().sourceDisplacement();
+    CHECK(height(i) == 74); // Simultaneous mean(4,8,12,16), independent of order.
+    CHECK(mesh.basePositions() == beforeMeshes[i].basePositions());
+    CHECK(mesh.indices() == beforeMeshes[i].indices());
+    CHECK(mesh.alphas() == beforeMeshes[i].alphas());
+    CHECK(mesh.positions()[12] == beforeMeshes[i].positions()[12]);
+    CHECK(
+      mesh.distance(cornerIndices[i] / mesh.size(), cornerIndices[i] % mesh.size())
+      == 4.0 * double(i + 1));
+  }
+  const auto batchSaved = batchMap.vmfScene()->serialize(batchMap.worldNode());
+  REQUIRE(batchSaved != beforeBatch);
+  batchSew->click();
+  CHECK(batchMap.modificationCount() == fourCount + 1);
+  CHECK(batchMap.vmfScene()->serialize(batchMap.worldNode()) == batchSaved);
+  batchMap.undoCommand();
+  QApplication::processEvents();
+  CHECK(batchMap.vmfScene()->serialize(batchMap.worldNode()) == beforeBatch);
+  batchMap.redoCommand();
+  QApplication::processEvents();
+  CHECK(batchMap.vmfScene()->serialize(batchMap.worldNode()) == batchSaved);
+  REQUIRE(QMetaObject::invokeMethod(batchSew, "pressed"));
+  mdl::deselectAll(batchMap);
+  mdl::selectBrushFaces(batchMap, {batchFaces[0], batchFaces[1], batchFaces[2]});
+  CHECK_FALSE(batchSew->isEnabled()); // Even another eligible set cancels stale intent.
+  REQUIRE(QMetaObject::invokeMethod(batchSew, "clicked"));
+  CHECK(batchMap.modificationCount() == fourCount + 1);
+  CHECK(batchMap.vmfScene()->serialize(batchMap.worldNode()) == batchSaved);
+  QApplication::processEvents();
+  REQUIRE(batchSew->isEnabled());
+  const auto batchPath = env.dir() / "batch-sewn-copy.vmf";
+  REQUIRE(batchMap.saveAs(batchPath).is_success());
+  for (const auto preview : {false, true})
+  {
+    auto result = MapDocument::loadDocument(
+      appController.environmentConfig(),
+      mdl::QuakeGameInfo,
+      mdl::MapFormat::SourceVMF,
+      vm::bbox3d{8192.0},
+      batchPath,
+      appController.taskManager(),
+      appController.glManager().resourceManager(),
+      preview);
+    REQUIRE(result.is_success());
+    auto reopened = std::move(result) | kdl::value();
+    auto& reopenedMap = reopened->map();
+    const auto children = reopenedMap.worldNode().defaultLayer()->children();
+    REQUIRE(children.size() == 4);
+    auto handles = std::vector<mdl::BrushFaceHandle>{};
+    for (size_t i = 0; i < children.size(); ++i)
+    {
+      auto* brush = dynamic_cast<mdl::BrushNode*>(children[i]);
+      REQUIRE(brush);
+      const auto face = brush->brush().findFace(vm::vec3d{0, 0, 1});
+      REQUIRE(face);
+      handles.emplace_back(*brush, *face);
+      CHECK(
+        handles.back().face().sourceDisplacement()->positions()[cornerIndices[i]].z()
+        == 74);
+    }
+    mdl::selectBrushFaces(reopenedMap, handles);
+    CHECK(mdl::canSewSourceDisplacements(reopenedMap) == !preview);
+    const auto batchReopenCount = reopenedMap.modificationCount();
+    CHECK(mdl::sewSourceDisplacements(reopenedMap) == !preview);
+    CHECK(reopenedMap.modificationCount() == batchReopenCount);
+    CHECK(reopenedMap.vmfScene()->serialize(reopenedMap.worldNode()) == batchSaved);
+  }
 }
 
 TEST_CASE("Source material settings group game mounts without changing the catalog")

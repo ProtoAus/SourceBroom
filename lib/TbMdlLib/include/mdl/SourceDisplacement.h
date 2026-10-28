@@ -89,6 +89,7 @@ public:
   static constexpr size_t MaxPower = 6;
   static constexpr double TranslationEpsilon = 0.000001;
   static constexpr double TransformEpsilon = TranslationEpsilon;
+  static constexpr size_t MaxSewMeshes = 64;
 
   /** Corners are the underlying BrushFace's counter-clockwise vertex positions. */
   static std::optional<SourceDisplacement> read(
@@ -118,6 +119,9 @@ public:
   bool canSewWith(const SourceDisplacement& other) const;
   /** Same-power, unique full base edge only. Stages both meshes; false is a no-op. */
   bool sewWith(SourceDisplacement& other);
+  /** Connected same-power full-edge batch; stages all meshes before committing. */
+  static bool canSewTogether(const std::vector<const SourceDisplacement*>& meshes);
+  static bool sewTogether(const std::vector<SourceDisplacement*>& meshes);
   bool canEditDistances() const;
   bool canEditAlphas() const;
   bool canInitializeAlphas() const;

@@ -13,11 +13,14 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include <iomanip>
 #include <limits>
 #include <locale>
+#include <map>
 #include <numeric>
+#include <set>
 #include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 
 namespace tb::mdl
@@ -184,8 +187,14 @@ std::string numberText(const double value)
 using SewEdge = std::vector<size_t>;
 using SewPlan = std::array<SewEdge, 2>;
 std::optional<SewPlan> planSew(
-  const SourceDisplacement& first, const SourceDisplacement& second)
+  const SourceDisplacement& first,
+  const SourceDisplacement& second,
+  bool* ambiguous = nullptr)
 {
+  if (ambiguous)
+  {
+    *ambiguous = false;
+  }
   const auto size = first.size();
   if (
     &first == &second || size < 5
@@ -234,12 +243,160 @@ std::optional<SewPlan> planSew(
         {
           if (result)
           {
+            if (ambiguous)
+            {
+              *ambiguous = true;
+            }
             return std::nullopt;
           }
           result = SewPlan{a, std::move(candidate)};
         }
       }
     }
+  }
+  return result;
+}
+std::optional<std::vector<SewEdge>> planSewTogether(
+  const std::vector<const SourceDisplacement*>& meshes)
+{
+  if (
+    meshes.size() < 2 || meshes.size() > SourceDisplacement::MaxSewMeshes
+    || !meshes.front())
+  {
+    return std::nullopt;
+  }
+  const auto size = meshes.front()->size();
+  if (size < 5 || size > (size_t{1} << SourceDisplacement::MaxPower) + 1)
+  {
+    return std::nullopt;
+  }
+  const auto samples = size * size;
+  for (size_t i = 0; i < meshes.size(); ++i)
+  {
+    const auto* mesh = meshes[i];
+    if (
+      !mesh || mesh->size() != size || mesh->power() != meshes.front()->power()
+      || mesh->basePositions().size() != samples || mesh->positions().size() != samples
+      || !(mesh->canEditOffsets() || mesh->canInitializeOffsets())
+      || std::find(meshes.begin(), meshes.begin() + i, mesh) != meshes.begin() + i)
+    {
+      return std::nullopt;
+    }
+  }
+  auto parents = std::vector<size_t>(meshes.size() * samples);
+  std::iota(parents.begin(), parents.end(), size_t{0});
+  const auto root = [&](size_t index) {
+    while (parents[index] != index)
+    {
+      parents[index] = parents[parents[index]];
+      index = parents[index];
+    }
+    return index;
+  };
+  auto matched = std::vector<bool>(parents.size(), false);
+  auto links = std::vector<std::vector<size_t>>(meshes.size());
+  auto usedEdges = std::set<std::tuple<size_t, size_t, size_t>>{};
+  for (size_t a = 0; a < meshes.size(); ++a)
+  {
+    for (size_t b = a + 1; b < meshes.size(); ++b)
+    {
+      auto ambiguous = false;
+      const auto plan = planSew(*meshes[a], *meshes[b], &ambiguous);
+      if (ambiguous)
+      {
+        return std::nullopt;
+      }
+      if (!plan)
+      {
+        continue;
+      }
+      for (size_t side = 0; side < 2; ++side)
+      {
+        const auto& edge = (*plan)[side];
+        if (!usedEdges
+               .emplace(
+                 side == 0 ? a : b,
+                 std::min(edge.front(), edge.back()),
+                 std::max(edge.front(), edge.back()))
+               .second)
+        {
+          return std::nullopt;
+        }
+      }
+      links[a].push_back(b);
+      links[b].push_back(a);
+      for (size_t i = 0; i < size; ++i)
+      {
+        const auto first = a * samples + (*plan)[0][i];
+        const auto second = b * samples + (*plan)[1][i];
+        parents[root(second)] = root(first);
+        matched[first] = matched[second] = true;
+      }
+    }
+  }
+  auto visited = std::vector<bool>(meshes.size(), false);
+  auto pending = std::vector<size_t>{0};
+  while (!pending.empty())
+  {
+    const auto next = pending.back();
+    pending.pop_back();
+    if (!visited[next])
+    {
+      visited[next] = true;
+      pending.insert(pending.end(), links[next].begin(), links[next].end());
+    }
+  }
+  if (std::find(visited.begin(), visited.end(), false) != visited.end())
+  {
+    return std::nullopt;
+  }
+  auto groups = std::map<size_t, SewEdge>{};
+  for (size_t i = 0; i < matched.size(); ++i)
+  {
+    if (matched[i])
+    {
+      groups[root(i)].push_back(i);
+    }
+  }
+  auto result = std::vector<SewEdge>{};
+  for (auto& [_, group] : groups)
+  {
+    for (const auto a : group)
+    {
+      if (!vm::is_finite(meshes[a / samples]->positions()[a % samples]))
+      {
+        return std::nullopt;
+      }
+      for (const auto b : group)
+      {
+        if (
+          vm::length(
+            meshes[a / samples]->basePositions()[a % samples]
+            - meshes[b / samples]->basePositions()[b % samples])
+          > SourceDisplacement::TransformEpsilon)
+        {
+          return std::nullopt; // Do not chain tolerance into a wider base-point group.
+        }
+      }
+    }
+    result.push_back(std::move(group));
+  }
+  return result;
+}
+double seamMean(std::vector<double> values)
+{
+  std::sort(values.begin(), values.end());
+  if (values.size() == 2)
+  {
+    return std::midpoint(values[0], values[1]);
+  }
+  auto result = values.front();
+  for (size_t i = 1; i < values.size(); ++i)
+  {
+    const auto count = double(i + 1);
+    result = std::signbit(result) == std::signbit(values[i])
+               ? result + (values[i] - result) / count
+               : result * (double(i) / count) + values[i] / count;
   }
   return result;
 }
@@ -779,6 +936,129 @@ bool SourceDisplacement::sewWith(SourceDisplacement& other)
   static_assert(std::is_nothrow_move_assignable_v<SourceDisplacement>);
   *this = std::move(first);
   other = std::move(second);
+  return true;
+}
+bool SourceDisplacement::canSewTogether(
+  const std::vector<const SourceDisplacement*>& meshes)
+{
+  return planSewTogether(meshes).has_value();
+}
+bool SourceDisplacement::sewTogether(const std::vector<SourceDisplacement*>& meshes)
+{
+  const auto originals =
+    std::vector<const SourceDisplacement*>{meshes.begin(), meshes.end()};
+  const auto plan = planSewTogether(originals);
+  if (!plan)
+  {
+    throw std::invalid_argument{"Unsupported connected displacement position seams"};
+  }
+  if (meshes.size() == 2)
+  {
+    return meshes[0]->sewWith(*meshes[1]);
+  }
+  auto staged = std::vector<SourceDisplacement>{};
+  staged.reserve(meshes.size());
+  for (const auto* mesh : meshes)
+  {
+    staged.push_back(*mesh);
+  }
+  auto changed = std::vector<bool>(meshes.size(), false);
+  auto targets = std::vector<std::pair<SewEdge, vm::vec3d>>{};
+  const auto samples = meshes.front()->size() * meshes.front()->size();
+  for (const auto& group : *plan)
+  {
+    auto needsChange = false;
+    for (const auto a : group)
+    {
+      for (const auto b : group)
+      {
+        needsChange |= vm::length(
+                         meshes[a / samples]->m_positions[a % samples]
+                         - meshes[b / samples]->m_positions[b % samples])
+                       > TransformEpsilon;
+      }
+    }
+    if (!needsChange)
+    {
+      continue;
+    }
+    auto target = vm::vec3d{};
+    for (size_t axis = 0; axis < 3; ++axis)
+    {
+      auto values = std::vector<double>{};
+      for (const auto sample : group)
+      {
+        values.push_back(meshes[sample / samples]->m_positions[sample % samples][axis]);
+      }
+      target[axis] = seamMean(std::move(values));
+    }
+    if (!vm::is_finite(target))
+    {
+      invalid(meshes.front()->m_entry, "displacement seam average overflowed");
+    }
+    targets.emplace_back(group, target);
+    for (const auto sample : group)
+    {
+      const auto mesh = sample / samples;
+      const auto vertex = sample % samples;
+      const auto offset =
+        meshes[mesh]->m_offsets[vertex] + (target - meshes[mesh]->m_positions[vertex]);
+      if (!vm::is_finite(offset))
+      {
+        invalid(meshes[mesh]->m_entry, "displacement seam offset overflowed");
+      }
+      if (offset == meshes[mesh]->m_offsets[vertex])
+      {
+        continue;
+      }
+      if (staged[mesh].canInitializeOffsets())
+      {
+        staged[mesh].initializeOffsets();
+      }
+      staged[mesh].m_offsets[vertex] = offset;
+      changed[mesh] = true;
+    }
+  }
+  if (targets.empty())
+  {
+    return false;
+  }
+  for (size_t i = 0; i < staged.size(); ++i)
+  {
+    if (changed[i])
+    {
+      staged[i].rebuild();
+    }
+  }
+  for (const auto& [group, target] : targets)
+  {
+    for (const auto a : group)
+    {
+      const auto& actual = staged[a / samples].m_positions[a % samples];
+      if (vm::length(actual - target) > TransformEpsilon)
+      {
+        invalid(
+          meshes[a / samples]->m_entry, "displacement seam target is not representable");
+      }
+      for (const auto b : group)
+      {
+        if (
+          vm::length(actual - staged[b / samples].m_positions[b % samples])
+          > TransformEpsilon)
+        {
+          invalid(meshes[a / samples]->m_entry, "displacement seam is not representable");
+        }
+      }
+    }
+  }
+  static_assert(std::is_nothrow_move_assignable_v<SourceDisplacement>);
+  for (size_t i = 0; i < meshes.size(); ++i)
+  {
+    if (changed[i])
+    {
+      *meshes[i] = std::move(staged[i]);
+    }
+  }
   return true;
 }
 SourceDisplacement SourceDisplacement::translated(const vm::vec3d& delta) const

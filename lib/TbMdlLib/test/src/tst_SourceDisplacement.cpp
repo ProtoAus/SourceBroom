@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include "vm/mat_ext.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <stdexcept>
 
@@ -78,7 +79,302 @@ std::string offsetFixture(const size_t rowCount = 5)
   rows += "}\ntriangle_tags {";
   return replaceOnce(displacementFixture(), "triangle_tags {", rows);
 }
+const auto sewTileShifts =
+  std::array<vm::vec3d, 4>{vm::vec3d{0, 0, 0}, {64, 0, 0}, {0, 64, 0}, {64, 64, 0}};
+size_t sewCorner(const SourceDisplacement& mesh, const vm::vec3d& point = {64, 64, 0})
+{
+  const auto it =
+    std::find(mesh.basePositions().begin(), mesh.basePositions().end(), point);
+  REQUIRE(it != mesh.basePositions().end());
+  return size_t(it - mesh.basePositions().begin());
+}
+std::vector<SourceDisplacement> sewTiles(const size_t count, const bool raised = true)
+{
+  const auto original = loadDisplacement(alphaFixture());
+  auto result = std::vector<SourceDisplacement>{};
+  for (size_t i = 0; i < count; ++i)
+  {
+    result.push_back(original.translated(sewTileShifts.at(i)));
+    if (raised)
+    {
+      const auto index = sewCorner(result.back());
+      result.back().setDistance(index / 5, index % 5, 4.0 * double(i + 1));
+    }
+  }
+  return result;
+}
+std::vector<SourceDisplacement*> sewPointers(std::vector<SourceDisplacement>& meshes)
+{
+  auto result = std::vector<SourceDisplacement*>{};
+  for (auto& mesh : meshes)
+  {
+    result.push_back(&mesh);
+  }
+  return result;
+}
 } // namespace
+
+TEST_CASE("SourceDisplacement sews connected position groups without corner bias")
+{
+  const auto count = GENERATE(size_t{3}, size_t{4});
+  const auto reverse = GENERATE(false, true);
+  const auto existingOffsets = GENERATE(false, true);
+  auto meshes = sewTiles(count);
+  if (existingOffsets)
+  {
+    meshes[0].initializeOffsets();
+  }
+  const auto before = meshes;
+  auto first = meshes[0];
+  auto second = meshes[1];
+  REQUIRE(first.canSewWith(second));
+  REQUIRE(first.sewWith(second));
+  REQUIRE(first.positions()[sewCorner(first)].z() == 6); // Pair ACTS before batch.
+  auto pair = std::vector<SourceDisplacement>{meshes[0], meshes[1]};
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(pair)));
+  CHECK(pair[0] == first);
+  CHECK(pair[1] == second);
+  auto pointers = sewPointers(meshes);
+  if (reverse)
+  {
+    std::reverse(pointers.begin(), pointers.end());
+  }
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  REQUIRE(SourceDisplacement::sewTogether(pointers));
+  const auto expected = count == 3 ? 8.0 : 10.0;
+  const auto source = alphaFixture();
+  const auto document = VmfDocument::parse(source);
+  const auto original = loadDisplacement(source);
+  for (size_t i = 0; i < count; ++i)
+  {
+    const auto& mesh = meshes[i];
+    CHECK(mesh.positions()[sewCorner(mesh)].z() == expected);
+    CHECK(mesh.basePositions() == before[i].basePositions());
+    CHECK(mesh.indices() == before[i].indices());
+    CHECK(mesh.alphas() == before[i].alphas());
+    for (size_t j = 0; j < mesh.positions().size(); ++j)
+    {
+      CHECK(mesh.distance(j / 5, j % 5) == before[i].distance(j / 5, j % 5));
+      if (mesh.basePositions()[j].x() != 64 && mesh.basePositions()[j].y() != 64)
+      {
+        CHECK(mesh.positions()[j] == before[i].positions()[j]);
+      }
+    }
+    auto structural = std::vector<VmfStructuralEdit>{};
+    const auto edits = mesh.editsFrom(original, structural);
+    const auto expectedAppend = count == 3 && i == 1 ? 0u : 1u; // Original8 IS mean8.
+    REQUIRE(structural.size() == expectedAppend);
+    const auto saved = document.serialize(edits, structural);
+    CHECK(saved.find("future { key \"opaque\" }") != std::string::npos);
+    CHECK(saved.find("000.0 +64  128.00   192 255") != std::string::npos);
+    auto shiftedCorners = corners;
+    for (auto& corner : shiftedCorners)
+    {
+      corner = corner + sewTileShifts[i];
+    }
+    const auto parsed = VmfDocument::parse(saved);
+    const auto reopened = SourceDisplacement::read(
+      parsed, parsed.roots()[0], shiftedCorners, {0, 0, 1}, bounds);
+    REQUIRE(reopened);
+    CHECK(reopened->positions() == mesh.positions());
+    CHECK(reopened->alphas() == mesh.alphas());
+  }
+  const auto sewn = meshes;
+  CHECK_FALSE(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == sewn);
+}
+
+TEST_CASE("SourceDisplacement batch refuses unsupported seam graphs without mutation")
+{
+  auto meshes = sewTiles(3);
+  auto control = meshes;
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(control)));
+  REQUIRE(control[2].positions()[sewCorner(control[2])].z() == 8);
+  auto pointers = sewPointers(meshes);
+  SECTION("empty")
+  {
+    pointers.clear();
+  }
+  SECTION("single")
+  {
+    pointers.resize(1);
+  }
+  SECTION("null")
+  {
+    pointers[2] = nullptr;
+  }
+  SECTION("duplicate pointer")
+  {
+    pointers[2] = pointers[0];
+  }
+  SECTION("disconnected")
+  {
+    meshes[2] = loadDisplacement(alphaFixture()).translated({-128, 0, 0});
+  }
+  SECTION("vertex only")
+  {
+    meshes[2] = loadDisplacement(alphaFixture()).translated({-64, -64, 0});
+  }
+  SECTION("ambiguous overlap")
+  {
+    meshes[2] = loadDisplacement(alphaFixture());
+  }
+  SECTION("different power")
+  {
+    meshes[2] =
+      loadDisplacement("side { dispinfo { power 3 startposition \"[0 0 0]\" } }")
+        .translated({0, 64, 0});
+  }
+  SECTION("partial offsets")
+  {
+    meshes[2] = loadDisplacement(offsetFixture(1)).translated({0, 64, 0});
+  }
+  SECTION("aliased offsets")
+  {
+    meshes[2] = loadDisplacement(replaceOnce(offsetFixture(), "offsets {", "Offsets {"))
+                  .translated({0, 64, 0});
+  }
+  SECTION("unsupported mesh")
+  {
+    meshes[2] = SourceDisplacement{};
+  }
+  SECTION("more than one selected partner for a base edge")
+  {
+    auto rotation = vm::mat4x4d::identity();
+    rotation[0][0] = 0;
+    rotation[2][2] = 0;
+    rotation[0][2] = 1;
+    rotation[2][0] = -1;
+    meshes[2] = loadDisplacement(alphaFixture())
+                  .rigidlyTransformed(rotation)
+                  .translated({64, 0, 0});
+    REQUIRE(meshes[0].canSewWith(meshes[2]));
+    REQUIRE(meshes[1].canSewWith(meshes[2]));
+  }
+  SECTION("base tolerance cannot chain into a wider corner cluster")
+  {
+    meshes[1] = loadDisplacement(alphaFixture()).translated({64 - 0.75e-6, 0, 0});
+    meshes[2] = loadDisplacement(alphaFixture()).translated({0, 64 - 0.75e-6, 0});
+    REQUIRE(meshes[0].canSewWith(meshes[1]));
+    REQUIRE(meshes[0].canSewWith(meshes[2]));
+  }
+  const auto before = meshes;
+  CHECK_FALSE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  CHECK_THROWS(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == before);
+}
+
+TEST_CASE("SourceDisplacement batch preserves close and unchanged missing offset tables")
+{
+  auto meshes = sewTiles(4, false);
+  const auto before = meshes;
+  auto pointers = sewPointers(meshes);
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  CHECK_FALSE(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == before);
+  for (const auto& mesh : meshes)
+  {
+    CHECK(mesh.canInitializeOffsets());
+  }
+  meshes.resize(3);
+  const auto firstCorner = sewCorner(meshes[0]);
+  const auto lastCorner = sewCorner(meshes[2]);
+  meshes[0].setDistance(firstCorner / 5, firstCorner % 5, 8);
+  meshes[2].setDistance(lastCorner / 5, lastCorner % 5, 16);
+  const auto unchanged = meshes[0];
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(meshes)));
+  CHECK(meshes[0] == unchanged); // mean(8,0,16)=8 needs no first-mesh table/rebuild.
+  CHECK(meshes[0].canInitializeOffsets());
+  CHECK(meshes[1].canEditOffsets());
+  CHECK(meshes[2].canEditOffsets());
+  CHECK(meshes[2].positions()[lastCorner].z() == 8);
+}
+
+TEST_CASE("SourceDisplacement batch bounds mesh count while sewing a connected strip")
+{
+  const auto scale = 1.0 / 64.0;
+  const auto original =
+    loadDisplacement(alphaFixture())
+      .uniformlyScaled(vm::scaling_matrix(vm::vec3d{scale, scale, scale}));
+  auto meshes = std::vector<SourceDisplacement>{};
+  for (size_t i = 0; i < SourceDisplacement::MaxSewMeshes; ++i)
+  {
+    meshes.push_back(original.translated({double(i), 0, 0}));
+  }
+  meshes[0].setDistance(2, 4, 8);
+  const auto untouchedLast = meshes.back();
+  auto pointers = sewPointers(meshes);
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  REQUIRE(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes[0].positions()[14].z() == 4);
+  CHECK(meshes[1].positions()[10].z() == 4);
+  CHECK(meshes.back() == untouchedLast);
+  CHECK(meshes.back().canInitializeOffsets());
+  meshes.push_back(original.translated({double(SourceDisplacement::MaxSewMeshes), 0, 0}));
+  const auto before = meshes;
+  pointers = sewPointers(meshes);
+  CHECK_FALSE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  CHECK_THROWS(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == before);
+}
+
+TEST_CASE("SourceDisplacement batch stages every mesh before a later world-bound failure")
+{
+  const auto document = VmfDocument::parse(displacementFixture());
+  const auto smallCorners =
+    std::vector<vm::vec3d>{{0, 0, 0}, {8, 0, 0}, {8, 8, 0}, {0, 8, 0}};
+  const auto read = [&](const double extent) {
+    return *SourceDisplacement::read(
+      document, document.roots()[0], smallCorners, {0, 0, 1}, vm::bbox3d{extent});
+  };
+  auto meshes = std::vector<SourceDisplacement>{
+    read(128), read(128).translated({8, 0, 0}), read(16).translated({0, 8, 0})};
+  meshes[0].initializeOffsets();
+  meshes[0].setOffset(4, 4, {0, 0, 8});
+  auto control = meshes;
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(control)));
+  const auto common = sewCorner(control[2], {8, 8, 0});
+  REQUIRE(control[2].positions()[common].z() > 2);
+  meshes[0].setOffset(4, 4, {0, 0, 96});
+  const auto before = meshes;
+  const auto pointers = sewPointers(meshes);
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  CHECK_THROWS(SourceDisplacement::sewTogether(pointers)); // Mean32 exceeds LAST box16.
+  CHECK(meshes == before);
+}
+
+TEST_CASE("SourceDisplacement batch joins maximum65 grids without topology changes")
+{
+  const auto original =
+    loadDisplacement("side { dispinfo { power 6 startposition \"[0 0 0]\" } }");
+  auto meshes = std::vector<SourceDisplacement>{
+    original, original.translated({64, 0, 0}), original.translated({0, 64, 0})};
+  meshes[0].initializeOffsets();
+  meshes[0].setOffset(64, 64, {0, 0, 12});
+  const auto before = meshes;
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(meshes)));
+  for (size_t i = 0; i < meshes.size(); ++i)
+  {
+    const auto& mesh = meshes[i];
+    CHECK(mesh.size() == 65);
+    CHECK(mesh.positions()[sewCorner(mesh)].z() == 4);
+    CHECK(mesh.indices() == before[i].indices());
+    CHECK(mesh.basePositions() == before[i].basePositions());
+    CHECK(mesh.alphas() == before[i].alphas());
+  }
+}
 
 TEST_CASE("SourceDisplacement sews only one supported same-power base edge")
 {

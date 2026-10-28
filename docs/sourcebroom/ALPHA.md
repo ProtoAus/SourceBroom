@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.35 — bounded static material RGB tint
+# Try Windows SourceBroom A5.36 — connected displacement position seams
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,35 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.35: preview static Source material RGB
+## A5.36: sew a connected terrain patch in one operation
+
+Select a connected set of **2 to 64 same-power native displacement faces**, then
+use **Sew selected displacement position seams** in the face inspector. Each
+matching full base edge may have one selected partner. Three/four-way junctions
+use one average of all original world positions, independent of selection order;
+two-face behavior is retained. Disconnected, vertex-only, ambiguous/overlapping,
+non-manifold, mixed-power, partial/aliased and read-only selections stay refused.
+
+Only needed XYZ offsets change; explicit Sew may initialize absent offset rows.
+A member already at the common position need not acquire a table. All changed
+meshes rebuild and verify before any commit. It is one non-collating Undo/Redo
+command; already-close seams do not add history. Source alpha/distance, base UVs,
+triangles, native IDs and unknown records stay independent. This is **position**
+sewing, not normal welding, neighbor generation, sculpting or mixed-power sewing.
+
+Actual native inspector281 passes after the desired three-face eligibility red;
+focused model2888/13 and full Model322/App50/GL21/Render28 pass. Current full
+UI63/64 retains only the untouched known Unicode preference-rename failure,
+not skipped/fixed/retried. Seven builds0 compiler diagnostics/six fingerprints.
+Read/derived-build/serializer boundaries remain A5.31; corpus proof is retained,
+not fresh. Installed-package checks and human/Hammer acceptance are separate.
+
+**Small owner check (pending):** only if your copied map already has three/four
+compatible terrain faces meeting at a corner, Sew then Undo. They should meet
+and return. No hunt or original-file save needed. Optional Save As a new copy
+and matching-Hammer comparison remain separate. Keep whole A5.35/A5.33/A5.25.
+
+## Retained A5.35: preview static Source material RGB
 
 Known basic preview shaders now retain literal `$color` / `$color2` factors rather
 than omitting them. Three finite normalized components, optionally `[ ... ]`, or

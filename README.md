@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.35 bounded static Source material RGB preview:
+**Status:** Windows A5.36 connected native displacement position seams:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,26 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.35 restores bounded authored **`$color` / `$color2` RGB modulation** in known
+A5.36 extends **Sew selected displacement position seams** to a connected set
+of **2–64 same-power native meshes**. Corresponding full base edges form one solve;
+three/four-way corners average all original positions once, without sequential
+pair bias. Only needed XYZ offsets change. Every changed mesh is staged/rebuilt
+before the whole batch commits as one Undo/Redo command; already-close seams are
+no-ops. Alpha, distance, topology, native IDs and unknown data remain independent.
+This is position sewing, not normal welding, neighbor generation or mixed-power
+resampling. Disconnected, ambiguous, non-manifold, partial and read-only inputs
+remain protected.
+
+The native inspector passes281 assertions after one desired three-face eligibility
+failure with198 controls passing; focused model2888/13 and full Model322/App50/
+GL21/Render28 pass. Current full UI63/64 has only the known untouched Unicode
+preference-rename AccessDenied failure; no skip/suppression/retry for green.
+Seven builds have zero compiler diagnostics on six held code fingerprints.
+Reader/derived-mesh/serializer boundaries and object fields match A5.31; its
+corpus evidence is retained, not rerun/re-dated. Use whole A5.36 on copies and keep
+A5.35/A5.33/A5.25. Human/Hammer/SDK and complete Source acceptance remain pending.
+
+Retained A5.35 restores bounded authored **`$color` / `$color2` RGB modulation** in known
 basic material previews, including models, browsers, UV view and masked terrain.
 Normalized literal triples (or byte-scale `{ ... }` triples) multiply together;
 alpha/cutout/opacity/editor fade stay separate. Raw images, byte budgets, vertex

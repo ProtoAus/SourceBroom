@@ -1,11 +1,50 @@
-# SourceBroom validation — A5.35 bounded static material RGB
+# SourceBroom validation — A5.36 connected displacement position seams
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.35 — bounded static material RGB modulation
+## A5.36 — connected displacement position-seam batches
+
+- Actual tests-only native inspector build0/runtime199:198 controls pass, ONE
+  desired connected-three eligibility failure in OLD exactly-two production.
+  Pair sewing ACTS/Undo restores bytes before that assertion. The EXACT SAME
+  inspector SHA then passes281/1; current whitespace-only-formatted version also
+  passes281, including three/four corners, one command, Undo/Redo/idempotence,
+  stale eligible selection, Save As strict/preview reopen and read-only refusal.
+  Original red/green bytes/logs retained; no compile/stale/silence credit.
+- Focused core2888/13 passes: old pair behavior, independent common means and
+  selection order, interiors/alpha/distance/topology/base preservation, native
+  lexical roundtrip, no-op and original-at-mean member without new offset rows.
+  Positive sewing precedes invalid/alias/partial/mixed-power/disconnected/
+  non-manifold/tolerance-chain guards.64-mesh strip acts,65 cap refuses; maximum65
+  grids sew and a later THIRD world-box failure leaves ALL originals unchanged.
+- Initial core2644/2639pass/5fail were OWN new-test errors, not feature failures:
+  four table expectations for original8 already at mean8, one nonuniform fixture
+  from one-component vec initialization. Corrected expectations/explicitXYZ scale;
+  product unchanged. Own C4456 shadow warning renamed, not suppressed; no runtime
+  credit before warning correction. LSP caught own vec+= before compiling.
+- CURRENT actual full Model322/App50/GL21/Render28 pass; full UI63/64 only the known
+  untouched QPreferenceStore Unicode rename AccessDenied. Native inspector281
+  passes in that full run. No skip/fix/retry for green. Fresh LastTest records
+  classified; stale LastTestsFailed files are not current failures or deleted.
+- Seven actual builds0 compiler diagnostics/six held code fingerprints. Complete
+  direct parent review, changed-range format/UTF8/diffcheck and explicit LSP are
+  not independent/clean-LSP/tidy/human/Hammer. Whole VmfDocument/File/Scene and
+  SourceDisplacement read/derived-rebuild/transform+native-serializer suffix, plus
+  private object fields, match A531. SOURCE checkout-EOL comparison only, never
+  original/asset/evidence normalization. The whole displacement file DOES change.
+  Retain corpus document38/strict35same3reasons/preview38, not fresh/re-dated;
+  original38SHA, installed authored strict probe and portable checks stay separate.
+
+Connected supported same-power2..64 POSITION seams only, one selected partner per
+full base edge. No normal weld, neighbor generation, mixed-power resampling,
+sculpt/create/power/topology or SDK/Hammer/compiler certification. No vertex layout
+or shader change; retained A535 RGB evidence is not a new GPU claim. Keep whole
+A5.35/A5.33/A5.25 recovery; complete native Source work continues.
+
+## Retained A5.35 — bounded static material RGB modulation
 
 - Schema-only actual build0/runtime289:228 acting controls,60 desired RGB parse/
   demand failures and ONE own wrong unknown-shader fallback assumption. Corrected
@@ -20,7 +59,7 @@ separate states. Full A4/A5 exit and a general release are **not** claimed.
   Face uses synthetic shared-cache Vertex values +REAL production holder/VBO.
   Neither is an actual native mesh/cache instance. No new vertex bytes.
 - Full Model315/316 initially caught2 untouched scalar1 base-image checks; product
-  now preserves that neutral omission, old test unchanged. CURRENT full
+  now preserves that neutral omission, old test unchanged. At A5.35 delivery,
   Model316/UI64/App50/GL21/Render28 pass with matching actual Passed/zeroFailed.
   Seven builds0 compiler diagnostics,12 held code fingerprints. Shader/host/GPUtest
   unchanged by parser compatibility fix; retain3847 without gratuitous rerun.

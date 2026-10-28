@@ -339,9 +339,12 @@ bool canSewSourceDisplacements(const Map& map)
     return false;
   }
   const auto faces = selectedDisplacementFaces(map);
-  return faces.size() == 2 && faces[0] != faces[1]
-         && faces[0].face().sourceDisplacement()->canSewWith(
-           *faces[1].face().sourceDisplacement());
+  auto meshes = std::vector<const SourceDisplacement*>{};
+  for (const auto& face : faces)
+  {
+    meshes.push_back(&*face.face().sourceDisplacement());
+  }
+  return SourceDisplacement::canSewTogether(meshes);
 }
 bool sewSourceDisplacements(Map& map)
 {
@@ -350,30 +353,35 @@ bool sewSourceDisplacements(Map& map)
     return false;
   }
   const auto faces = selectedDisplacementFaces(map);
-  const auto& beforeFirst = *faces[0].face().sourceDisplacement();
-  const auto& beforeSecond = *faces[1].face().sourceDisplacement();
-  auto first = beforeFirst;
-  auto second = beforeSecond;
+  auto before = std::vector<SourceDisplacement>{};
+  for (const auto& face : faces)
+  {
+    before.push_back(*face.face().sourceDisplacement());
+  }
+  auto after = before;
+  auto meshes = std::vector<SourceDisplacement*>{};
+  for (auto& mesh : after)
+  {
+    meshes.push_back(&mesh);
+  }
   try
   {
-    if (!first.sewWith(second))
+    if (!SourceDisplacement::sewTogether(meshes))
     {
-      return true; // No new tables, command or pending-redo loss for an existing seam.
+      return true; // No new tables, command or pending-redo loss for existing seams.
     }
     return applyAndSwap(
       map,
-      "Sew Displacement Position Seam",
+      "Sew Displacement Position Seams",
       faces,
       [&](auto& face) {
-        if (*face.sourceDisplacement() == beforeFirst)
+        for (size_t i = 0; i < before.size(); ++i)
         {
-          face.setSourceDisplacement(first);
-          return true;
-        }
-        if (*face.sourceDisplacement() == beforeSecond)
-        {
-          face.setSourceDisplacement(second);
-          return true;
+          if (*face.sourceDisplacement() == before[i])
+          {
+            face.setSourceDisplacement(after[i]);
+            return true;
+          }
         }
         return false;
       },

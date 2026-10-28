@@ -5,7 +5,36 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Static Source material RGB preview — A5.35
+## Connected displacement position-seam sewing — A5.36
+
+Select2..64 connected same-power native displacement faces, then **Sew selected
+displacement position seams**. Corresponding full base edges match in either
+orientation; each edge can have one selected partner. All boundary equivalence
+groups solve together from ORIGINAL world positions. Three/four-way corners get
+one common mean, not sequential pair bias. Two-face behavior stays intact.
+
+Only needed XYZ offsets change. Explicit Sew may create absent zero rows, but a
+member already at the target needs no new table. All changed copies rebuild and
+verify before the whole set commits. It is one non-collating history command;
+Undo/Redo and preserving Save As/reopen apply to the whole batch, while already-
+close seams add no history. Existing stale-press/read-only/backend gates remain.
+Distance/alpha/directions, base UV, triangles, native IDs and unknown data stay.
+
+Disconnected/vertex-only/ambiguous/overlapping/non-manifold sets, mixed powers,
+partial/aliased data and more than64 meshes refuse. This is POSITION sewing, not
+normal welding, neighbor generation, mixed-power resampling or arbitrary compiler
+validity. The64 cap bounds this editor planner, not the native file format.
+
+Inspector281 passes after one desired connected3 runtime failure with198 acting
+controls. Focused model2888/13 and full Model322/App50/GL21/Render28 pass; current
+UI63/64 only known untouched Unicode preference rename AccessDenied, not fixed/
+skipped/retried. Seven builds0 compiler diagnostics/six fingerprints. Direct parent
+review is not independent/clean-LSP/tidy/human/Hammer. A531 read/derived-build/
+serializer boundary proof and corpus38/35same3/38 are retained, not rerun/re-dated.
+See [pending small owner check](../../lextest.md); use whole A5.36 on copies and
+keep whole A5.35/A5.33/A5.25. Complete Source support remains in progress.
+
+## Retained static Source material RGB preview — A5.35
 
 Known basic preview shaders now apply `$color` and `$color2` componentwise, rather
 than dropping the authored RGB. Three finite normalized values, optionally `[ ... ]`,
@@ -22,7 +51,7 @@ or native parity. Full regression caught and fixed that compatibility in product
 old test unchanged. This is not full gamma/branch/material-shader reproduction.
 
 Same-test real desktop GPU3847 passes after59 desired partial-wiring RGB failures;
-CURRENT full Model316/UI64/App50/GL21/Render28 pass, seven builds0 compiler
+A5.35 full Model316/UI64/App50/GL21/Render28 pass, seven builds0 compiler
 diagnostics/12 held fingerprints. GPU uses synthetic shared Vertex values through
 actual production holder/VBO/Face, not an actual native cache instance. Native
 source/corpus proof retained, not re-dated; no new owner/Hammer acceptance.

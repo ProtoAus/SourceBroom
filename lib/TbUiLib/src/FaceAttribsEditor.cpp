@@ -678,13 +678,14 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   displacementLayout->addWidget(m_initializeDisplacementOffsets, 9, 0, 1, 4);
   displacementLayout->addWidget(m_displacementOffsetStatus, 10, 0, 1, 4);
   faceAttribsLayout->addWidget(m_displacementEditor, r, 0, 1, 4);
-  m_sewDisplacements = new QPushButton{tr("Sew selected displacement position seam")};
+  m_sewDisplacements = new QPushButton{tr("Sew selected displacement position seams")};
   m_sewDisplacements->setObjectName("sourceDisplacementSew");
   m_sewDisplacements->setEnabled(false); // Fail closed until the first deferred refresh.
   m_sewDisplacements->setToolTip(tr(
-    "Two same-power native meshes and one full shared base edge only. Explicit Sew may "
-    "initialize absent offset rows. Does not weld normals, change power or repair "
-    "partial data."));
+    "A connected set of 2 to 64 same-power native meshes with full shared base edges. "
+    "Shared corners use one average of all original positions. Explicit Sew may "
+    "initialize absent offset rows. Does not weld normals, change power, generate "
+    "neighbors or repair partial data."));
   faceAttribsLayout->addWidget(m_sewDisplacements, r + 1, 0, 1, 4);
   connect(m_sewDisplacements, &QAbstractButton::pressed, this, [this] {
     m_sewIntent = m_sewDisplacements->isEnabled()
