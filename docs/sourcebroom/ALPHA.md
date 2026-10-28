@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.38 — clip and mirror cached brushes
+# Try Windows SourceBroom A5.39 — edit imprecise cached brushes
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,34 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.38: clip and mirror Strata and Hammer++ brushes
+## A5.39: edit brushes whose caches are slightly off
+
+A5.39 makes brushes with imprecise Strata/Hammer++ caches editable. About 17%
+of the owner's brushes (6,993 of 41,245) store cached vertices 0.0001 to over
+1 unit from the vertices their planes imply (Strata writes each plane through
+a face's first three cached points; later points can sit off it), and every
+edit used to need a 1e-6 match. A cached point now matches a vertex within a
+quarter of the face's shortest vertex gap and at most 1 unit, with the same
+uniqueness, count and order checks. A pure move carries each cached point by
+the same offset, so precise shapes move rigidly; any other edit writes such a
+point's plane-derived vertex. Brushes more than 1 unit off
+or with a different vertex count (about 1%) still refuse. Brush entities that
+hold `hidden { solid }` blocks no longer block geometry edits across their map.
+
+Still refused: hidden solids (not selectable), brushes owned by unsupported
+group structures, vertex edits that add faces, and the three maps that refuse
+strict loading.
+
+VMF tests (120 cases, 24596 assertions) and full
+Model335/App50/GL21/Render28 pass, UI64; seven targets build
+with zero compiler diagnostics. Real maps: 724 clips on 33 of the owner's 38
+maps saved, reopened and edited again (A5.38: 634 on 31); originals unchanged.
+
+**Small owner check (pending):** on a COPY of a map where some brushes refused to
+move before, move and clip one, Save As a new file, and open it in the Hammer
+that saved the map. Keep whole A5.38/A5.37/A5.25.
+
+## Retained A5.38: clip and mirror Strata and Hammer++ brushes
 
 Maps saved by Strata Hammer or Hammer++ store a vertex cache on every face, and
 until now that made **Clip** (front/back or Both) and **Flip** refuse on every

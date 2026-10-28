@@ -5,7 +5,30 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Clip and mirror cached Strata/Hammer++ brushes — A5.38
+## Imprecise caches and entity hidden solids — A5.39
+
+A5.39 makes brushes with imprecise Strata/Hammer++ caches editable. About 17%
+of the owner's brushes (6,993 of 41,245) store cached vertices 0.0001 to over
+1 unit from the vertices their planes imply (Strata writes each plane through
+a face's first three cached points; later points can sit off it), and every
+edit used to need a 1e-6 match. A cached point now matches a vertex within a
+quarter of the face's shortest vertex gap and at most 1 unit, with the same
+uniqueness, count and order checks. A pure move carries each cached point by
+the same offset, so precise shapes move rigidly; any other edit writes such a
+point's plane-derived vertex. Brushes more than 1 unit off
+or with a different vertex count (about 1%) still refuse. Brush entities that
+hold `hidden { solid }` blocks no longer block geometry edits across their map.
+
+Still refused: hidden solids (not selectable), brushes owned by unsupported
+group structures, vertex edits that add faces, and the three maps that refuse
+strict loading.
+
+VMF tests (120 cases, 24596 assertions) and full
+Model335/App50/GL21/Render28 pass, UI64; seven targets build
+with zero compiler diagnostics. Real maps: 724 clips on 33 of the owner's 38
+maps saved, reopened and edited again (A5.38: 634 on 31); originals unchanged.
+
+## Retained clip and mirror cached Strata/Hammer++ brushes — A5.38
 
 The normal Clip tool (front/back and Both) and Flip now work on brushes whose
 faces carry Strata `point_data` or Hammer++ `vertices_plus`. Changed faces get

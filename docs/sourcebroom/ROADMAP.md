@@ -33,7 +33,12 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.38 candidate:** Clip (front/back, Both) and Flip on brushes with Strata
+- **A5.39 candidate:** imprecise Strata/Hammer++ caches (17% of the owner's
+  brushes) editable within a quarter-gap, 1-unit vertex tolerance, pure moves
+  carrying precise points; entity `hidden { solid }` no longer blocks a map.
+  724 real-map clips on 33/38 maps. Hidden solids, unsupported group owners and
+  face-adding vertex edits still refuse.
+- **Retained A5.38 candidate:** Clip (front/back, Both) and Flip on brushes with Strata
   point_data or Hammer++ vertices_plus caches (every brush in the owner's maps);
   changed faces' caches rewritten to the corpus conventions, cut faces cached,
   untouched bytes kept. 634 real-map clips on 31/38 maps saved, reopened and

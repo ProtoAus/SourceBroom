@@ -278,7 +278,7 @@ TEST_CASE("VmfScene point_data refuses unsafe cache and topology", "[vmf]")
       replace("1 0 64 64", "1 nan 64 64");
       break;
     case 4:
-      replace("1 0 64 64", "1 1 64 64");
+      replace("1 0 64 64", "1 9 64 64"); // Beyond the 1-unit match tolerance.
       break;
     case 5:
       malformed += cache;
@@ -521,7 +521,8 @@ TEST_CASE("VmfScene coupled polygon displacement preserves guard boundaries", "[
           R"(vertices_plus { v "64 64 64" v "64 0 64" v "0 0 64" v "0 64 64" })"};
   if (fault == 2)
   {
-    polygon.replace(polygon.find("0 64 64"), 7, "1 64 64");
+    // Beyond the 1-unit match tolerance; smaller offsets are admitted as imprecision.
+    polygon.replace(polygon.find("0 64 64"), 7, "9 64 64");
   }
   auto source = fixture(
     false,
@@ -591,7 +592,7 @@ TEST_CASE("VmfScene vertices_plus strict schema and operation guards", "[vmf]")
       replace("0 64 64", "0 0 64");
       break;
     case 2:
-      replace("0 64 64", "1 64 64");
+      replace("0 64 64", "9 64 64"); // Beyond the 1-unit match tolerance.
       break;
     case 3:
       replace("0 64 64", "0 64");

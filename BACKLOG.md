@@ -124,15 +124,38 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   cache rewrites for incidence changes other than a clip or mirror. Falsifier for a
   fix: a vertex edit that adds a face saves new sides with fresh IDs, UVs and (on a
   cached brush) a rewritten cache, and reopens and re-edits like a clip does.
-- **Imprecise polygon caches block all geometry edits — `polygonCacheEdits`.** Every
+- **Imprecise polygon caches (mostly fixed in A5.39) — `polygonCacheEdits`.** Every
   edit matches each cached row to a plane-derived vertex within 1e-6. Measured on
   the owner's 38 maps (`artifacts/full-source/a538_cache_deviation.py`): 83.05% of
   41,245 non-displacement brushes match exactly, but 6,993 (16.95%) have cached
   vertices 0.0001 to over 1 unit from what their planes imply (2.4% up to 0.01,
   9.7% up to 0.1, 4.2% up to 1, 0.4% beyond). 85 of 153 sampled real-map clip
   refusals were this; 63 of those 85 brushes also refused a plain move and 22
-  accepted one, which is not yet explained (find out first). Likely the
+  accepted one; A5.39 found those 22 were hidden brushes that could not be
+  selected, so the probe's move was of an empty selection. A5.39 admits offsets
+  within a quarter vertex gap and 1 unit; about 1% of brushes (more than 1 unit
+  off, or a different vertex count) still refuse. Likely the
   editors keep precise vertices while plane points are rounded. Falsifier for a
   fix: such brushes move, clip and mirror with caches kept consistent (moves
   carry each cached point by its vertex's motion, rewrites follow the planes),
   while ambiguous or far-off (stale) caches still refuse.
+- **A5.39 cache tolerance follow-ups (review, calculated, not observed).** (1) A
+  pure move is detected when every vertex delta agrees within 1e-9; on badly
+  conditioned brushes far from the origin, plane-rebuilt vertices might differ by
+  more, so the move would heal imprecise rows instead of carrying them (safe, but
+  loses Strata's precise shape). A fractional move of a cube at ~3000 units carried
+  correctly. (2) A rewritten face starts at plane point 0 only when that point is a
+  vertex within 1e-6; on Strata-shaped imprecise faces it may not be, so the ring
+  starts elsewhere. Falsifier: a real-map move that heals, or a Strata reload that
+  depends on the start.
+- **Hidden solids cannot be edited — VmfScene clip/selection ownership.** Solids in a
+  `hidden` wrapper (Hammer's hide) are not selectable, so they refuse clips and
+  moves; 37 of the A5.39 real-map samples. Editing them needs a native "unhide" that
+  moves the solid out of its wrapper (and back on undo), which is not implemented.
+  Falsifier: unhide/edit/re-hide round-trips byte-exactly and Hammer shows the same
+  hidden set.
+- **Unsupported group owners — `unsupported native group component geometry owner`.**
+  22 A5.39 real-map samples (concentrated in three maps) refuse moves and clips
+  because their group structure is outside the supported ownership shapes.
+  Falsifier: identify the group shapes in those maps and admit them with ownership
+  tests, without weakening the closed cached-group guards.

@@ -303,6 +303,8 @@ std::set<VmfEntryId> polygonCacheEdits(
   };
   auto correspondence = std::map<size_t, PolygonCorrespondence>{};
   auto inPlace = true;
+  auto carried = std::optional<vm::vec3d>{};
+  auto translated = true;
   const auto positionKey = [](const vm::vec3d& position) {
     return std::array<double, 3>{position.x(), position.y(), position.z()};
   };
@@ -388,7 +390,25 @@ std::set<VmfEntryId> polygonCacheEdits(
       }
       return nullptr;
     };
-    if (const auto* problem = correspond())
+    const auto* problem = correspond();
+    if (!problem)
+    {
+      // A pure translation carries cached points by the same offset, keeping their
+      // precise (sometimes non-planar) shape; other motions write plane vertices.
+      for (const auto& [binding, polygon] : correspondence)
+      {
+        for (size_t i = 0; i < polygon.indices.size(); ++i)
+        {
+          const auto delta = polygon.after[polygon.indices[i]] - polygon.before[i];
+          if (carried && !vm::is_equal(*carried, delta, 1e-9))
+          {
+            translated = false;
+          }
+          carried = delta;
+        }
+      }
+    }
+    else
     {
       // Rewrites cover clips (a side added or removed) and mirrors (reversed winding);
       // other incidence changes keep the in-place refusal.
@@ -453,6 +473,18 @@ std::set<VmfEntryId> polygonCacheEdits(
     {
       refuse(*block, "native polygon cache count does not match brush polygon");
     }
+    // Owner corpus: 17% of brushes cache vertices up to ~1 unit off their planes.
+    // A quarter of the shortest gap keeps each match unique; larger offsets refuse.
+    auto gap = std::numeric_limits<double>::max();
+    for (size_t i = 0; i < count; ++i)
+    {
+      for (size_t j = i + 1; j < count; ++j)
+      {
+        gap = std::min(gap, vm::length(oldRing[i] - oldRing[j]));
+      }
+    }
+    const auto tolerance =
+      std::max(SourceDisplacement::TransformEpsilon, std::min(1.0, gap / 4));
     auto oldForIndex = std::vector<size_t>(count, count);
     auto usedOld = std::set<size_t>{};
     for (size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex)
@@ -481,7 +513,7 @@ std::set<VmfEntryId> polygonCacheEdits(
       auto match = std::optional<size_t>{};
       for (size_t i = 0; i < count; ++i)
       {
-        if (vm::is_equal(position, oldRing[i], SourceDisplacement::TransformEpsilon))
+        if (vm::length(position - oldRing[i]) <= tolerance)
         {
           if (match)
           {
@@ -510,14 +542,22 @@ std::set<VmfEntryId> polygonCacheEdits(
         spans[i] = {cursor, tokens[i].size()};
         cursor += tokens[i].size();
       }
+      // A pure move carries the row; any other motion writes an imprecise row's whole
+      // plane vertex, so no kept axis holds an error off the transformed plane.
+      const auto carry = translated && carried;
+      const auto heal =
+        !carry
+        && vm::length(position - oldRing[*match]) > SourceDisplacement::TransformEpsilon;
       for (size_t axis = 3; axis > 0; --axis)
       {
-        if (oldRing[*match][axis - 1] != replacement[axis - 1])
+        if (heal || oldRing[*match][axis - 1] != replacement[axis - 1])
         {
+          const auto value =
+            carry ? position[axis - 1] + (*carried)[axis - 1] : replacement[axis - 1];
           updated.replace(
             spans[offset + axis - 1].first,
             spans[offset + axis - 1].second,
-            number(replacement[axis - 1]));
+            number(value));
         }
       }
       if (updated != raw)
@@ -1136,7 +1176,14 @@ std::optional<std::string> geometryProblem(const VmfDocument& d, const WorldNode
         if (d.entries()[child].isBlock())
         {
           const auto name = key(d, child);
-          if (name != "solid" && name != "editor" && !supportedConnections(d, id, child))
+          const auto hiddenSolids =
+            name == "hidden"
+            && std::ranges::all_of(d.entries()[child].children, [&](const auto entry) {
+                 return d.entries()[entry].isBlock() && key(d, entry) == "solid";
+               });
+          if (
+            name != "solid" && name != "editor" && !hiddenSolids
+            && !supportedConnections(d, id, child))
           {
             return "unknown entity attachment may reference this brush";
           }

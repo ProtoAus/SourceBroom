@@ -21,7 +21,45 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Clip and mirror with rewritten polygon caches — A5.38
+## Imprecise polygon caches and entity hidden solids — A5.39
+
+Measured (`a538_cache_deviation.py`, `a539_deviation_shape.py`): 6,993 of 41,245
+corpus brushes have a cached vertex more than 1e-6 from every plane-derived
+vertex; 99.4% keep the per-face vertex count and 99.2% deviate by less than a
+quarter of the shortest vertex gap (median 0.08% of it). `polygonCacheEdits`
+matches each row within `max(1e-6, min(1, gap / 4))` of the face's own
+plane-derived ring, so no row can be near two vertices; count, bijection and
+cyclic checks are unchanged. When in-place correspondence holds and every vertex
+moved by one offset (within 1e-9), changed coordinates are written as cached
+value + offset. Any other motion writes an imprecise row's whole plane vertex:
+review found that keeping its unchanged axes raw could leave the row off a
+rotated sloped plane (reproduced as a rotate test, then fixed). Exact rows keep
+the old per-axis patch. Rewrites (clip, mirror) regenerate from the planes, and faces
+they leave untouched keep their admitted rows.
+
+`geometryProblem` treated any entity child block other than solid/editor/
+connections as an unknown attachment, refusing geometry edits map-wide; four
+owner maps hold 372 `hidden { solid }` blocks in brush entities. A hidden block
+whose children are all solids is now accepted.
+
+Tests: a cube with one cached corner 0.02 off its plane moves (the point is
+carried to 68.02, not snapped to 68), rotates and clips, then reopens and edits
+again; 0.9 and 1.5 unit offsets on a 64 cube and 0.4/0.6 on a 2-unit cube show
+both bounds; an entity hidden solid no longer blocks a world move/clip, while
+other hidden content still refuses. Five existing "invalid cache" fixtures used
+a 1-unit offset (one, via an unanchored search, really a 0.01 offset); they now
+use 9 units. The real-map probe now requires the brush to be selected and to
+move: A5.38's "22 accepted a move" were hidden brushes that could not be
+selected, so an empty selection had trivially "moved". One VMF run hit "Cannot
+exclusively create VMF temporary file" in three unrelated save tests; they
+passed when rerun and in the final runs.
+
+VMF tests (120 cases, 24596 assertions) and full
+Model335/App50/GL21/Render28 pass, UI64; seven targets build
+with zero compiler diagnostics. Real maps: 724 clips on 33 of the owner's 38
+maps saved, reopened and edited again (A5.38: 634 on 31); originals unchanged.
+
+## Retained clip and mirror with rewritten polygon caches — A5.38
 
 Strata `point_data` and Hammer++ `vertices_plus` were patchable only in place, so
 any change to a cached brush's sides, incidence or winding refused. Measured on

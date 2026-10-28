@@ -4,6 +4,14 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.39 imprecise cached brushes — pending small owner check
+
+No new owner observation. Whole A5.39 on a COPY; keep whole A5.38/A5.37/A5.25.
+
+- [ ] On a copy of a map where some brushes refused to move in A5.38, move and
+  clip one of them, then Save As a NEW file.
+- [ ] Open that file in the Hammer that saved the map; the brush should look right.
+
 ## A5.38 clip and mirror cached brushes — pending small owner check
 
 No new owner observation. Whole A5.38 on a COPY; keep whole A5.37/A5.36/A5.25.

@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.38 clipping and mirroring of Strata/Hammer++ cached brushes:
+**Status:** Windows A5.39 editing of imprecise Strata/Hammer++ cached brushes:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,28 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.38 lets the normal **Clip** tool (front/back and Both) and **Flip** work on
+A5.39 makes brushes with imprecise Strata/Hammer++ caches editable. About 17%
+of the owner's brushes (6,993 of 41,245) store cached vertices 0.0001 to over
+1 unit from the vertices their planes imply (Strata writes each plane through
+a face's first three cached points; later points can sit off it), and every
+edit used to need a 1e-6 match. A cached point now matches a vertex within a
+quarter of the face's shortest vertex gap and at most 1 unit, with the same
+uniqueness, count and order checks. A pure move carries each cached point by
+the same offset, so precise shapes move rigidly; any other edit writes such a
+point's plane-derived vertex. Brushes more than 1 unit off
+or with a different vertex count (about 1%) still refuse. Brush entities that
+hold `hidden { solid }` blocks no longer block geometry edits across their map.
+
+VMF tests (120 cases, 24596 assertions) and full
+Model335/App50/GL21/Render28 pass, UI64; seven targets build
+with zero compiler diagnostics. Real maps: 724 clips on 33 of the owner's 38
+maps saved, reopened and edited again (A5.38: 634 on 31); originals unchanged.
+Still refused: hidden solids (not selectable), brushes owned by unsupported
+group structures, vertex edits that add faces, and the three maps that refuse
+strict loading. Use whole A5.39 on copies and keep whole
+A5.38/A5.37/A5.25.
+
+Retained A5.38 lets the normal **Clip** tool (front/back and Both) and **Flip** work on
 brushes that carry Strata `point_data` or Hammer++ `vertices_plus` face caches,
 which in the owner's 38 maps is every brush (all 261,351 sides). Each changed
 face's cache is rewritten from its new shape the way those editors save it:

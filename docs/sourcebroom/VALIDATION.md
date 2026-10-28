@@ -1,11 +1,28 @@
-# SourceBroom validation — A5.38 clip and mirror cached brushes
+# SourceBroom validation — A5.39 imprecise caches and entity hidden solids
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.38 — clip and mirror Strata/Hammer++ cached brushes
+## A5.39 — imprecise caches and entity hidden solids
+
+- Red on A5.38 code: an imprecise cube refused move, rotate and clip in both
+  schemas; in-tolerance offsets (0.9, 0.4) refused; an entity hidden solid
+  blocked a world move and clip.
+- Green: all pass; a move carries the precise point (68.02); out-of-tolerance
+  offsets (1.5 on 64 units, 0.6 on 2 units) and non-solid hidden content refuse.
+- Real maps: refusals for cache precision fell from 85 to 2 sampled brushes and
+  for entity attachments from 40 to 2; 724 clips on 33 of 38 maps.
+- VMF tests (120 cases, 24596 assertions) and full
+Model335/App50/GL21/Render28 pass, UI64; seven targets build
+with zero compiler diagnostics. Real maps: 724 clips on 33 of the owner's 38
+maps saved, reopened and edited again (A5.38: 634 on 31); originals unchanged.
+- One independent review: the kept-axis defect was reproduced and fixed; two
+  calculated risks are in BACKLOG. An intermittent "Cannot exclusively create VMF
+  temporary file" hit three unrelated save tests once; they passed on rerun.
+
+## Retained A5.38 — clip and mirror Strata/Hammer++ cached brushes
 
 - Red: on A5.37 code a cube cached on every side refused clip, corner clip,
   Both and mirror in both schemas (8 of 8) after an acting move control.

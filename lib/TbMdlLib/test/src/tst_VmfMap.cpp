@@ -51,6 +51,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -333,17 +334,36 @@ std::string nativePolygonEntity(const std::string& polygon)
 
 // Every side carries a cache, as in Strata (point_data) and Hammer++ (vertices_plus)
 // saves; rings wind like the plane points and start at the first one.
-std::string nativeCachedCube(const bool indexed)
+// One cached row moved off its vertex, as in about 17% of the owner's brushes.
+struct CacheOffset
+{
+  size_t side; // Plane order 0..5.
+  size_t row;
+  vm::vec3d delta;
+};
+
+std::string nativeCachedCube(
+  const bool indexed,
+  const double size = 64,
+  const std::optional<CacheOffset>& offset = std::nullopt,
+  const vm::vec3d& shift = {})
 {
   auto source = nativeRamp(false);
   const auto slope = std::string{"(0 0 32) (0 64 32) (64 0 64)"};
   source.replace(source.find(slope), slope.size(), "(0 0 64) (0 64 64) (64 0 64)");
   const auto document = VmfDocument::parse(source);
-  const auto xyz = [](const vm::vec3d& p) {
-    return std::to_string(int(p.x())) + " " + std::to_string(int(p.y())) + " "
-           + std::to_string(int(p.z()));
+  const auto decimal = [](const double v) {
+    // Shortest round-trip text (64.02, 1088.145): exact, as editors write decimals.
+    auto buffer = std::array<char, 32>{};
+    const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), v).ptr;
+    return std::string{buffer.data(), end};
   };
+  const auto xyz = [&](const vm::vec3d& p) {
+    return decimal(p.x()) + " " + decimal(p.y()) + " " + decimal(p.z());
+  };
+  auto planes = std::vector<VmfValueEdit>{};
   auto append = std::vector<VmfStructuralEdit>{};
+  auto side = size_t{0};
   for (size_t i = 0; i < document.entries().size(); ++i)
   {
     const auto& entry = document.entries()[i];
@@ -359,8 +379,19 @@ std::string nativeCachedCube(const bool indexed)
     for (auto& point : p)
     {
       input >> point[0] >> point[1] >> point[2];
+      point = point * (size / 64) + shift;
     }
-    const auto ring = std::array<vm::vec3d, 4>{p[0], p[1], p[1] + p[2] - p[0], p[2]};
+    if (size != 64 || shift != vm::vec3d{})
+    {
+      planes.push_back(
+        {i, "\"(" + xyz(p[0]) + ") (" + xyz(p[1]) + ") (" + xyz(p[2]) + ")\""});
+    }
+    auto ring = std::array<vm::vec3d, 4>{p[0], p[1], p[1] + p[2] - p[0], p[2]};
+    if (offset && offset->side == side)
+    {
+      ring[offset->row] = ring[offset->row] + offset->delta;
+    }
+    ++side;
     auto block =
       std::string{indexed ? R"(point_data { "numpts" "4" )" : "vertices_plus { "};
     for (size_t k = 0; k < ring.size(); ++k)
@@ -371,7 +402,7 @@ std::string nativeCachedCube(const bool indexed)
     append.push_back({VmfStructuralEdit::Type::Append, *entry.parent, block + "}"});
   }
   REQUIRE(append.size() == 6);
-  return document.serialize({}, append);
+  return document.serialize(planes, append);
 }
 
 // Independent of the writer: each side's cache is its face polygon, wound like the
@@ -381,10 +412,42 @@ void checkRegeneratedCaches(
   const bool indexed,
   const size_t solids,
   const std::set<std::string>* only = nullptr,
-  const vm::bbox3d& bounds = vm::bbox3d{4096})
+  const vm::bbox3d& bounds = vm::bbox3d{4096},
+  const std::string* original = nullptr)
 {
   const auto scene = VmfScene::read(saved, bounds);
   const auto& document = scene.document();
+  // Blocks an edit left byte-identical may keep the owner's admitted imprecision.
+  const auto blocksById = [](const VmfDocument& source, const std::string& text) {
+    auto result = std::map<std::string, std::string>{};
+    for (const auto& entry : source.entries())
+    {
+      if (!entry.isBlock() || source.tokenContents(entry.key) != "side")
+      {
+        continue;
+      }
+      auto id = std::string{};
+      auto block = std::string{};
+      for (const auto child : entry.children)
+      {
+        const auto& field = source.entries()[child];
+        const auto name = source.tokenContents(field.key);
+        if (field.value && name == "id")
+        {
+          id = std::string{source.tokenContents(*field.value)};
+        }
+        if (field.isBlock() && (name == "point_data" || name == "vertices_plus"))
+        {
+          block = text.substr(field.key.offset, field.end - field.key.offset);
+        }
+      }
+      result.emplace(id, block);
+    }
+    return result;
+  };
+  const auto untouched = original ? blocksById(VmfDocument::parse(*original), *original)
+                                  : std::map<std::string, std::string>{};
+  const auto current = blocksById(document, saved);
   auto brushes = std::vector<const BrushNode*>{};
   const auto visit = [&](auto&& self, const Node& node) -> void {
     if (
@@ -447,6 +510,26 @@ void checkRegeneratedCaches(
       REQUIRE(blocks == 1);
       const auto polygon = face.vertexPositions();
       REQUIRE(rows.size() == polygon.size());
+      auto sideId = std::string{};
+      for (const auto child : document.entries()[face.lineNumber() - 1].children)
+      {
+        const auto& field = document.entries()[child];
+        if (field.value && document.tokenContents(field.key) == "id")
+        {
+          sideId = std::string{document.tokenContents(*field.value)};
+        }
+      }
+      const auto kept =
+        untouched.contains(sideId) && untouched.at(sideId) == current.at(sideId);
+      auto gap = std::numeric_limits<double>::max();
+      for (size_t i = 0; i < polygon.size(); ++i)
+      {
+        for (size_t j = i + 1; j < polygon.size(); ++j)
+        {
+          gap = std::min(gap, vm::length(polygon[i] - polygon[j]));
+        }
+      }
+      const auto tolerance = kept ? std::min(1.0, gap / 4) : 1e-6;
       REQUIRE(rows.rbegin()->first == rows.size() - 1);
       if (indexed)
       {
@@ -456,8 +539,9 @@ void checkRegeneratedCaches(
       auto normal = vm::vec3d{};
       for (const auto& [index, point] : rows)
       {
-        const auto match = std::ranges::find_if(
-          polygon, [&](const auto& vertex) { return vm::is_equal(vertex, point, 1e-6); });
+        const auto match = std::ranges::find_if(polygon, [&](const auto& vertex) {
+          return vm::length(vertex - point) <= tolerance;
+        });
         REQUIRE(match != polygon.end());
         ring.push_back(size_t(match - polygon.begin()));
         normal = normal + vm::cross(point, rows.at((index + 1) % rows.size()));
@@ -470,7 +554,7 @@ void checkRegeneratedCaches(
       }
       const auto& p = face.points();
       CHECK(vm::dot(normal, vm::cross(p[1] - p[0], p[2] - p[0])) > 0);
-      if (indexed && std::ranges::any_of(polygon, [&](const auto& vertex) {
+      if (indexed && !kept && std::ranges::any_of(polygon, [&](const auto& vertex) {
             return vm::is_equal(vertex, p[0], 1e-6);
           }))
       {
@@ -543,8 +627,9 @@ TEST_CASE("VmfMap polygon caches history save and atomic refusal", "[vmf]")
   source = document.serialize({}, append);
   if (invalid)
   {
+    // Beyond the 1-unit match tolerance; smaller offsets are admitted as imprecision.
     const auto row = indexed ? std::string{"1 0 64 32"} : std::string{"0 64 32"};
-    source.replace(source.find(row), row.size(), indexed ? "1 1 64 32" : "1 64 32");
+    source.replace(source.find(row), row.size(), indexed ? "1 9 64 32" : "9 64 32");
   }
   auto env = fs::TestEnvironment{};
   const auto input = env.dir() / "point-data.vmf";
@@ -757,11 +842,18 @@ TEST_CASE("VmfMap cached brush clipping installed opt-in", "[.][vmf][installed]"
         auto reason = std::string{error.what()};
         const auto colon = reason.find(": ");
         reason = colon == std::string::npos ? reason : reason.substr(colon + 2);
-        // Does the same brush accept a plain move? Undone so later samples are
-        // unaffected.
-        if (translateSelection(map, {1, 0, 0}))
+        // Does the same brush accept a plain move? It must really be selected and
+        // really move; an empty selection "moves" trivially. Undone afterwards.
+        const auto start = brush->brush().bounds().min;
+        if (map.selection().brushes != std::vector<BrushNode*>{brush})
         {
-          ++reasons[reason + " | move acts"];
+          ++reasons[reason + " | not selectable"];
+        }
+        else if (translateSelection(map, {1, 0, 0}))
+        {
+          const auto moved = brush->brush().bounds().min == start + vm::vec3d{1, 0, 0};
+          ++reasons
+            [reason + (moved ? " | move acts" : " | move reports success, no motion")];
           map.undoCommand();
         }
         else
@@ -780,7 +872,7 @@ TEST_CASE("VmfMap cached brush clipping installed opt-in", "[.][vmf][installed]"
                       << " clipped, " << refused << " refused");
   REQUIRE_FALSE(clipped.empty());
   const auto saved = map.vmfScene()->serialize(map.worldNode());
-  checkRegeneratedCaches(saved, *indexed, clipped.size(), &clipped, bounds);
+  checkRegeneratedCaches(saved, *indexed, clipped.size(), &clipped, bounds, &inputBytes);
   auto env = fs::TestEnvironment{};
   const auto output = env.dir() / "clipped copy.vmf";
   REQUIRE(map.saveAs(output).is_success());
@@ -803,6 +895,235 @@ TEST_CASE("VmfMap cached brush clipping installed opt-in", "[.][vmf][installed]"
   WARN(
     candidates.size() << " cached world brushes, " << clipped.size() << " clipped, "
                       << refused << " refused");
+}
+
+TEST_CASE(
+  "VmfMap imprecise caches move clip and rotate within a vertex tolerance", "[vmf]")
+{
+  const auto indexed = GENERATE(false, true);
+  const auto operation = GENERATE(
+    std::string{"move"},
+    std::string{"far move"},
+    std::string{"rotate"},
+    std::string{"clip"});
+  CAPTURE(indexed, operation);
+  // Top face (plane 5), row 2 is corner (64,64,64): 0.02 off its plane, like the corpus.
+  // "far move" puts the cube at fractional coordinates far from the origin first.
+  const auto shift =
+    operation == "far move" ? vm::vec3d{3001.5, -2777.25, 1024.125} : vm::vec3d{};
+  const auto original =
+    nativeCachedCube(indexed, 64, CacheOffset{5, 2, {0, 0, 0.02}}, shift);
+  const auto corner = vm::vec3d{64, 64, 64} + shift;
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto env = fs::TestEnvironment{};
+  const auto input = env.dir() / "imprecise cube.vmf";
+  writeBinary(input, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(input, config);
+  auto& node = ramp(map);
+  selectNodes(map, {&node});
+  REQUIRE(map.selection().brushes == std::vector<BrushNode*>{&node});
+  const auto before = node.brush().bounds();
+  const auto delta =
+    operation == "far move" ? vm::vec3d{0.37, -1.11, 2.5} : vm::vec3d{16, 8, 4};
+  if (operation == "move" || operation == "far move")
+  {
+    REQUIRE(translateSelection(map, delta));
+    CHECK(vm::is_equal(node.brush().bounds().min, before.min + delta, 1e-9));
+  }
+  else if (operation == "rotate")
+  {
+    REQUIRE(rotateSelection(map, {32, 32, 32}, {0, 0, 1}, vm::to_radians(90.0)));
+  }
+  else
+  {
+    REQUIRE(clipBrushes(map, {&node}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+  }
+  const auto saved = map.vmfScene()->serialize(map.worldNode());
+  REQUIRE(saved != original);
+  // Rows of the top face; the imprecise one started at corner + (0, 0, 0.02).
+  const auto topRows = [&] {
+    const auto top = VmfDocument::parse(sideFragment(saved, "8"));
+    auto rows = std::vector<vm::vec3d>{};
+    for (const auto& entry : top.entries())
+    {
+      const auto name = top.tokenContents(entry.key);
+      if (entry.value && (name == "point" || name == "v"))
+      {
+        auto row = std::istringstream{std::string{top.tokenContents(*entry.value)}};
+        auto values = std::vector<double>{};
+        for (auto value = 0.0; row >> value;)
+        {
+          values.push_back(value);
+        }
+        rows.emplace_back(
+          values[values.size() - 3], values[values.size() - 2], values.back());
+      }
+    }
+    return rows;
+  };
+  if (operation == "move" || operation == "far move")
+  {
+    // A pure move carries the precise point (z + 0.02), not the plane vertex.
+    const auto target = corner + delta + vm::vec3d{0, 0, 0.02};
+    CHECK(std::ranges::any_of(topRows(), [&](const auto& row) {
+      return vm::is_equal(row, target, 1e-9);
+    }));
+  }
+  if (operation == "rotate")
+  {
+    // Any other motion writes the plane vertex on every axis: no row keeps an old error.
+    const auto& face = node.brush().face(*node.brush().findFace(vm::vec3d{0, 0, 1}));
+    const auto polygon = face.vertexPositions();
+    for (const auto& row : topRows())
+    {
+      CHECK(std::ranges::any_of(polygon, [&](const auto& vertex) {
+        return vm::is_equal(row, vertex, 1e-9);
+      }));
+    }
+  }
+  if (operation == "move")
+  {
+    const auto top = VmfDocument::parse(sideFragment(saved, "8"));
+    auto carried = false;
+    for (const auto& entry : top.entries())
+    {
+      const auto name = top.tokenContents(entry.key);
+      if (entry.value && (name == "point" || name == "v"))
+      {
+        auto row = std::istringstream{std::string{top.tokenContents(*entry.value)}};
+        auto values = std::vector<double>{};
+        for (auto value = 0.0; row >> value;)
+        {
+          values.push_back(value);
+        }
+        const auto* xyz = values.data() + values.size() - 3;
+        carried =
+          carried || (xyz[0] == 80 && xyz[1] == 72 && std::abs(xyz[2] - 68.02) < 1e-9);
+      }
+    }
+    CHECK(carried);
+  }
+  else if (operation == "clip")
+  {
+    checkRegeneratedCaches(saved, indexed, 1);
+  }
+  const auto output = env.dir() / "imprecise edited.vmf";
+  REQUIRE(map.saveAs(output).is_success());
+  auto reopened = MapFixture{};
+  auto& loaded = reopened.load(output, config);
+  selectNodes(loaded, {&ramp(loaded)});
+  REQUIRE(translateSelection(loaded, {1, 2, 3})); // Revalidates every cached row.
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  CHECK(readBinary(input) == original);
+}
+
+TEST_CASE("VmfMap caches too far from their vertices still refuse", "[vmf]")
+{
+  const auto kind =
+    GENERATE(std::string{"beyond one unit"}, std::string{"beyond a quarter vertex gap"});
+  CAPTURE(kind);
+  // A 64-unit cube allows up to 1 unit; a 2-unit cube allows a quarter of its 2-unit gap.
+  const auto size = kind == "beyond one unit" ? 64.0 : 2.0;
+  const auto accepted = kind == "beyond one unit" ? 0.9 : 0.4;
+  const auto refused = kind == "beyond one unit" ? 1.5 : 0.6;
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto env = fs::TestEnvironment{};
+  for (const auto deviation : {accepted, refused})
+  {
+    CAPTURE(deviation);
+    const auto original =
+      nativeCachedCube(true, size, CacheOffset{5, 2, {0, 0, deviation}});
+    const auto input = env.dir() / ("deviation " + std::to_string(deviation) + ".vmf");
+    writeBinary(input, original);
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(input, config);
+    auto& node = ramp(map);
+    selectNodes(map, {&node});
+    REQUIRE(map.selection().brushes == std::vector<BrushNode*>{&node});
+    const auto count = map.modificationCount();
+    CHECK(translateSelection(map, {1, 0, 0}) == (deviation == accepted));
+    CHECK(map.modificationCount() == count + (deviation == accepted ? 1 : 0));
+    if (deviation == refused)
+    {
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    }
+  }
+}
+
+TEST_CASE("VmfMap entity hidden solids do not block world geometry edits", "[vmf]")
+{
+  const auto withEntity = [](const std::string& hidden) {
+    auto source = nativeCachedCube(true);
+    // Brush entity holding a hidden solid, as in four of the owner's maps.
+    return source + "entity { \"id\" \"300\" \"classname\" \"func_detail\" hidden { "
+           + hidden + " } editor { \"color\" \"0 180 0\" } }\r\n";
+  };
+  const auto cube = nativeCachedCube(true);
+  const auto solid = VmfDocument::parse(nativeFragment(cube, "2"));
+  auto ids = std::vector<VmfValueEdit>{};
+  for (size_t i = 0; i < solid.entries().size(); ++i)
+  {
+    const auto& entry = solid.entries()[i];
+    if (entry.value && solid.tokenContents(entry.key) == "id")
+    {
+      const auto id = std::stoull(std::string{solid.tokenContents(*entry.value)});
+      ids.push_back({i, '"' + std::to_string(id + 100) + '"'});
+    }
+  }
+  const auto original = withEntity(solid.serialize(ids));
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto env = fs::TestEnvironment{};
+  const auto input = env.dir() / "entity hidden.vmf";
+  writeBinary(input, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(input, config);
+  auto* node = dynamic_cast<BrushNode*>(&nativeNode(map, "2"));
+  REQUIRE(node);
+  selectNodes(map, {node});
+  REQUIRE(map.selection().brushes == std::vector<BrushNode*>{node});
+  REQUIRE(translateSelection(map, {8, 0, 0}));
+  REQUIRE(clipBrushes(map, {node}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+  const auto saved = map.vmfScene()->serialize(map.worldNode());
+  CHECK(nativeFragment(saved, "300") == nativeFragment(original, "300"));
+  map.undoCommand();
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+
+  // Anything else in that hidden block stays an unknown attachment (or unloadable).
+  const auto foreign = withEntity("foreign { key value }");
+  const auto refuses = [&] {
+    try
+    {
+      auto scene = VmfScene::read(foreign, vm::bbox3d{4096});
+      for (auto* child : scene.world().defaultLayer()->children())
+      {
+        if (
+          auto* brush = dynamic_cast<BrushNode*>(child);
+          brush && scene.nativeId(*brush) == "2")
+        {
+          auto moved = brush->brush();
+          REQUIRE(moved
+                    .transform(
+                      vm::bbox3d{4096}, vm::translation_matrix(vm::vec3d{8, 0, 0}), true)
+                    .is_success());
+          scene.validateContents(
+            *brush, NodeContents{std::move(moved)}, vm::bbox3d{4096});
+          return false;
+        }
+      }
+      return false;
+    }
+    catch (const std::invalid_argument&)
+    {
+      return true;
+    }
+  };
+  CHECK(refuses());
 }
 
 TEST_CASE("VmfMap partial or mixed caches refuse clip and mirror atomically", "[vmf]")
@@ -1205,7 +1526,14 @@ TEST_CASE("VmfMap coupled polygon displacement history and atomic refusal", "[vm
     {
       const auto cacheStart = source.find(polygon);
       REQUIRE(cacheStart != std::string::npos);
-      source.replace(source.find("0 64 64", cacheStart), 7, "1 64 64");
+      // Beyond the 1-unit match tolerance; smaller offsets are admitted as imprecision.
+      // (An unanchored "0 64 64" matched inside "64.00 64 64": a 0.01 offset.)
+      const auto row =
+        indexed ? std::string{"\"1 0 64 64\""} : std::string{"\"0 64 64\""};
+      source.replace(
+        source.find(row, cacheStart),
+        row.size(),
+        indexed ? "\"1 9 64 64\"" : "\"9 64 64\"");
     }
     if (fault == 1)
     {
@@ -1523,7 +1851,8 @@ TEST_CASE("VmfMap polygon cache closed owner invalid batch is atomic", "[vmf]")
   }
   if (fault == 4)
   {
-    polygon.replace(polygon.find("0 64 64"), 7, "1 64 64");
+    // Beyond the 1-unit match tolerance; smaller offsets are admitted as imprecision.
+    polygon.replace(polygon.find("0 64 64"), 7, "9 64 64");
   }
   auto source = nativePolygonEntity(polygon);
   if (fault == 0)
