@@ -5,7 +5,27 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Mixed-power displacement position seams — A5.37
+## Clip and mirror cached Strata/Hammer++ brushes — A5.38
+
+The normal Clip tool (front/back and Both) and Flip now work on brushes whose
+faces carry Strata `point_data` or Hammer++ `vertices_plus`. Changed faces get
+their cache rewritten from the new shape (wound like the plane, point_data
+starting at plane point 0), new cut faces get the same kind of cache, untouched
+faces keep their bytes. Partly cached or mixed brushes, displacements, hidden
+solids and brushes an unknown entity may reference still refuse.
+About 17% of the brushes in those maps (6,993 of 41,245) have cached vertices
+0.0001 to over 1 unit from the vertices their planes imply. Those refuse
+clipping, and in a real-map sample 63 of 85 also refused a plain move (22
+accepted one, not yet explained). That is the next fix (BACKLOG).
+
+The VMF tests (117 cases, 24132 assertions) and full
+Model332/App50/GL21/Render28 pass; UI 63/64 fails only the known
+untouched QPreferenceStore rename. Seven targets build with zero compiler
+diagnostics. On 31 of the owner's 38 maps, 634 real brushes were
+clipped, saved, reopened and edited again; every original is unchanged. See [pending small owner
+check](../../lextest.md).
+
+## Retained mixed-power displacement position seams — A5.37
 
 **Sew selected displacement position seams** accepts connected selections that
 mix powers 2–6. A matching edge must be a full shared base edge, in either

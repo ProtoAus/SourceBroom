@@ -56,6 +56,8 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -279,6 +281,28 @@ std::string nativeFragment(const std::string& source, const std::string& id)
   throw std::logic_error{"Native fragment is absent: " + id};
 }
 
+std::string sideFragment(const std::string& source, const std::string& id)
+{
+  const auto document = VmfDocument::parse(source);
+  for (const auto& entry : document.entries())
+  {
+    if (entry.isBlock() && document.tokenContents(entry.key) == "side")
+    {
+      for (const auto child : entry.children)
+      {
+        const auto& property = document.entries()[child];
+        if (
+          property.value && document.tokenContents(property.key) == "id"
+          && document.tokenContents(*property.value) == id)
+        {
+          return source.substr(entry.key.offset, entry.end - entry.key.offset);
+        }
+      }
+    }
+  }
+  throw std::logic_error{"Native side is absent: " + id};
+}
+
 std::string nativePolygonRoom(const std::string& polygon)
 {
   auto source = nativeDisplacementRoom(polygon);
@@ -305,6 +329,155 @@ std::string nativePolygonEntity(const std::string& polygon)
   }
   return source + R"(entity { id 10 classname func_detail origin "0.00 0 0" )" + solid
          + document.serialize(edits) + " }";
+}
+
+// Every side carries a cache, as in Strata (point_data) and Hammer++ (vertices_plus)
+// saves; rings wind like the plane points and start at the first one.
+std::string nativeCachedCube(const bool indexed)
+{
+  auto source = nativeRamp(false);
+  const auto slope = std::string{"(0 0 32) (0 64 32) (64 0 64)"};
+  source.replace(source.find(slope), slope.size(), "(0 0 64) (0 64 64) (64 0 64)");
+  const auto document = VmfDocument::parse(source);
+  const auto xyz = [](const vm::vec3d& p) {
+    return std::to_string(int(p.x())) + " " + std::to_string(int(p.y())) + " "
+           + std::to_string(int(p.z()));
+  };
+  auto append = std::vector<VmfStructuralEdit>{};
+  for (size_t i = 0; i < document.entries().size(); ++i)
+  {
+    const auto& entry = document.entries()[i];
+    if (!entry.value || document.tokenContents(entry.key) != "plane")
+    {
+      continue;
+    }
+    auto text = std::string{document.tokenContents(*entry.value)};
+    std::ranges::replace(text, '(', ' ');
+    std::ranges::replace(text, ')', ' ');
+    auto input = std::istringstream{text};
+    auto p = std::array<vm::vec3d, 3>{};
+    for (auto& point : p)
+    {
+      input >> point[0] >> point[1] >> point[2];
+    }
+    const auto ring = std::array<vm::vec3d, 4>{p[0], p[1], p[1] + p[2] - p[0], p[2]};
+    auto block =
+      std::string{indexed ? R"(point_data { "numpts" "4" )" : "vertices_plus { "};
+    for (size_t k = 0; k < ring.size(); ++k)
+    {
+      block += indexed ? "\"point\" \"" + std::to_string(k) + " " + xyz(ring[k]) + "\" "
+                       : "\"v\" \"" + xyz(ring[k]) + "\" ";
+    }
+    append.push_back({VmfStructuralEdit::Type::Append, *entry.parent, block + "}"});
+  }
+  REQUIRE(append.size() == 6);
+  return document.serialize({}, append);
+}
+
+// Independent of the writer: each side's cache is its face polygon, wound like the
+// plane points and (point_data, as in the owner's corpus) starting at plane point 0.
+void checkRegeneratedCaches(
+  const std::string& saved,
+  const bool indexed,
+  const size_t solids,
+  const std::set<std::string>* only = nullptr,
+  const vm::bbox3d& bounds = vm::bbox3d{4096})
+{
+  const auto scene = VmfScene::read(saved, bounds);
+  const auto& document = scene.document();
+  auto brushes = std::vector<const BrushNode*>{};
+  const auto visit = [&](auto&& self, const Node& node) -> void {
+    if (
+      const auto* brush = dynamic_cast<const BrushNode*>(&node);
+      brush && (!only || only->contains(scene.nativeId(*brush))))
+    {
+      brushes.push_back(brush);
+    }
+    for (const auto* child : node.children())
+    {
+      self(self, *child);
+    }
+  };
+  visit(visit, scene.world());
+  REQUIRE(brushes.size() == solids);
+  for (const auto* brush : brushes)
+  {
+    for (const auto& face : brush->brush().faces())
+    {
+      auto rows = std::map<size_t, vm::vec3d>{};
+      auto numpts = std::optional<size_t>{};
+      auto blocks = 0;
+      for (const auto child : document.entries()[face.lineNumber() - 1].children)
+      {
+        const auto name = document.tokenContents(document.entries()[child].key);
+        if (name != "point_data" && name != "vertices_plus")
+        {
+          continue;
+        }
+        ++blocks;
+        CHECK(name == (indexed ? "point_data" : "vertices_plus"));
+        if (indexed)
+        {
+          const auto& first =
+            document.entries()[document.entries()[child].children.at(0)];
+          CHECK(document.tokenContents(first.key) == "numpts");
+        }
+        for (const auto row : document.entries()[child].children)
+        {
+          const auto& entry = document.entries()[row];
+          REQUIRE(entry.value);
+          auto input =
+            std::istringstream{std::string{document.tokenContents(*entry.value)}};
+          if (document.tokenContents(entry.key) == "numpts")
+          {
+            numpts.emplace();
+            input >> *numpts;
+            continue;
+          }
+          auto index = rows.size();
+          if (indexed)
+          {
+            input >> index;
+          }
+          auto point = vm::vec3d{};
+          input >> point[0] >> point[1] >> point[2];
+          REQUIRE(rows.emplace(index, point).second);
+        }
+      }
+      REQUIRE(blocks == 1);
+      const auto polygon = face.vertexPositions();
+      REQUIRE(rows.size() == polygon.size());
+      REQUIRE(rows.rbegin()->first == rows.size() - 1);
+      if (indexed)
+      {
+        CHECK(numpts == rows.size());
+      }
+      auto ring = std::vector<size_t>{};
+      auto normal = vm::vec3d{};
+      for (const auto& [index, point] : rows)
+      {
+        const auto match = std::ranges::find_if(
+          polygon, [&](const auto& vertex) { return vm::is_equal(vertex, point, 1e-6); });
+        REQUIRE(match != polygon.end());
+        ring.push_back(size_t(match - polygon.begin()));
+        normal = normal + vm::cross(point, rows.at((index + 1) % rows.size()));
+      }
+      const auto step = (ring[1] + ring.size() - ring[0]) % ring.size();
+      CHECK((step == 1 || step == ring.size() - 1));
+      for (size_t i = 0; i < ring.size(); ++i)
+      {
+        CHECK(ring[(i + 1) % ring.size()] == (ring[i] + step) % ring.size());
+      }
+      const auto& p = face.points();
+      CHECK(vm::dot(normal, vm::cross(p[1] - p[0], p[2] - p[0])) > 0);
+      if (indexed && std::ranges::any_of(polygon, [&](const auto& vertex) {
+            return vm::is_equal(vertex, p[0], 1e-6);
+          }))
+      {
+        CHECK(vm::is_equal(rows.at(0), p[0], 1e-6));
+      }
+    }
+  }
 }
 
 std::vector<vm::vec3d> nativeCubePoints()
@@ -416,6 +589,273 @@ TEST_CASE("VmfMap polygon caches history save and atomic refusal", "[vmf]")
     CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
   }
   CHECK(readBinary(input) == source);
+}
+
+TEST_CASE("VmfMap cached brushes clip and mirror with regenerated caches", "[vmf]")
+{
+  const auto indexed = GENERATE(false, true);
+  const auto operation = GENERATE(
+    std::string{"clip"},
+    std::string{"corner clip"},
+    std::string{"both"},
+    std::string{"mirror"},
+    std::string{"centred mirror"});
+  CAPTURE(indexed, operation);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto env = fs::TestEnvironment{};
+  const auto input = env.dir() / "cached cube.vmf";
+  const auto original = nativeCachedCube(indexed);
+  writeBinary(input, original);
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(input, config);
+  auto& node = ramp(map);
+  selectNodes(map, {&node});
+  REQUIRE(translateSelection(map, {8, 0, 0})); // Control: these caches are valid input.
+  map.undoCommand();
+  REQUIRE(map.vmfScene()->serialize(map.worldNode()) == original);
+  const auto axisCut = std::array<vm::vec3d, 3>{{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}};
+  // Three faces become pentagons, so cached vertex counts change, not just coordinates.
+  const auto cornerCut = std::array<vm::vec3d, 3>{{{32, 0, 0}, {0, 32, 0}, {0, 0, 32}}};
+  const auto count = map.modificationCount();
+  if (operation == "mirror" || operation == "centred mirror")
+  {
+    // The UI flips about the selection centre, mapping four faces onto themselves.
+    const auto x = operation == "mirror" ? 0.0 : 32.0;
+    REQUIRE(flipSelection(map, {x, 32, 32}, vm::axis::x));
+  }
+  else if (operation == "both")
+  {
+    REQUIRE(clipBrushesBoth(map, {&node}, axisCut));
+  }
+  else
+  {
+    REQUIRE(clipBrushes(map, {&node}, operation == "clip" ? axisCut : cornerCut));
+  }
+  CHECK(map.modificationCount() == count + 1);
+  const auto once = map.vmfScene()->serialize(map.worldNode());
+  REQUIRE(once != original);
+  checkRegeneratedCaches(once, indexed, operation == "both" ? 2 : 1);
+  if (operation == "clip")
+  {
+    CHECK(sideFragment(once, "3") == sideFragment(original, "3")); // x=0 face untouched.
+  }
+  // A second cut on the already-rewritten brush, before any save.
+  REQUIRE(clipBrushes(map, {&node}, {{{0, 64, 40}, {24, 64, 64}, {0, 40, 64}}}));
+  const auto saved = map.vmfScene()->serialize(map.worldNode());
+  REQUIRE(saved != once);
+  checkRegeneratedCaches(saved, indexed, operation == "both" ? 2 : 1);
+  const auto output = env.dir() / "regenerated.vmf";
+  REQUIRE(map.saveAs(output).is_success());
+  CHECK(readBinary(output) == saved);
+  auto reopened = MapFixture{};
+  auto& loaded = reopened.load(output, config);
+  auto brushes = std::vector<Node*>{};
+  for (auto* child : loaded.worldNode().defaultLayer()->children())
+  {
+    if (dynamic_cast<BrushNode*>(child))
+    {
+      brushes.push_back(child);
+    }
+  }
+  REQUIRE(brushes.size() == (operation == "both" ? 2u : 1u));
+  selectNodes(loaded, brushes);
+  // A further edit revalidates every saved cache row against the reopened geometry.
+  REQUIRE(translateSelection(loaded, {1, 2, 3}));
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == once);
+  map.undoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+  map.redoCommand();
+  map.redoCommand();
+  CHECK(map.vmfScene()->serialize(map.worldNode()) == saved);
+  CHECK(readBinary(input) == original);
+}
+
+// Real maps stay outside the repository: SOURCEBROOM_CLIP_INPUT names one read-only VMF.
+TEST_CASE("VmfMap cached brush clipping installed opt-in", "[.][vmf][installed]")
+{
+  const auto* input = std::getenv("SOURCEBROOM_CLIP_INPUT");
+  REQUIRE(input);
+  const auto inputBytes = readBinary(input);
+  const auto bounds = vm::bbox3d{VmfScene::PreviewWorldExtent};
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = bounds};
+  auto fixture = MapFixture{};
+  auto& map = fixture.load(input, config);
+  const auto& document = map.vmfScene()->document();
+  auto candidates = std::vector<BrushNode*>{};
+  auto indexed = std::optional<bool>{};
+  for (auto* child : map.worldNode().defaultLayer()->children())
+  {
+    auto* brush = dynamic_cast<BrushNode*>(child);
+    if (!brush)
+    {
+      continue;
+    }
+    auto schemas = std::set<std::string>{};
+    auto cached = size_t{0};
+    for (const auto& face : brush->brush().faces())
+    {
+      if (face.sourceDisplacement())
+      {
+        cached = 0;
+        break;
+      }
+      for (const auto field : document.entries()[face.lineNumber() - 1].children)
+      {
+        const auto name = document.tokenContents(document.entries()[field].key);
+        if (name == "point_data" || name == "vertices_plus")
+        {
+          schemas.emplace(name);
+          ++cached;
+        }
+      }
+    }
+    if (cached == brush->brush().faceCount() && schemas.size() == 1)
+    {
+      candidates.push_back(brush);
+      const auto brushIndexed = *schemas.begin() == "point_data";
+      REQUIRE(indexed.value_or(brushIndexed) == brushIndexed); // One schema per map.
+      indexed = brushIndexed;
+    }
+  }
+  const auto samples = std::min(candidates.size(), size_t{25});
+  REQUIRE(samples > 0);
+  auto clipped = std::set<std::string>{};
+  auto refused = size_t{0};
+  auto reasons = std::map<std::string, size_t>{};
+  for (size_t i = 0; i < samples; ++i)
+  {
+    auto* brush = candidates[i * candidates.size() / samples];
+    const auto c = brush->brush().bounds().center();
+    const auto e = brush->brush().bounds().size();
+    deselectAll(map);
+    selectNodes(map, {brush});
+    if (
+      clipBrushes(
+        map,
+        {brush},
+        {{{c.x(), c.y(), c.z()},
+          {c.x(), c.y(), c.z() + e.z()},
+          {c.x(), c.y() + e.y(), c.z()}}}))
+    {
+      clipped.insert(map.vmfScene()->nativeId(*brush));
+    }
+    else
+    {
+      ++refused;
+      // The owner gate is const; content-path refusals report "admitted by owner gate".
+      try
+      {
+        map.vmfScene()->validateClipContents(
+          *brush, NodeContents{brush->brush()}, bounds);
+        ++reasons["admitted by owner gate"];
+      }
+      catch (const std::exception& error)
+      {
+        auto reason = std::string{error.what()};
+        const auto colon = reason.find(": ");
+        reason = colon == std::string::npos ? reason : reason.substr(colon + 2);
+        // Does the same brush accept a plain move? Undone so later samples are
+        // unaffected.
+        if (translateSelection(map, {1, 0, 0}))
+        {
+          ++reasons[reason + " | move acts"];
+          map.undoCommand();
+        }
+        else
+        {
+          ++reasons[reason + " | move refuses"];
+        }
+      }
+    }
+  }
+  for (const auto& [reason, count] : reasons)
+  {
+    WARN("refusal " << count << " x " << reason);
+  }
+  INFO(
+    candidates.size() << " uniformly cached world brushes, " << clipped.size()
+                      << " clipped, " << refused << " refused");
+  REQUIRE_FALSE(clipped.empty());
+  const auto saved = map.vmfScene()->serialize(map.worldNode());
+  checkRegeneratedCaches(saved, *indexed, clipped.size(), &clipped, bounds);
+  auto env = fs::TestEnvironment{};
+  const auto output = env.dir() / "clipped copy.vmf";
+  REQUIRE(map.saveAs(output).is_success());
+  auto reopened = MapFixture{};
+  auto& loaded = reopened.load(output, config);
+  auto again = std::vector<Node*>{};
+  for (auto* child : loaded.worldNode().defaultLayer()->children())
+  {
+    if (
+      dynamic_cast<BrushNode*>(child)
+      && clipped.contains(loaded.vmfScene()->nativeId(*child)))
+    {
+      again.push_back(child);
+    }
+  }
+  REQUIRE(again.size() == clipped.size());
+  selectNodes(loaded, again);
+  REQUIRE(translateSelection(loaded, {1, 2, 3}));
+  CHECK(readBinary(input) == inputBytes);
+  WARN(
+    candidates.size() << " cached world brushes, " << clipped.size() << " clipped, "
+                      << refused << " refused");
+}
+
+TEST_CASE("VmfMap partial or mixed caches refuse clip and mirror atomically", "[vmf]")
+{
+  const auto kind = GENERATE(std::string{"partial"}, std::string{"mixed"});
+  CAPTURE(kind);
+  auto original = nativeCachedCube(true);
+  const auto side = sideFragment(original, "3");
+  const auto start = side.find("point_data");
+  REQUIRE(start != std::string::npos);
+  auto changed = side;
+  if (kind == "partial")
+  {
+    changed.erase(start, side.rfind('}', side.size() - 2) - start + 1);
+  }
+  else
+  {
+    changed.replace(
+      start,
+      side.rfind('}', side.size() - 2) - start + 1,
+      R"(vertices_plus { "v" "0 0 0" "v" "0 64 0" "v" "0 64 64" "v" "0 0 64" })");
+  }
+  original.replace(original.find(side), side.size(), changed);
+  const auto config =
+    MapFixtureConfig{.mapFormat = MapFormat::SourceVMF, .worldBounds = vm::bbox3d{4096}};
+  auto env = fs::TestEnvironment{};
+  const auto input = env.dir() / "uneven cube.vmf";
+  writeBinary(input, original);
+  const auto withAttempts = [&](const bool attempt) {
+    auto fixture = MapFixture{};
+    auto& map = fixture.load(input, config);
+    auto& node = ramp(map);
+    selectNodes(map, {&node});
+    REQUIRE(translateSelection(map, {8, 0, 0})); // Control: the caches are valid input.
+    map.undoCommand();
+    if (attempt)
+    {
+      const auto count = map.modificationCount();
+      const auto positions = filePositions(map);
+      CHECK_FALSE(clipBrushes(map, {&node}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+      CHECK_FALSE(
+        clipBrushesBoth(map, {&node}, {{{32, 0, 0}, {32, 0, 64}, {32, 64, 0}}}));
+      CHECK_FALSE(flipSelection(map, {32, 32, 32}, vm::axis::x));
+      CHECK(map.modificationCount() == count);
+      CHECK(filePositions(map) == positions);
+      CHECK(map.vmfScene()->serialize(map.worldNode()) == original);
+    }
+    deselectAll(map);
+    REQUIRE(createBrush(map, nativeCubePoints())); // Allocates object and side IDs.
+    return map.vmfScene()->serialize(map.worldNode());
+  };
+  CHECK(withAttempts(true) == withAttempts(false));
+  CHECK(readBinary(input) == original);
 }
 
 TEST_CASE("VmfMap Hammer++ root settings acted atomic controls", "[vmf]")

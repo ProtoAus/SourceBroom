@@ -106,3 +106,33 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   either side belongs to a seam group, even when that group would not move.
   Falsifier for loosening it: the same T-junction tests still refuse, and a
   selection whose touching samples provably stay put sews.
+- **Rewritten polygon caches — `polygonCacheEdits`/`polygonCacheRows` in VmfScene.cpp.**
+  A5.38 rewrites a changed face's point_data/vertices_plus from its new polygon,
+  wound like the written plane points and starting at plane point 0 when that point
+  is a vertex (the owner's corpus does this on 99.98% of point_data sides). Not
+  done: making ring[1..2] equal plane points 1..2, which the corpus also shows; a
+  cut side's plane points are the user's clip points and need not be vertices. A
+  review suspected Strata may depend on that and could not establish it; 32 corpus
+  sides already break it. Rewritten rows also reformat values (`64.00` becomes `64`,
+  computed values print 17 digits), leave whitespace-only lines where rows were
+  removed and add LF lines to CRLF files. Falsifier: a matching Strata/Hammer++ load
+  of an A5.38-clipped copy shows a wrong or rejected shape, or a check of that
+  editor's loader shows it reads ring order beyond winding.
+- **Vertex edits that change a brush's faces — VmfScene side bindings.** Moving a
+  vertex usually splits or merges faces; the new faces have no native side binding,
+  so the edit refuses for every brush, cached or not. A5.38 also keeps refusing
+  cache rewrites for incidence changes other than a clip or mirror. Falsifier for a
+  fix: a vertex edit that adds a face saves new sides with fresh IDs, UVs and (on a
+  cached brush) a rewritten cache, and reopens and re-edits like a clip does.
+- **Imprecise polygon caches block all geometry edits — `polygonCacheEdits`.** Every
+  edit matches each cached row to a plane-derived vertex within 1e-6. Measured on
+  the owner's 38 maps (`artifacts/full-source/a538_cache_deviation.py`): 83.05% of
+  41,245 non-displacement brushes match exactly, but 6,993 (16.95%) have cached
+  vertices 0.0001 to over 1 unit from what their planes imply (2.4% up to 0.01,
+  9.7% up to 0.1, 4.2% up to 1, 0.4% beyond). 85 of 153 sampled real-map clip
+  refusals were this; 63 of those 85 brushes also refused a plain move and 22
+  accepted one, which is not yet explained (find out first). Likely the
+  editors keep precise vertices while plane points are rounded. Falsifier for a
+  fix: such brushes move, clip and mirror with caches kept consistent (moves
+  carry each cached point by its vertex's motion, rewrites follow the planes),
+  while ambiguous or far-off (stale) caches still refuse.

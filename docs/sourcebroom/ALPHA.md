@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.37 — mixed-power displacement seams
+# Try Windows SourceBroom A5.38 — clip and mirror cached brushes
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,35 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.37: sew terrain faces of different powers
+## A5.38: clip and mirror Strata and Hammer++ brushes
+
+Maps saved by Strata Hammer or Hammer++ store a vertex cache on every face, and
+until now that made **Clip** (front/back or Both) and **Flip** refuse on every
+brush in them. Those tools now work: each changed face's `point_data` or
+`vertices_plus` is rewritten from the face's new shape, wound and started the
+way those editors write it, new cut faces get a cache of the same kind, and
+untouched faces keep their exact bytes. Undo/Redo and repeated clips before a
+save work as for plain brushes.
+
+Still refused: brushes whose faces are only partly cached or mix both kinds,
+displacements, hidden solids, and brushes an unknown entity may reference.
+About 17% of the brushes in those maps (6,993 of 41,245) have cached vertices
+0.0001 to over 1 unit from the vertices their planes imply. Those refuse
+clipping, and in a real-map sample 63 of 85 also refused a plain move (22
+accepted one, not yet explained). That is the next fix (BACKLOG).
+
+The VMF tests (117 cases, 24132 assertions) and full
+Model332/App50/GL21/Render28 pass; UI 63/64 fails only the known
+untouched QPreferenceStore rename. Seven targets build with zero compiler
+diagnostics. On 31 of the owner's 38 maps, 634 real brushes were
+clipped, saved, reopened and edited again; every original is unchanged.
+
+**Small owner check (pending):** on a COPY of one of your maps, clip an ordinary
+brush (front/back, then Both on another), Undo/Redo, Save As a new file, then open
+that copy in Strata Hammer or Hammer++ and check the clipped brushes look right.
+Keep whole A5.37/A5.36/A5.25.
+
+## Retained A5.37: sew terrain faces of different powers
 
 **Sew selected displacement position seams** now accepts connected selections
 that mix displacement powers 2–6. Each matching edge must still be a full shared

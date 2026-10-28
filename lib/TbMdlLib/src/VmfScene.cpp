@@ -221,14 +221,52 @@ bool supportedConnections(
   return true;
 }
 
+// A topology change rewrites whole cache blocks. Measured on the owner's 38 maps:
+// every cached ring winds like its plane points, and point_data starts at point 0.
+struct PolygonCacheRewrite
+{
+  std::vector<VmfStructuralEdit> structure;
+  std::string schema; // Set once a uniformly cached brush is rewritten.
+};
+std::string polygonCacheRows(const bool indexed, const BrushFace& face)
+{
+  auto ring = face.vertexPositions();
+  const auto& plane = face.points();
+  auto normal = vm::vec3d{};
+  for (size_t i = 0; i < ring.size(); ++i)
+  {
+    normal = normal + vm::cross(ring[i], ring[(i + 1) % ring.size()]);
+  }
+  if (vm::dot(normal, vm::cross(plane[1] - plane[0], plane[2] - plane[0])) < 0)
+  {
+    std::reverse(ring.begin(), ring.end());
+  }
+  const auto start = std::ranges::find_if(ring, [&](const auto& vertex) {
+    return vm::is_equal(vertex, plane[0], SourceDisplacement::TransformEpsilon);
+  });
+  std::rotate(ring.begin(), start == ring.end() ? ring.begin() : start, ring.end());
+  auto result =
+    indexed ? "\"numpts\" " + quote(std::to_string(ring.size())) + "\n" : std::string{};
+  for (size_t i = 0; i < ring.size(); ++i)
+  {
+    const auto xyz =
+      number(ring[i].x()) + " " + number(ring[i].y()) + " " + number(ring[i].z());
+    result += indexed ? "\"point\" " + quote(std::to_string(i) + " " + xyz) + "\n"
+                      : "\"v\" " + quote(xyz) + "\n";
+  }
+  return result;
+}
+
 // Native face polygon caches are geometry, not inert metadata. Content edits and
 // closed ownership gates use the same immutable-to-current polygon validation.
+// Without a rewrite target, any change in topology, cardinality or winding refuses.
 std::set<VmfEntryId> polygonCacheEdits(
   const VmfDocument& d,
   const Brush& before,
   const Brush& after,
   std::vector<VmfValueEdit>& edits,
-  const bool validateUnchanged = false)
+  const bool validateUnchanged = false,
+  PolygonCacheRewrite* rewrite = nullptr)
 {
   auto admitted = std::set<VmfEntryId>{};
   if (!validateUnchanged && before == after)
@@ -260,8 +298,11 @@ std::set<VmfEntryId> polygonCacheEdits(
     std::vector<vm::vec3d> before;
     std::vector<vm::vec3d> after;
     std::vector<size_t> indices;
+    const BrushFace* beforeFace = nullptr;
+    const BrushFace* afterFace = nullptr;
   };
   auto correspondence = std::map<size_t, PolygonCorrespondence>{};
+  auto inPlace = true;
   const auto positionKey = [](const vm::vec3d& position) {
     return std::array<double, 3>{position.x(), position.y(), position.z()};
   };
@@ -286,62 +327,83 @@ std::set<VmfEntryId> polygonCacheEdits(
           }
           auto& polygon = correspondence[face.lineNumber()];
           (original ? polygon.before : polygon.after) = std::move(ring);
+          (original ? polygon.beforeFace : polygon.afterFace) = &face;
         }
       };
     collect(before, oldIncidence, true);
     collect(after, newIncidence, false);
-    auto oldIdentities = std::set<std::set<size_t>>{};
-    auto newIdentities = std::set<std::set<size_t>>{};
-    for (const auto& [position, identity] : oldIncidence)
-    {
-      if (!oldIdentities.insert(identity).second)
+    // In-place row patches need unchanged incidence, cardinality and winding.
+    static constexpr auto reversed = "native polygon cache winding reversal unsupported";
+    const auto correspond = [&]() -> const char* {
+      auto oldIdentities = std::set<std::set<size_t>>{};
+      auto newIdentities = std::set<std::set<size_t>>{};
+      for (const auto& [position, identity] : oldIncidence)
       {
-        refuse(block, "ambiguous native polygon cache vertex incidence");
-      }
-    }
-    for (const auto& [position, identity] : newIncidence)
-    {
-      if (!newIdentities.insert(identity).second)
-      {
-        refuse(block, "ambiguous native polygon cache vertex incidence");
-      }
-    }
-    if (oldIdentities != newIdentities)
-    {
-      refuse(block, "native polygon cache topology/incidence change unsupported");
-    }
-    // Check the entire brush once, including faces without cached polygons.
-    for (auto& [binding, polygon] : correspondence)
-    {
-      if (polygon.before.empty() || polygon.before.size() != polygon.after.size())
-      {
-        refuse(block, "native polygon cache topology/cardinality change unsupported");
-      }
-      auto targetIndices = std::map<std::set<size_t>, size_t>{};
-      for (size_t i = 0; i < polygon.after.size(); ++i)
-      {
-        targetIndices.emplace(newIncidence.at(positionKey(polygon.after[i])), i);
-      }
-      for (const auto& position : polygon.before)
-      {
-        const auto match = targetIndices.find(oldIncidence.at(positionKey(position)));
-        if (match == targetIndices.end())
+        if (!oldIdentities.insert(identity).second)
         {
-          refuse(block, "native polygon cache topology/incidence change unsupported");
-        }
-        polygon.indices.push_back(match->second);
-      }
-      for (size_t i = 0; i < polygon.indices.size(); ++i)
-      {
-        if (
-          polygon.indices[(i + 1) % polygon.indices.size()]
-          != (polygon.indices[i] + 1) % polygon.indices.size())
-        {
-          refuse(block, "native polygon cache winding reversal unsupported");
+          return "ambiguous native polygon cache vertex incidence";
         }
       }
+      for (const auto& [position, identity] : newIncidence)
+      {
+        if (!newIdentities.insert(identity).second)
+        {
+          return "ambiguous native polygon cache vertex incidence";
+        }
+      }
+      if (oldIdentities != newIdentities)
+      {
+        return "native polygon cache topology/incidence change unsupported";
+      }
+      // Check the entire brush once, including faces without cached polygons.
+      for (auto& [binding, polygon] : correspondence)
+      {
+        if (polygon.before.empty() || polygon.before.size() != polygon.after.size())
+        {
+          return "native polygon cache topology/cardinality change unsupported";
+        }
+        auto targetIndices = std::map<std::set<size_t>, size_t>{};
+        for (size_t i = 0; i < polygon.after.size(); ++i)
+        {
+          targetIndices.emplace(newIncidence.at(positionKey(polygon.after[i])), i);
+        }
+        for (const auto& position : polygon.before)
+        {
+          const auto match = targetIndices.find(oldIncidence.at(positionKey(position)));
+          if (match == targetIndices.end())
+          {
+            return "native polygon cache topology/incidence change unsupported";
+          }
+          polygon.indices.push_back(match->second);
+        }
+        for (size_t i = 0; i < polygon.indices.size(); ++i)
+        {
+          if (
+            polygon.indices[(i + 1) % polygon.indices.size()]
+            != (polygon.indices[i] + 1) % polygon.indices.size())
+          {
+            return reversed;
+          }
+        }
+      }
+      return nullptr;
+    };
+    if (const auto* problem = correspond())
+    {
+      // Rewrites cover clips (a side added or removed) and mirrors (reversed winding);
+      // other incidence changes keep the in-place refusal.
+      const auto sidesChanged =
+        std::ranges::any_of(correspondence, [](const auto& entry) {
+          return !entry.second.beforeFace || !entry.second.afterFace;
+        });
+      if (!rewrite || (!sidesChanged && problem != reversed))
+      {
+        refuse(block, problem);
+      }
+      inPlace = false;
     }
   };
+  auto schemas = std::set<std::string>{};
   for (const auto& face : before.faces())
   {
     const auto side = face.lineNumber() - 1;
@@ -433,6 +495,10 @@ std::set<VmfEntryId> polygonCacheEdits(
         refuse(row, "duplicate or unmatched native polygon cache index/vertex");
       }
       oldForIndex[index] = *match;
+      if (!inPlace)
+      {
+        continue; // Rows are validated here and rewritten whole below.
+      }
       const auto& replacement = newRing[newForOld[*match]];
       auto updated = raw;
       auto cursor = size_t{0};
@@ -471,7 +537,51 @@ std::set<VmfEntryId> polygonCacheEdits(
         refuse(*block, "native polygon cache indices do not form a cyclic polygon");
       }
     }
+    schemas.insert(key(d, *block));
+    // A removed side takes its block with it; an unchanged ring and plane keep bytes.
+    const auto sameRing = [&] {
+      if (polygon.afterFace->points() != polygon.beforeFace->points())
+      {
+        return false; // A centred mirror keeps the ring but reorders the plane points.
+      }
+      const auto start = std::ranges::find(newRing, oldRing.front());
+      if (newRing.size() != oldRing.size() || start == newRing.end())
+      {
+        return false;
+      }
+      const auto offset = size_t(start - newRing.begin());
+      for (size_t i = 0; i < oldRing.size(); ++i)
+      {
+        if (newRing[(offset + i) % newRing.size()] != oldRing[i])
+        {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (!inPlace && polygon.afterFace && !sameRing())
+    {
+      for (const auto row : d.entries()[*block].children)
+      {
+        rewrite->structure.push_back({VmfStructuralEdit::Type::Remove, row, {}});
+      }
+      rewrite->structure.push_back(
+        {VmfStructuralEdit::Type::Append,
+         *block,
+         polygonCacheRows(indexed, *polygon.afterFace)});
+    }
     admitted.insert(*block);
+  }
+  if (!inPlace)
+  {
+    // New cut sides need a cache too, so only uniformly cached brushes are rewritten.
+    if (schemas.size() != 1 || admitted.size() != before.faceCount())
+    {
+      refuse(
+        admitted.empty() ? 0 : *admitted.begin(),
+        "partial or mixed native polygon cache cannot follow a topology change");
+    }
+    rewrite->schema = *schemas.begin();
   }
   return admitted;
 }
@@ -644,8 +754,10 @@ std::set<VmfEntryId> ownershipPolygonBlocks(
       refuse(*source, "polygon cache ownership source is not a projected solid");
     }
     auto edits = std::vector<VmfValueEdit>{};
+    auto rewrite = PolygonCacheRewrite{}; // Validation only; emission recomputes it.
     const auto normalized = canonicalPolygonBrush(d, node.brush(), *source, resolve);
-    const auto blocks = polygonCacheEdits(d, before->brush(), normalized, edits, true);
+    const auto blocks =
+      polygonCacheEdits(d, before->brush(), normalized, edits, true, &rewrite);
     checkLayout(checkLayout, *source, blocks);
     covered.insert(*source + 1);
     if (blocks.empty())
@@ -3411,18 +3523,15 @@ void VmfScene::validateClipOwner(
   validateVisgroupProjection(node);
   const Node* owner = effectiveParent(node);
   const auto* entity = dynamic_cast<const EntityNode*>(owner);
-  auto polygonBlocks = std::set<VmfEntryId>{};
-  if (!clipping)
-  {
-    auto original = NodeMap{};
-    collect(*m_original, original);
-    polygonBlocks = ownershipPolygonBlocks(
-      m_document,
-      original,
-      entity ? static_cast<const Node&>(*entity) : static_cast<const Node&>(node),
-      [&](const size_t binding) { return prototype(binding); },
-      [&](const BrushNode& brush) { validateSideState(brush); });
-  }
+  // Clipping a cached brush rewrites its caches, so the same validation admits it.
+  auto original = NodeMap{};
+  collect(*m_original, original);
+  const auto polygonBlocks = ownershipPolygonBlocks(
+    m_document,
+    original,
+    entity ? static_cast<const Node&>(*entity) : static_cast<const Node&>(node),
+    [&](const size_t binding) { return prototype(binding); },
+    [&](const BrushNode& brush) { validateSideState(brush); });
   if (entity)
   {
     const auto record = m_generated.find(entity->lineNumber());
@@ -3438,8 +3547,6 @@ void VmfScene::validateClipOwner(
     }
     if (record == m_generated.end())
     {
-      auto original = NodeMap{};
-      collect(*m_original, original);
       const auto found = original.find(entity->lineNumber());
       if (
         found == original.end() || !dynamic_cast<const EntityNode*>(found->second)
@@ -3476,6 +3583,33 @@ void VmfScene::validateClipOwner(
   {
     refuse(*source, "opaque/displacement source prevents native clipping");
   }
+  if (clipping && source)
+  {
+    // Cut sides copy the source schema, so refuse before any identity is allocated.
+    auto schemas = std::set<std::string>{};
+    auto sides = size_t{0};
+    auto cached = size_t{0};
+    for (const auto side : m_document.entries()[*source].children)
+    {
+      if (key(m_document, side) == "side")
+      {
+        ++sides;
+        for (const auto field : m_document.entries()[side].children)
+        {
+          const auto name = key(m_document, field);
+          if (name == "point_data" || name == "vertices_plus")
+          {
+            schemas.insert(name);
+            ++cached;
+          }
+        }
+      }
+    }
+    if (cached != 0 && (cached != sides || schemas.size() != 1))
+    {
+      refuse(*source, "partial or mixed native polygon cache prevents clipping");
+    }
+  }
   if (source)
   {
     for (auto parent = m_document.entries()[*source].parent; parent;
@@ -3491,8 +3625,6 @@ void VmfScene::validateClipOwner(
   }
   if (!m_generated.contains(node.lineNumber()))
   {
-    auto original = NodeMap{};
-    collect(*m_original, original);
     const auto found = original.find(node.lineNumber());
     if (found == original.end())
     {
@@ -4213,14 +4345,6 @@ void VmfScene::nodeEdits(
     }
     const auto topologyChanged =
       templateBindings != originalBindings || templateBindings.size() != bindings.size();
-    if (topologyChanged)
-    {
-      if (opaque(d, id))
-      {
-        refuse(id, "opaque/displacement attachment prevents native clipping");
-      }
-      checkGeometryReferences(id);
-    }
     auto displacementSides = std::set<VmfEntryId>{};
     for (const auto& face : b.faces())
     {
@@ -4231,13 +4355,24 @@ void VmfScene::nodeEdits(
     }
     const auto polygonEditStart = edits.size();
     auto polygonBlocks = std::set<VmfEntryId>{};
+    auto polygonRewrite = PolygonCacheRewrite{};
     if (b != a)
     {
       const auto polygonBrush = canonicalPolygonBrush(
         d, a, id, [&](const size_t binding) { return prototype(binding); });
-      polygonBlocks = polygonCacheEdits(d, b, polygonBrush, edits);
+      polygonBlocks =
+        polygonCacheEdits(d, b, polygonBrush, edits, false, &polygonRewrite);
     }
-    if (edits.size() != polygonEditStart)
+    if (topologyChanged)
+    {
+      // Validated caches are rewritten; a displacement still blocks clipping.
+      if (opaque(d, id, nullptr, &polygonBlocks))
+      {
+        refuse(id, "opaque/displacement attachment prevents native clipping");
+      }
+      checkGeometryReferences(id);
+    }
+    if (edits.size() != polygonEditStart || !polygonRewrite.structure.empty())
     {
       if (opaque(d, id, &displacementSides, &polygonBlocks))
       {
@@ -4248,6 +4383,8 @@ void VmfScene::nodeEdits(
         checkGeometryReferences(id);
       }
     }
+    structural.insert(
+      structural.end(), polygonRewrite.structure.begin(), polygonRewrite.structure.end());
     auto sides = std::map<size_t, const BrushFace*>{};
     for (const auto& f : a.faces())
     {
@@ -4259,7 +4396,13 @@ void VmfScene::nodeEdits(
         {
           refuse(id, "generated displacement side unsupported");
         }
-        const auto text = freshSideText(f, generatedSide->second.nativeId);
+        auto text = freshSideText(f, generatedSide->second.nativeId);
+        if (const auto& schema = polygonRewrite.schema; !schema.empty())
+        {
+          text.insert(
+            text.size() - 2,
+            schema + "\n{\n" + polygonCacheRows(schema == "point_data", f) + "}\n");
+        }
         static_cast<void>(VmfDocument::parse(text));
         appended[id] += text;
         continue;

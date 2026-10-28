@@ -1,11 +1,31 @@
-# SourceBroom validation — A5.37 mixed-power displacement position seams
+# SourceBroom validation — A5.38 clip and mirror cached brushes
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.37 — mixed-power displacement position seams
+## A5.38 — clip and mirror Strata/Hammer++ cached brushes
+
+- Red: on A5.37 code a cube cached on every side refused clip, corner clip,
+  Both and mirror in both schemas (8 of 8) after an acting move control.
+- Green: the same cases plus a centred mirror and a second clip pass, with each
+  cache checked independently (polygon, winding, numpts first, start at plane
+  point 0), untouched faces byte-identical, save/strict reopen/further edit and
+  exact Undo/Redo. Partial and mixed caches refuse atomically, next IDs unchanged.
+- Discrimination: a reversed-ring mutant passes reopen and re-edit and fails only
+  the winding check (116 assertions); the centred-mirror review defect failed 6
+  start checks before its fix.
+- Real maps: 634 clips on 31 of 38 owner maps verified after save and reopen;
+  originals unchanged. Refusal reasons are recorded in DEVELOPMENT.md.
+- Full Model332/App50/GL21/Render28 pass; UI 63/64 only the known
+  QPreferenceStore rename (not retried); VMF 117 cases/24132 assertions;
+  seven targets build with zero compiler diagnostics. One independent review.
+
+Not claimed: Strata/Hammer++ reopening of a clipped copy, vertex edits that
+add faces, or brushes whose caches are imprecise (17% of corpus brushes).
+
+## Retained A5.37 — mixed-power displacement position seams
 
 - Red: against A5.36 production the promoted fixture (two power-2 tiles and a
   power-3 tile) failed only its eligibility assertion (12 assertions, 11 passed),

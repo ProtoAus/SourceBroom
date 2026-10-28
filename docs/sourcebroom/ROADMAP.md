@@ -33,7 +33,14 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.37 candidate:** mixed-power (2–6) native displacement POSITION sewing in
+- **A5.38 candidate:** Clip (front/back, Both) and Flip on brushes with Strata
+  point_data or Hammer++ vertices_plus caches (every brush in the owner's maps);
+  changed faces' caches rewritten to the corpus conventions, cut faces cached,
+  untouched bytes kept. 634 real-map clips on 31/38 maps saved, reopened and
+  re-edited. Partial/mixed caches, displacements, hidden solids and unknown
+  entity references still refuse, as do brushes with imprecise caches (17% of
+  corpus brushes; next). Strata/Hammer++ reopening pending.
+- **Retained A5.37 candidate:** mixed-power (2–6) native displacement POSITION sewing in
   the same connected 2..64 selection: full shared base edges only, coincident
   samples averaged once per junction, finer-only edge samples moved onto the
   solved coarser edge; T-junctions refuse. Staged all-mesh commit, one

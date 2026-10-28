@@ -4,6 +4,18 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.38 clip and mirror cached brushes — pending small owner check
+
+No new owner observation. Whole A5.38 on a COPY; keep whole A5.37/A5.36/A5.25.
+
+- [ ] On a copy of one of your maps, clip an ordinary brush (front/back), clip
+  another with Both, Undo/Redo, then Save As a NEW file.
+- [ ] Open that new file in Strata Hammer or Hammer++ (whichever saved the map)
+  and check the clipped brushes look right. Never overwrite an original.
+
+Pending only. If a brush refuses, the log line names the reason; brushes with
+imprecise caches (about 17%) still refuse clipping, which is the next fix.
+
 ## A5.37 mixed-power displacement seams — pending small owner check
 
 No new owner observation. Whole A5.37 on a COPY; keep whole A5.36/A5.35/A5.25.

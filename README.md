@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.37 mixed-power native displacement position seams:
+**Status:** Windows A5.38 clipping and mirroring of Strata/Hammer++ cached brushes:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,27 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.37 lets **Sew selected displacement position seams** join native meshes of
+A5.38 lets the normal **Clip** tool (front/back and Both) and **Flip** work on
+brushes that carry Strata `point_data` or Hammer++ `vertices_plus` face caches,
+which in the owner's 38 maps is every brush (all 261,351 sides). Each changed
+face's cache is rewritten from its new shape the way those editors save it:
+wound like its plane and, for point_data, starting at the plane's first point.
+Untouched faces keep their bytes and new cut faces get a cache of the same kind.
+Partly cached or mixed-kind brushes, displacements, hidden solids and brushes an
+unknown entity may reference still refuse clipping.
+
+The VMF tests (117 cases, 24132 assertions) and full
+Model332/App50/GL21/Render28 pass; UI 63/64 fails only the known
+untouched QPreferenceStore rename. Seven targets build with zero compiler
+diagnostics. On 31 of the owner's 38 maps, 634 real brushes were
+clipped, saved, reopened and edited again; every original is unchanged.
+About 17% of the brushes in those maps (6,993 of 41,245) have cached vertices
+0.0001 to over 1 unit from the vertices their planes imply. Those refuse
+clipping, and in a real-map sample 63 of 85 also refused a plain move (22
+accepted one, not yet explained). That is the next fix (BACKLOG). Use whole A5.38 on copies and keep
+whole A5.37/A5.36/A5.25. Strata/Hammer++ reopening is pending.
+
+Retained A5.37 lets **Sew selected displacement position seams** join native meshes of
 **different powers** (2–6) within the same connected 2–64-face selection. Edges
 must still match along their whole base length, with one selected partner each.
 Grid samples both meshes have are averaged from their original positions, once
