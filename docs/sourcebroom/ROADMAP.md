@@ -33,7 +33,16 @@ compatible merely because they also use VMF.
   FTESurf clients. Independent Hammer++ reopening/visual inspection is pending
   in [lextest.md](../../lextest.md), so the full A4 exit is not yet claimed.
 - Windows packaging/install smoke passes. No public binary release is claimed.
-- **A5.36 candidate:** connected2..64 same-power native displacement POSITION
+- **A5.37 candidate:** mixed-power (2–6) native displacement POSITION sewing in
+  the same connected 2..64 selection: full shared base edges only, coincident
+  samples averaged once per junction, finer-only edge samples moved onto the
+  solved coarser edge; T-junctions refuse. Staged all-mesh commit, one
+  Undo/Redo/Save As/reopen. Focused core 35537/21, inspector 410 and full
+  Model330/UI64/App50/GL21/Render28
+  pass; seven builds with zero compiler diagnostics. No re-powering, normal weld,
+  neighbor data, SDK/Hammer parity or new human acceptance. Keep whole
+  A5.36/A5.35/A5.25; full Source development continues.
+- **Retained A5.36 candidate:** connected2..64 same-power native displacement POSITION
   sewing, full unique shared base edges and simultaneous original-position means
   at multi-face junctions. Staged all-mesh commit, one Undo/Redo/Save As/reopen;
   no unneeded offset table for an unchanged member. Inspector281 after desired
@@ -472,8 +481,9 @@ proper similarity transforms and separately stored alpha samples (A5.23).
 A5.26 adds explicit absent-alpha-table initialization; A5.31 adds independent
 per-sample XYZ offsets and explicit absent-offset-table initialization. A5.33
 adds bounded same-power position-seam sewing; A5.36 extends this to connected
-2..64-mesh patches with simultaneous junction means. Neither claims smooth-normal
-welding, SDK neighbor generation, mixed-power or general sew support. A5.27's
+2..64-mesh patches with simultaneous junction means, and A5.37 admits mixed powers
+by moving finer-only edge samples onto the solved coarser edge. None claims
+smooth-normal welding, SDK neighbor generation or general sew support. A5.27's
 bounded scalar VMT opacity is distinct from displacement weights or shader parity. This foundation
 does not complete A6: stored blend-weight editing is not full shader blending,
 paint/smoothing or topology/power/sew, and independent native acceptance remains

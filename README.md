@@ -5,7 +5,7 @@ for **native Source 1 VMF editing across Source games**. Counter-Strike: Source
 and Momentum Mod are the first game profiles; generic Source 1 paths are editable.
 FTESurf is an additional compile/play verification target, not an editor dependency.
 
-**Status:** Windows A5.36 connected native displacement position seams:
+**Status:** Windows A5.37 mixed-power native displacement position seams:
 native VMF opening, starter/new plain-brush and point-entity creation,
 supported duplication/deletion and brush-entity ownership, base-texture and
 bounded static-prop preview, existing-brush/entity edits,
@@ -39,7 +39,24 @@ No material-wide scan or persistent include cache is added. Unsupported nested,
 proxy, deletion or ambiguous operations still refuse; file/chain limits and final
 shader/alpha validation remain explicit.
 
-A5.36 extends **Sew selected displacement position seams** to a connected set
+A5.37 lets **Sew selected displacement position seams** join native meshes of
+**different powers** (2–6) within the same connected 2–64-face selection. Edges
+must still match along their whole base length, with one selected partner each.
+Grid samples both meshes have are averaged from their original positions, once
+per junction, as in A5.36. Samples only the finer mesh has are moved onto the
+straight segment between the solved coarser samples, so the seam closes; finer
+detail along that edge is flattened on purpose. Same-power sewing is unchanged.
+Powers, triangles, distances, alphas and normals are not edited; no neighbor
+data or Hammer algorithm parity is claimed. A face that touches another selected
+face without sharing a full edge with it (a T-junction) is refused, because
+sewing would open a gap there.
+
+Focused core (21 cases, 35537 assertions) and the native inspector (410
+assertions) pass; full Model330/UI64/App50/GL21/Render28 pass. Seven targets
+build with zero compiler diagnostics. Use whole A5.37 on copies and
+keep whole A5.36/A5.35/A5.25. Human/Hammer/SDK acceptance remains pending.
+
+Retained A5.36 extends **Sew selected displacement position seams** to a connected set
 of **2–64 same-power native meshes**. Corresponding full base edges form one solve;
 three/four-way corners average all original positions once, without sequential
 pair bias. Only needed XYZ offsets change. Every changed mesh is staged/rebuilt

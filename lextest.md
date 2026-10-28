@@ -4,6 +4,20 @@ Only the owner observations explicitly recorded below are confirmed. Do not turn
 an automated build/screenshot or a general visual approval into unrelated passes.
 Use newly authored maps/copies; never overwrite an original user/corpus VMF.
 
+## A5.37 mixed-power displacement seams — pending small owner check
+
+No new owner observation. Whole A5.37 on a COPY; keep whole A5.36/A5.35/A5.25.
+Automated tests are not human/Hammer/SDK acceptance.
+
+- [ ] Only if the usual copied map already has neighbouring terrain faces of
+  different power: select them, Sew selected displacement position seams, look
+  along the seam for a gap, then Undo. No hunt or original-file save.
+- [ ] Optional: Save As a NEW copy and open it in matching Hammer; the seam should
+  stay closed and the other displacement records unchanged.
+
+Pending only. Mixed-power POSITION seams flatten finer edge detail between coarse
+samples; not normal welding, neighbor data or complete Source acceptance.
+
 ## A5.36 connected displacement position seams — pending small owner check
 
 No new owner observation. Whole A5.36 on a COPY; keep whole A5.35/A5.33/A5.25.

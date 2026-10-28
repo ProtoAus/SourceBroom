@@ -5,7 +5,25 @@ Momentum/Strata are the first tested profiles; generic Source paths and external
 tools remain configurable. This is an experimental editor candidate, not full
 Source branch, Hammer++, shader or performance compatibility.
 
-## Connected displacement position-seam sewing — A5.36
+## Mixed-power displacement position seams — A5.37
+
+**Sew selected displacement position seams** accepts connected selections that
+mix powers 2–6. A matching edge must be a full shared base edge, in either
+orientation, with one selected partner. Samples both grids share solve together
+from original positions (one mean per junction); samples only the finer grid has
+move onto the straight segment between the solved coarser samples, which
+flattens finer edge detail on purpose. Only needed XYZ offsets change, staged and
+verified before the whole set commits as one history command. Refusals and the
+stale-press, read-only and backend guards are as in A5.36. A face that touches another selected face without sharing a full edge with
+it (a T-junction) is refused, because sewing would open a gap there. Not normal welding,
+neighbor generation, re-powering or compiler validity.
+
+Focused core (21 cases, 35537 assertions) and the native inspector (410
+assertions) pass; full Model330/UI64/App50/GL21/Render28 pass. Seven targets
+build with zero compiler diagnostics. See [pending small owner
+check](../../lextest.md).
+
+## Retained connected displacement position-seam sewing — A5.36
 
 Select2..64 connected same-power native displacement faces, then **Sew selected
 displacement position seams**. Corresponding full base edges match in either

@@ -256,34 +256,221 @@ std::optional<SewPlan> planSew(
   }
   return result;
 }
-std::optional<std::vector<SewEdge>> planSewTogether(
+std::array<SewEdge, 4> sewGridEdges(const size_t size)
+{
+  auto result = std::array<SewEdge, 4>{};
+  for (size_t i = 0; i < size; ++i)
+  {
+    result[0].push_back(i);
+    result[1].push_back(i * size + size - 1);
+    result[2].push_back((size - 1) * size + size - 1 - i);
+    result[3].push_back((size - 1 - i) * size);
+  }
+  return result;
+}
+template <typename Position>
+vm::vec3d sewEdgePosition(
+  const SewEdge& edge,
+  const size_t index,
+  const size_t segments,
+  const Position& position)
+{
+  const auto ratio = segments / (edge.size() - 1);
+  const auto knot = index / ratio;
+  const auto remainder = index % ratio;
+  if (remainder == 0)
+  {
+    return position(edge[knot]);
+  }
+  const auto fraction = double(remainder) / double(ratio);
+  return position(edge[knot]) * (1 - fraction) + position(edge[knot + 1]) * fraction;
+}
+std::optional<SewPlan> planSewAcrossPowers(
+  const SourceDisplacement& first, const SourceDisplacement& second, bool& ambiguous)
+{
+  ambiguous = false;
+  if (first.size() == second.size())
+  {
+    return planSew(first, second, &ambiguous);
+  }
+  const auto firstEdges = sewGridEdges(first.size());
+  const auto secondEdges = sewGridEdges(second.size());
+  const auto segments = std::max(first.size(), second.size()) - 1;
+  const auto firstBase = [&](const size_t index) -> const vm::vec3d& {
+    return first.basePositions()[index];
+  };
+  const auto secondBase = [&](const size_t index) -> const vm::vec3d& {
+    return second.basePositions()[index];
+  };
+  auto result = std::optional<SewPlan>{};
+  for (const auto& a : firstEdges)
+  {
+    for (const auto& b : secondEdges)
+    {
+      for (const auto reverse : {false, true})
+      {
+        auto candidate = b;
+        if (reverse)
+        {
+          std::reverse(candidate.begin(), candidate.end());
+        }
+        auto matches = true;
+        for (size_t i = 0; i <= segments; ++i)
+        {
+          const auto p = sewEdgePosition(a, i, segments, firstBase);
+          const auto q = sewEdgePosition(candidate, i, segments, secondBase);
+          if (
+            !vm::is_finite(p) || !vm::is_finite(q)
+            || vm::length(p - q) > SourceDisplacement::TransformEpsilon)
+          {
+            matches = false;
+            break;
+          }
+        }
+        if (matches)
+        {
+          if (result)
+          {
+            ambiguous = true;
+            return std::nullopt;
+          }
+          result = SewPlan{a, std::move(candidate)};
+        }
+      }
+    }
+  }
+  return result;
+}
+struct SewBatchPlan
+{
+  std::vector<size_t> starts{0};
+  std::vector<SewEdge> groups;
+  std::vector<SewPlan> edges; // Global sample IDs; both edges have the same orientation.
+};
+std::pair<size_t, size_t> sewSampleAddress(const SewBatchPlan& plan, const size_t sample)
+{
+  const auto mesh = size_t(
+    std::upper_bound(plan.starts.begin(), plan.starts.end(), sample) - plan.starts.begin()
+    - 1);
+  return {mesh, sample - plan.starts[mesh]};
+}
+// A boundary touching another selected mesh without being sewn to it (a T-junction
+// or partial edge) would crack open if either side moved.
+bool sewContactsAreSewn(
+  const std::vector<const SourceDisplacement*>& meshes, const SewBatchPlan& plan)
+{
+  constexpr auto none = std::numeric_limits<size_t>::max();
+  auto groupOf = std::vector<size_t>(plan.starts.back(), none);
+  auto groupMeshes = std::vector<std::set<size_t>>(plan.groups.size());
+  for (size_t group = 0; group < plan.groups.size(); ++group)
+  {
+    for (const auto sample : plan.groups[group])
+    {
+      groupOf[sample] = group;
+      groupMeshes[group].insert(sewSampleAddress(plan, sample).first);
+    }
+  }
+  auto finePartner = std::vector<size_t>(plan.starts.back(), none);
+  for (const auto& edges : plan.edges)
+  {
+    const auto fine = edges[0].size() > edges[1].size() ? 0u : 1u;
+    const auto ratio = (edges[fine].size() - 1) / (edges[1 - fine].size() - 1);
+    const auto partner = sewSampleAddress(plan, edges[1 - fine].front()).first;
+    for (size_t i = 0; i < edges[fine].size(); ++i)
+    {
+      if (i % ratio != 0)
+      {
+        finePartner[edges[fine][i]] = partner;
+      }
+    }
+  }
+  const auto moves = [&](const size_t sample) {
+    return groupOf[sample] != none || finePartner[sample] != none;
+  };
+  auto sides = std::vector<std::array<SewEdge, 4>>{};
+  for (const auto* mesh : meshes)
+  {
+    sides.push_back(sewGridEdges(mesh->size()));
+  }
+  for (size_t mesh = 0; mesh < meshes.size(); ++mesh)
+  {
+    for (const auto& edge : sides[mesh])
+    {
+      for (const auto vertex : edge)
+      {
+        const auto sample = plan.starts[mesh] + vertex;
+        const auto& point = meshes[mesh]->basePositions()[vertex];
+        for (size_t other = 0; other < meshes.size(); ++other)
+        {
+          if (
+            other == mesh || finePartner[sample] == other
+            || (groupOf[sample] != none && groupMeshes[groupOf[sample]].contains(other)))
+          {
+            continue;
+          }
+          const auto& base = meshes[other]->basePositions();
+          for (const auto& side : sides[other])
+          {
+            const auto& start = base[side.front()];
+            const auto along = base[side.back()] - start;
+            const auto length = vm::length(along);
+            if (!(length > 0))
+            {
+              return false;
+            }
+            const auto t =
+              std::clamp(vm::dot(point - start, along) / (length * length), 0.0, 1.0);
+            if (
+              vm::length(point - (start + along * t))
+              > SourceDisplacement::TransformEpsilon)
+            {
+              continue;
+            }
+            const auto segments = double(side.size() - 1);
+            const auto span = t * segments;
+            const auto knot = std::round(span);
+            const auto onKnot = std::abs(span - knot) * length / segments
+                                <= SourceDisplacement::TransformEpsilon;
+            const auto at = [&](const double index) {
+              return plan.starts[other] + side[size_t(index)];
+            };
+            const auto otherMoves =
+              onKnot ? moves(at(knot)) : moves(at(span)) || moves(at(span + 1));
+            if (moves(sample) || otherMoves)
+            {
+              return false;
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+std::optional<SewBatchPlan> planSewTogether(
   const std::vector<const SourceDisplacement*>& meshes)
 {
-  if (
-    meshes.size() < 2 || meshes.size() > SourceDisplacement::MaxSewMeshes
-    || !meshes.front())
+  if (meshes.size() < 2 || meshes.size() > SourceDisplacement::MaxSewMeshes)
   {
     return std::nullopt;
   }
-  const auto size = meshes.front()->size();
-  if (size < 5 || size > (size_t{1} << SourceDisplacement::MaxPower) + 1)
-  {
-    return std::nullopt;
-  }
-  const auto samples = size * size;
+  auto result = SewBatchPlan{};
   for (size_t i = 0; i < meshes.size(); ++i)
   {
     const auto* mesh = meshes[i];
     if (
-      !mesh || mesh->size() != size || mesh->power() != meshes.front()->power()
-      || mesh->basePositions().size() != samples || mesh->positions().size() != samples
+      !mesh || mesh->power() < 2 || mesh->power() > SourceDisplacement::MaxPower
+      || mesh->size() != (size_t{1} << mesh->power()) + 1
+      || mesh->basePositions().size() != mesh->size() * mesh->size()
+      || mesh->positions().size() != mesh->size() * mesh->size()
       || !(mesh->canEditOffsets() || mesh->canInitializeOffsets())
       || std::find(meshes.begin(), meshes.begin() + i, mesh) != meshes.begin() + i)
     {
       return std::nullopt;
     }
+    result.starts.push_back(result.starts.back() + mesh->size() * mesh->size());
   }
-  auto parents = std::vector<size_t>(meshes.size() * samples);
+  auto parents = std::vector<size_t>(result.starts.back());
   std::iota(parents.begin(), parents.end(), size_t{0});
   const auto root = [&](size_t index) {
     while (parents[index] != index)
@@ -301,7 +488,7 @@ std::optional<std::vector<SewEdge>> planSewTogether(
     for (size_t b = a + 1; b < meshes.size(); ++b)
     {
       auto ambiguous = false;
-      const auto plan = planSew(*meshes[a], *meshes[b], &ambiguous);
+      const auto plan = planSewAcrossPowers(*meshes[a], *meshes[b], ambiguous);
       if (ambiguous)
       {
         return std::nullopt;
@@ -310,28 +497,42 @@ std::optional<std::vector<SewEdge>> planSewTogether(
       {
         continue;
       }
+      auto edges = *plan;
       for (size_t side = 0; side < 2; ++side)
       {
+        const auto face = side == 0 ? a : b;
         const auto& edge = (*plan)[side];
         if (!usedEdges
                .emplace(
-                 side == 0 ? a : b,
+                 face,
                  std::min(edge.front(), edge.back()),
                  std::max(edge.front(), edge.back()))
                .second)
         {
           return std::nullopt;
         }
+        for (auto& sample : edges[side])
+        {
+          if (!vm::is_finite(meshes[face]->positions()[sample]))
+          {
+            return std::nullopt; // Fine-only samples join no group, so check every edge.
+          }
+          sample += result.starts[face];
+        }
       }
       links[a].push_back(b);
       links[b].push_back(a);
-      for (size_t i = 0; i < size; ++i)
+      const auto segments = std::min(edges[0].size(), edges[1].size()) - 1;
+      const auto firstRatio = (edges[0].size() - 1) / segments;
+      const auto secondRatio = (edges[1].size() - 1) / segments;
+      for (size_t i = 0; i <= segments; ++i)
       {
-        const auto first = a * samples + (*plan)[0][i];
-        const auto second = b * samples + (*plan)[1][i];
+        const auto first = edges[0][i * firstRatio];
+        const auto second = edges[1][i * secondRatio];
         parents[root(second)] = root(first);
         matched[first] = matched[second] = true;
       }
+      result.edges.push_back(std::move(edges));
     }
   }
   auto visited = std::vector<bool>(meshes.size(), false);
@@ -358,28 +559,29 @@ std::optional<std::vector<SewEdge>> planSewTogether(
       groups[root(i)].push_back(i);
     }
   }
-  auto result = std::vector<SewEdge>{};
   for (auto& [_, group] : groups)
   {
     for (const auto a : group)
     {
-      if (!vm::is_finite(meshes[a / samples]->positions()[a % samples]))
-      {
-        return std::nullopt;
-      }
+      const auto [aMesh, aVertex] = sewSampleAddress(result, a);
       for (const auto b : group)
       {
+        const auto [bMesh, bVertex] = sewSampleAddress(result, b);
         if (
           vm::length(
-            meshes[a / samples]->basePositions()[a % samples]
-            - meshes[b / samples]->basePositions()[b % samples])
+            meshes[aMesh]->basePositions()[aVertex]
+            - meshes[bMesh]->basePositions()[bVertex])
           > SourceDisplacement::TransformEpsilon)
         {
           return std::nullopt; // Do not chain tolerance into a wider base-point group.
         }
       }
     }
-    result.push_back(std::move(group));
+    result.groups.push_back(std::move(group));
+  }
+  if (!sewContactsAreSewn(meshes, result))
+  {
+    return std::nullopt;
   }
   return result;
 }
@@ -952,30 +1154,24 @@ bool SourceDisplacement::sewTogether(const std::vector<SourceDisplacement*>& mes
   {
     throw std::invalid_argument{"Unsupported connected displacement position seams"};
   }
-  if (meshes.size() == 2)
+  if (meshes.size() == 2 && meshes[0]->power() == meshes[1]->power())
   {
     return meshes[0]->sewWith(*meshes[1]);
   }
-  auto staged = std::vector<SourceDisplacement>{};
-  staged.reserve(meshes.size());
-  for (const auto* mesh : meshes)
-  {
-    staged.push_back(*mesh);
-  }
-  auto changed = std::vector<bool>(meshes.size(), false);
-  auto targets = std::vector<std::pair<SewEdge, vm::vec3d>>{};
-  const auto samples = meshes.front()->size() * meshes.front()->size();
-  for (const auto& group : *plan)
+  const auto originalPosition = [&](const size_t sample) -> const vm::vec3d& {
+    const auto [mesh, vertex] = sewSampleAddress(*plan, sample);
+    return meshes[mesh]->m_positions[vertex];
+  };
+  auto targets = std::map<size_t, vm::vec3d>{};
+  for (const auto& group : plan->groups)
   {
     auto needsChange = false;
     for (const auto a : group)
     {
       for (const auto b : group)
       {
-        needsChange |= vm::length(
-                         meshes[a / samples]->m_positions[a % samples]
-                         - meshes[b / samples]->m_positions[b % samples])
-                       > TransformEpsilon;
+        needsChange |=
+          vm::length(originalPosition(a) - originalPosition(b)) > TransformEpsilon;
       }
     }
     if (!needsChange)
@@ -988,7 +1184,7 @@ bool SourceDisplacement::sewTogether(const std::vector<SourceDisplacement*>& mes
       auto values = std::vector<double>{};
       for (const auto sample : group)
       {
-        values.push_back(meshes[sample / samples]->m_positions[sample % samples][axis]);
+        values.push_back(originalPosition(sample)[axis]);
       }
       target[axis] = seamMean(std::move(values));
     }
@@ -996,32 +1192,78 @@ bool SourceDisplacement::sewTogether(const std::vector<SourceDisplacement*>& mes
     {
       invalid(meshes.front()->m_entry, "displacement seam average overflowed");
     }
-    targets.emplace_back(group, target);
     for (const auto sample : group)
     {
-      const auto mesh = sample / samples;
-      const auto vertex = sample % samples;
-      const auto offset =
-        meshes[mesh]->m_offsets[vertex] + (target - meshes[mesh]->m_positions[vertex]);
-      if (!vm::is_finite(offset))
+      targets.emplace(sample, target);
+    }
+  }
+  const auto solvedPosition = [&](const size_t sample) {
+    const auto it = targets.find(sample);
+    return it == targets.end() ? originalPosition(sample) : it->second;
+  };
+  for (const auto& edges : plan->edges)
+  {
+    if (edges[0].size() == edges[1].size())
+    {
+      continue;
+    }
+    const auto coarse = edges[0].size() < edges[1].size() ? 0u : 1u;
+    const auto fine = 1u - coarse;
+    const auto segments = edges[fine].size() - 1;
+    const auto ratio = segments / (edges[coarse].size() - 1);
+    for (size_t i = 1; i < segments; ++i)
+    {
+      if (i % ratio == 0)
       {
-        invalid(meshes[mesh]->m_entry, "displacement seam offset overflowed");
+        continue; // Coincident samples were solved together, including all junctions.
       }
-      if (offset == meshes[mesh]->m_offsets[vertex])
+      const auto sample = edges[fine][i];
+      const auto target = sewEdgePosition(edges[coarse], i, segments, solvedPosition);
+      if (!vm::is_finite(target))
+      {
+        invalid(meshes.front()->m_entry, "displacement seam interpolation overflowed");
+      }
+      if (vm::length(originalPosition(sample) - target) <= TransformEpsilon)
       {
         continue;
       }
-      if (staged[mesh].canInitializeOffsets())
+      const auto [it, inserted] = targets.emplace(sample, target);
+      if (!inserted && vm::length(it->second - target) > TransformEpsilon)
       {
-        staged[mesh].initializeOffsets();
+        invalid(meshes.front()->m_entry, "conflicting displacement seam interpolation");
       }
-      staged[mesh].m_offsets[vertex] = offset;
-      changed[mesh] = true;
     }
   }
   if (targets.empty())
   {
     return false;
+  }
+  auto staged = std::vector<SourceDisplacement>{};
+  staged.reserve(meshes.size());
+  for (const auto* mesh : meshes)
+  {
+    staged.push_back(*mesh);
+  }
+  auto changed = std::vector<bool>(meshes.size(), false);
+  for (const auto& [sample, target] : targets)
+  {
+    const auto [mesh, vertex] = sewSampleAddress(*plan, sample);
+    const auto offset =
+      meshes[mesh]->m_offsets[vertex] + (target - originalPosition(sample));
+    if (!vm::is_finite(offset))
+    {
+      invalid(meshes[mesh]->m_entry, "displacement seam offset overflowed");
+    }
+    if (offset == meshes[mesh]->m_offsets[vertex])
+    {
+      continue;
+    }
+    if (staged[mesh].canInitializeOffsets())
+    {
+      staged[mesh].initializeOffsets();
+    }
+    staged[mesh].m_offsets[vertex] = offset;
+    changed[mesh] = true;
   }
   for (size_t i = 0; i < staged.size(); ++i)
   {
@@ -1030,24 +1272,46 @@ bool SourceDisplacement::sewTogether(const std::vector<SourceDisplacement*>& mes
       staged[i].rebuild();
     }
   }
-  for (const auto& [group, target] : targets)
+  const auto actualPosition = [&](const size_t sample) -> const vm::vec3d& {
+    const auto [mesh, vertex] = sewSampleAddress(*plan, sample);
+    return staged[mesh].m_positions[vertex];
+  };
+  for (const auto& [sample, target] : targets)
+  {
+    if (vm::length(actualPosition(sample) - target) > TransformEpsilon)
+    {
+      const auto mesh = sewSampleAddress(*plan, sample).first;
+      invalid(meshes[mesh]->m_entry, "displacement seam target is not representable");
+    }
+  }
+  for (const auto& group : plan->groups)
   {
     for (const auto a : group)
     {
-      const auto& actual = staged[a / samples].m_positions[a % samples];
-      if (vm::length(actual - target) > TransformEpsilon)
-      {
-        invalid(
-          meshes[a / samples]->m_entry, "displacement seam target is not representable");
-      }
       for (const auto b : group)
       {
-        if (
-          vm::length(actual - staged[b / samples].m_positions[b % samples])
-          > TransformEpsilon)
+        if (vm::length(actualPosition(a) - actualPosition(b)) > TransformEpsilon)
         {
-          invalid(meshes[a / samples]->m_entry, "displacement seam is not representable");
+          invalid(
+            meshes[sewSampleAddress(*plan, a).first]->m_entry,
+            "displacement seam is not representable");
         }
+      }
+    }
+  }
+  for (const auto& edges : plan->edges)
+  {
+    const auto coarse = edges[0].size() <= edges[1].size() ? 0u : 1u;
+    const auto fine = 1u - coarse;
+    const auto segments = edges[fine].size() - 1;
+    for (size_t i = 0; i <= segments; ++i)
+    {
+      const auto target = sewEdgePosition(edges[coarse], i, segments, actualPosition);
+      if (vm::length(actualPosition(edges[fine][i]) - target) > TransformEpsilon)
+      {
+        invalid(
+          meshes[sewSampleAddress(*plan, edges[fine][i]).first]->m_entry,
+          "displacement seam curve is not representable");
       }
     }
   }

@@ -1,4 +1,4 @@
-# Try Windows SourceBroom A5.36 — connected displacement position seams
+# Try Windows SourceBroom A5.37 — mixed-power displacement seams
 
 This is an experimental native-VMF editor candidate, not a public release or a
 claim of complete A4/A5 acceptance. CSS and Momentum are the first tested games;
@@ -20,7 +20,30 @@ FTESurf is an optional runtime, not an editor dependency.
    Unsupported operations must refuse preserving-save with a diagnostic. Never
    treat an error as a successful save or overwrite the original to test it.
 
-## A5.36: sew a connected terrain patch in one operation
+## A5.37: sew terrain faces of different powers
+
+**Sew selected displacement position seams** now accepts connected selections
+that mix displacement powers 2–6. Each matching edge must still be a full shared
+base edge with one selected partner. Samples both faces have meet at one average
+of their original positions; samples only the finer face has along that edge are
+placed on the straight segment between the coarser face's solved samples. Finer
+detail along the seam is flattened on purpose so no gap remains. Everything else
+from A5.36 holds: one Undo/Redo command, no history for an already-closed seam,
+and refusal of ambiguous, disconnected, non-manifold, partial/aliased and
+read-only selections. A face that touches another selected face without sharing a full edge with
+it (a T-junction) is refused, because sewing would open a gap there. Powers, triangles, distances, alphas and
+normals are not changed; this is not normal welding, neighbor generation or
+Hammer's algorithm.
+
+Focused core (21 cases, 35537 assertions) and the native inspector (410
+assertions) pass; full Model330/UI64/App50/GL21/Render28 pass. Seven targets
+build with zero compiler diagnostics.
+
+**Small owner check (pending):** only if a copied map already has neighbouring
+terrain faces of different power: select them, Sew, look along the seam for a
+gap, then Undo. No hunt or original-file save. Keep whole A5.36/A5.35/A5.25.
+
+## Retained A5.36: sew a connected terrain patch in one operation
 
 Select a connected set of **2 to 64 same-power native displacement faces**, then
 use **Sew selected displacement position seams** in the face inspector. Each

@@ -682,10 +682,11 @@ QWidget* FaceAttribsEditor::createAttribsWidget()
   m_sewDisplacements->setObjectName("sourceDisplacementSew");
   m_sewDisplacements->setEnabled(false); // Fail closed until the first deferred refresh.
   m_sewDisplacements->setToolTip(tr(
-    "A connected set of 2 to 64 same-power native meshes with full shared base edges. "
-    "Shared corners use one average of all original positions. Explicit Sew may "
-    "initialize absent offset rows. Does not weld normals, change power, generate "
-    "neighbors or repair partial data."));
+    "A connected set of 2 to 64 native meshes with full shared base edges. "
+    "Shared samples average original positions; mixed powers move finer-only edge "
+    "samples onto the solved coarse edge. Explicit Sew may initialize absent offset "
+    "rows. Does not weld normals, change power, generate neighbors or repair partial "
+    "data."));
   faceAttribsLayout->addWidget(m_sewDisplacements, r + 1, 0, 1, 4);
   connect(m_sewDisplacements, &QAbstractButton::pressed, this, [this] {
     m_sewIntent = m_sewDisplacements->isEnabled()

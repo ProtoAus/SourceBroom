@@ -11,8 +11,11 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <functional>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace tb::mdl
 {
@@ -114,6 +117,41 @@ std::vector<SourceDisplacement*> sewPointers(std::vector<SourceDisplacement>& me
 }
 } // namespace
 
+TEST_CASE("SourceDisplacement batch admits mixed powers with coarse edge interpolation")
+{
+  auto meshes = sewTiles(3);
+  auto first = meshes[0];
+  auto second = meshes[1];
+  REQUIRE(first.canSewWith(second));
+  REQUIRE(first.sewWith(second));
+  REQUIRE(first.positions()[sewCorner(first)].z() == 6); // Same-power pair ACTS.
+  meshes[2] =
+    loadDisplacement("side { dispinfo { power 3 startposition \"[0 0 0]\" } }")
+      .translated({0, 64, 0}); // Exact fixture promoted from the old batch refusal.
+  REQUIRE(meshes[2].power() == 3);
+  REQUIRE(meshes[2].canInitializeOffsets());
+  CHECK_FALSE(meshes[0].canSewWith(meshes[2])); // Legacy strict pair API stays strict.
+  const auto before = meshes;
+  const auto pointers = sewPointers(meshes);
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  REQUIRE(SourceDisplacement::sewTogether(pointers));
+  for (size_t i = 0; i < meshes.size(); ++i)
+  {
+    CHECK(meshes[i].positions()[sewCorner(meshes[i])].z() == 4); // mean(4,8,0).
+    CHECK(meshes[i].basePositions() == before[i].basePositions());
+    CHECK(meshes[i].indices() == before[i].indices());
+    CHECK(meshes[i].alphas() == before[i].alphas());
+    CHECK(meshes[i].power() == before[i].power());
+  }
+  CHECK(meshes[0] == before[0]); // Original4 is already at the common mean4.
+  CHECK(meshes[0].canInitializeOffsets());
+  const auto sewn = meshes;
+  CHECK_FALSE(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == sewn);
+}
+
 TEST_CASE("SourceDisplacement sews connected position groups without corner bias")
 {
   const auto count = GENERATE(size_t{3}, size_t{4});
@@ -186,6 +224,423 @@ TEST_CASE("SourceDisplacement sews connected position groups without corner bias
   CHECK(meshes == sewn);
 }
 
+TEST_CASE("SourceDisplacement mixed powers close the full analytic XYZ edge curve")
+{
+  const auto source = [](const unsigned power) {
+    return "side { dispinfo { power " + std::to_string(power)
+           + " startposition \"[0 0 0]\" } }";
+  };
+  for (const auto powers : {std::pair{2u, 3u}, std::pair{2u, 6u}, std::pair{3u, 5u}})
+  {
+    for (const auto reversedFrame : {false, true})
+    {
+      for (const auto reversedSelection : {false, true})
+      {
+        INFO(
+          powers.first << "/" << powers.second << " frame=" << reversedFrame
+                       << " selection=" << reversedSelection);
+        auto low = loadDisplacement(source(powers.first));
+        auto high = loadDisplacement(source(powers.second));
+        if (reversedFrame)
+        {
+          auto rotation = vm::mat4x4d::identity();
+          rotation[0][0] = -1;
+          rotation[1][1] = -1;
+          high = high.rigidlyTransformed(rotation).translated({128, 64, 0});
+        }
+        else
+        {
+          high = high.translated({64, 0, 0});
+        }
+        const auto lowPeak = sewCorner(low, {64, 32, 0});
+        const auto highStep = 64.0 / double(high.size() - 1);
+        const auto highBump = sewCorner(high, {64, 32 + highStep, 0});
+        low.initializeOffsets();
+        high.initializeOffsets();
+        low.setOffset(lowPeak / low.size(), lowPeak % low.size(), {8, 4, 8});
+        high.setOffset(highBump / high.size(), highBump % high.size(), {6, -2, 6});
+        const auto beforeLow = low;
+        const auto beforeHigh = high;
+        REQUIRE(beforeHigh.positions()[highBump].z() == 6);
+        auto pointers = std::vector<SourceDisplacement*>{&low, &high};
+        if (reversedSelection)
+        {
+          std::reverse(pointers.begin(), pointers.end());
+        }
+        REQUIRE(
+          SourceDisplacement::canSewTogether(
+            std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+        REQUIRE(SourceDisplacement::sewTogether(pointers));
+        // XYZ mean, not Z only.
+        REQUIRE(low.positions()[lowPeak] == vm::vec3d{68, 34, 4});
+        const auto spacing = 64.0 / double(low.size() - 1);
+        const auto expectedBump = 4 * (1 - highStep / spacing);
+        REQUIRE(high.positions()[highBump].z() == expectedBump); // Fine-only6 must ACT.
+        for (const auto& pair :
+             {std::pair{&low, &beforeLow}, std::pair{&high, &beforeHigh}})
+        {
+          const auto& mesh = *pair.first;
+          const auto& before = *pair.second;
+          CHECK(mesh.basePositions() == before.basePositions());
+          CHECK(mesh.indices() == before.indices());
+          CHECK(mesh.alphas() == before.alphas());
+          CHECK(mesh.power() == before.power());
+          CHECK(mesh.canEditDistances() == before.canEditDistances());
+          for (size_t i = 0; i < mesh.positions().size(); ++i)
+          {
+            const auto& base = mesh.basePositions()[i];
+            if (base.x() == 64)
+            {
+              const auto t = std::max(0.0, 1 - std::abs(base.y() - 32) / spacing);
+              CHECK(
+                mesh.positions()[i] == vm::vec3d{64 + 4 * t, base.y() + 2 * t, 4 * t});
+            }
+            else
+            {
+              CHECK(mesh.positions()[i] == before.positions()[i]);
+            }
+          }
+        }
+        const auto sewnLow = low;
+        const auto sewnHigh = high;
+        CHECK_FALSE(SourceDisplacement::sewTogether(pointers));
+        CHECK(low == sewnLow);
+        CHECK(high == sewnHigh);
+        if (
+          powers.first == 2 && powers.second == 6 && reversedFrame && !reversedSelection)
+        {
+          const auto text = source(powers.second);
+          const auto document = VmfDocument::parse(text);
+          auto structural = std::vector<VmfStructuralEdit>{};
+          const auto edits = high.editsFrom(loadDisplacement(text), structural);
+          const auto saved = document.serialize(edits, structural);
+          const auto parsed = VmfDocument::parse(saved);
+          const auto size = high.size();
+          const auto& base = high.basePositions();
+          const auto face = std::vector<vm::vec3d>{
+            base[0], base[size - 1], base[size * size - 1], base[(size - 1) * size]};
+          const auto reopened =
+            SourceDisplacement::read(parsed, parsed.roots()[0], face, {0, 0, 1}, bounds);
+          REQUIRE(reopened);
+          CHECK(reopened->positions() == high.positions());
+          CHECK(reopened->indices() == high.indices());
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("SourceDisplacement mixed-power junctions share one original-coordinate mean")
+{
+  const auto count = GENERATE(size_t{3}, size_t{4});
+  const auto reverse = GENERATE(false, true);
+  const auto powers = std::array<unsigned, 4>{2, 3, 4, 6};
+  auto meshes = std::vector<SourceDisplacement>{};
+  for (size_t i = 0; i < count; ++i)
+  {
+    meshes.push_back(loadDisplacement(
+                       "side { dispinfo { power " + std::to_string(powers[i])
+                       + " startposition \"[0 0 0]\" } }")
+                       .translated(sewTileShifts[i]));
+    auto& mesh = meshes.back();
+    const auto corner = sewCorner(mesh);
+    mesh.initializeOffsets();
+    mesh.setOffset(
+      corner / mesh.size(), corner % mesh.size(), {0, 0, 4.0 * double(i + 1)});
+  }
+  const auto before = meshes;
+  auto pointers = sewPointers(meshes);
+  if (reverse)
+  {
+    std::reverse(pointers.begin(), pointers.end());
+  }
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  REQUIRE(SourceDisplacement::sewTogether(pointers));
+  const auto mean = count == 3 ? 8.0 : 10.0;
+  // Shared edges by tile index; each fine sample follows that edge's coarser spacing.
+  const auto shared = std::array<std::pair<size_t, size_t>, 4>{
+    std::pair{size_t{0}, size_t{1}}, {0, 2}, {1, 3}, {2, 3}};
+  for (size_t i = 0; i < count; ++i)
+  {
+    const auto& mesh = meshes[i];
+    CHECK(mesh.positions()[sewCorner(mesh)] == vm::vec3d{64, 64, mean});
+    CHECK(mesh.basePositions() == before[i].basePositions());
+    CHECK(mesh.indices() == before[i].indices());
+    CHECK(mesh.power() == before[i].power());
+    for (size_t j = 0; j < mesh.positions().size(); ++j)
+    {
+      const auto& base = mesh.basePositions()[j];
+      auto expected = before[i].positions()[j];
+      for (const auto& [a, b] : shared)
+      {
+        if ((a != i && b != i) || a >= count || b >= count)
+        {
+          continue;
+        }
+        const auto other = a == i ? b : a;
+        const auto alongX = sewTileShifts[i].y() != sewTileShifts[other].y();
+        if ((alongX ? base.y() : base.x()) != 64)
+        {
+          continue;
+        }
+        const auto spacing =
+          64.0 / double(std::min(mesh.size(), meshes[other].size()) - 1);
+        const auto along = std::abs((alongX ? base.x() : base.y()) - 64);
+        expected = base + vm::vec3d{0, 0, mean * std::max(0.0, 1 - along / spacing)};
+      }
+      CHECK(mesh.positions()[j] == expected);
+    }
+  }
+  const auto sewn = meshes;
+  CHECK_FALSE(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == sewn);
+}
+
+TEST_CASE("SourceDisplacement mixed-power seams keep protected data and atomic bounds")
+{
+  // Power-3 rows are 9 wide; a relabelled 5-wide fixture throws in read, not in sew.
+  const auto power3 = [](const size_t offsetRows, const std::string& table = "offsets") {
+    auto source = std::string{"side { dispinfo { power 3 startposition \"[0 0 0]\"\n"};
+    if (offsetRows != 0)
+    {
+      source += table + " {\n";
+      for (size_t row = 0; row < offsetRows; ++row)
+      {
+        source += "row" + std::to_string(row) + " \"";
+        for (size_t column = 0; column < 9; ++column)
+        {
+          source += "0 0 0 ";
+        }
+        source += "\"\n";
+      }
+      source += "}\n";
+    }
+    auto result = loadDisplacement(source + "} }");
+    REQUIRE(result.power() == 3);
+    return result;
+  };
+  const auto eligible = [](const SourceDisplacement& a, const SourceDisplacement& b) {
+    return SourceDisplacement::canSewTogether({&a, &b});
+  };
+  auto meshes = sewTiles(3);
+  meshes[2] = power3(9).translated({0, 64, 0});
+  auto control = meshes;
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(control)));
+  REQUIRE(control[2].positions()[sewCorner(control[2])].z() == 4); // Full table ACTS.
+  SECTION("partial higher-power offsets")
+  {
+    meshes[2] = power3(1).translated({0, 64, 0});
+  }
+  SECTION("aliased higher-power offsets")
+  {
+    meshes[2] = power3(9, "Offsets").translated({0, 64, 0});
+  }
+  SECTION("ambiguous mixed overlap")
+  {
+    meshes[2] = power3(0); // Exactly over meshes[0]: every edge matches.
+    // Ambiguous as a pair, not merely an edge with two partners.
+    CHECK_FALSE(eligible(meshes[0], meshes[2]));
+  }
+  SECTION("disconnected mixed mesh")
+  {
+    meshes[2] = power3(0).translated({-128, 0, 0});
+  }
+  SECTION("non-manifold mixed edge")
+  {
+    auto rotation = vm::mat4x4d::identity();
+    rotation[0][0] = 0;
+    rotation[2][2] = 0;
+    rotation[0][2] = 1;
+    rotation[2][0] = -1;
+    meshes[2] = power3(0).rigidlyTransformed(rotation).translated({64, 0, 0});
+    REQUIRE(eligible(meshes[0], meshes[2]));
+    REQUIRE(eligible(meshes[1], meshes[2]));
+  }
+  SECTION("mixed base tolerance cannot chain into a wider corner cluster")
+  {
+    meshes[1] = meshes[1].translated({-0.75e-6, 0, 0});
+    meshes[2] = power3(0).translated({0, 64 - 0.75e-6, 0});
+    REQUIRE(eligible(meshes[0], meshes[1]));
+    REQUIRE(eligible(meshes[0], meshes[2]));
+  }
+  const auto before = meshes;
+  const auto pointers = sewPointers(meshes);
+  CHECK_FALSE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  CHECK_THROWS(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == before);
+}
+
+TEST_CASE("SourceDisplacement batch refuses T-junctions that sewing would open")
+{
+  const auto source = [](const unsigned power) {
+    return "side { dispinfo { power " + std::to_string(power)
+           + " startposition \"[0 0 0]\" } }";
+  };
+  const auto document = VmfDocument::parse(source(3));
+  // x 64..128, y 0..128: 16-unit spacing, like a power-2 tile beside it.
+  const auto tall = SourceDisplacement::read(
+    document,
+    document.roots()[0],
+    {{0, 0, 0}, {64, 0, 0}, {64, 128, 0}, {0, 128, 0}},
+    {0, 0, 1},
+    bounds);
+  REQUIRE(tall);
+  const auto raise = [](
+                       SourceDisplacement& mesh, const vm::vec3d& point, const double z) {
+    const auto index = sewCorner(mesh, point);
+    if (mesh.canInitializeOffsets())
+    {
+      mesh.initializeOffsets();
+    }
+    mesh.setOffset(index / mesh.size(), index % mesh.size(), {0, 0, z});
+  };
+  const auto at = [](const SourceDisplacement& mesh, const vm::vec3d& point) {
+    return mesh.positions()[sewCorner(mesh, point)];
+  };
+  // Tall, B1 left of it, B2 above B1, C below tall, D below B1; full edges link
+  // tall-C-D-B1(-B2), but tall's left edge only touches B1 and B2.
+  auto meshes = std::vector<SourceDisplacement>{
+    tall->translated({64, 0, 0}),
+    loadDisplacement(source(2)),
+    loadDisplacement(source(2)).translated({0, 64, 0}),
+    loadDisplacement(source(2)).translated({64, -64, 0}),
+    loadDisplacement(source(2)).translated({0, -64, 0})};
+  auto subset = std::vector<size_t>{1, 2, 3, 4};
+  auto crack = std::function<double()>{};
+  SECTION("junction on a coarser edge sample")
+  {
+    raise(meshes[0], {64, 64, 0}, 8);
+    raise(meshes[1], {64, 64, 0}, 8); // Tall and B1 already meet; B2 is at 0.
+    crack = [&] {
+      return at(meshes[0], {64, 64, 0}).z() - at(meshes[1], {64, 64, 0}).z();
+    };
+  }
+  SECTION("finer edge lying along part of a coarser edge")
+  {
+    meshes[1] = loadDisplacement(source(3));
+    meshes.erase(meshes.begin() + 2); // No B2.
+    subset = {1, 2, 3};
+    raise(meshes[2], {64, 0, 0}, 8); // C's corner moves the tall/B1/C/D junction.
+    crack = [&] {
+      const auto edge = (at(meshes[0], {64, 0, 0}) + at(meshes[0], {64, 16, 0})) / 2.0;
+      return edge.z() - at(meshes[1], {64, 8, 0}).z();
+    };
+  }
+  REQUIRE(crack() == 0);
+  auto control = std::vector<SourceDisplacement>{};
+  for (const auto i : subset)
+  {
+    control.push_back(meshes[i]);
+  }
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(control))); // Without tall: ACTS.
+  const auto before = meshes;
+  const auto pointers = sewPointers(meshes);
+  CHECK_FALSE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  CHECK_THROWS(SourceDisplacement::sewTogether(pointers));
+  CHECK(meshes == before);
+  CHECK(crack() == 0);
+}
+
+TEST_CASE("SourceDisplacement mixed-power seams move finer-only samples alone")
+{
+  auto low = loadDisplacement("side { dispinfo { power 2 startposition \"[0 0 0]\" } }");
+  auto high = loadDisplacement("side { dispinfo { power 3 startposition \"[0 0 0]\" } }")
+                .translated({64, 0, 0});
+  const auto bump = sewCorner(high, {64, 40, 0}); // Between low's samples at 32 and 48.
+  high.initializeOffsets();
+  high.setOffset(bump / high.size(), bump % high.size(), {0, 0, 6});
+  const auto beforeLow = low;
+  auto pointers = std::vector<SourceDisplacement*>{&low, &high};
+  REQUIRE(SourceDisplacement::sewTogether(pointers)); // No coincident group changes.
+  CHECK(high.positions()[bump] == vm::vec3d{64, 40, 0});
+  CHECK(low == beforeLow);
+  CHECK(low.canInitializeOffsets()); // The unchanged coarse mesh gets no table.
+  const auto sewn = high;
+  CHECK_FALSE(SourceDisplacement::sewTogether(pointers));
+  CHECK(high == sewn);
+}
+
+TEST_CASE("SourceDisplacement mixed-power seams close a rotated inexact edge")
+{
+  const auto turn = vm::rotation_matrix(vm::vec3d{0, 0, 1}, 0.37);
+  const auto lowFlat =
+    loadDisplacement("side { dispinfo { power 2 startposition \"[0 0 0]\" } }");
+  const auto highFlat =
+    loadDisplacement("side { dispinfo { power 3 startposition \"[0 0 0]\" } }")
+      .translated({64, 0, 0});
+  auto lowEdge = std::vector<size_t>{};
+  for (size_t k = 0; k < 5; ++k)
+  {
+    lowEdge.push_back(sewCorner(lowFlat, {64, 16.0 * double(k), 0}));
+  }
+  auto highEdge = std::vector<size_t>{};
+  for (size_t k = 0; k < 9; ++k)
+  {
+    highEdge.push_back(sewCorner(highFlat, {64, 8.0 * double(k), 0}));
+  }
+  auto low = lowFlat.rigidlyTransformed(turn);
+  auto high = highFlat.rigidlyTransformed(turn);
+  REQUIRE(low.basePositions()[lowEdge[2]] != lowFlat.basePositions()[lowEdge[2]]);
+  low.initializeOffsets();
+  low.setOffset(lowEdge[2] / 5, lowEdge[2] % 5, {0.3, -0.2, 8});
+  high.initializeOffsets();
+  high.setOffset(highEdge[5] / 9, highEdge[5] % 9, {0.1, 0.4, 6}); // Finer-only, y=40.
+  auto pointers = std::vector<SourceDisplacement*>{&low, &high};
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  REQUIRE(SourceDisplacement::sewTogether(pointers));
+  for (size_t k = 0; k < 9; ++k)
+  {
+    const auto& a = low.positions()[lowEdge[k / 2]];
+    const auto& b = low.positions()[lowEdge[std::min(k / 2 + 1, size_t{4})]];
+    const auto fraction = double(k % 2) / 2;
+    CHECK(
+      vm::length(high.positions()[highEdge[k]] - (a * (1 - fraction) + b * fraction))
+      <= 1e-9);
+  }
+  CHECK(vm::length(high.positions()[highEdge[5]] - low.positions()[lowEdge[2]]) > 1);
+  const auto sewnLow = low;
+  const auto sewnHigh = high;
+  CHECK_FALSE(SourceDisplacement::sewTogether(pointers));
+  CHECK(low == sewnLow);
+  CHECK(high == sewnHigh);
+}
+
+TEST_CASE("SourceDisplacement mixed-power seam stages a later world-bound failure")
+{
+  const auto smallCorners =
+    std::vector<vm::vec3d>{{0, 0, 0}, {8, 0, 0}, {8, 8, 0}, {0, 8, 0}};
+  const auto read = [&](const unsigned power, const double extent) {
+    const auto document = VmfDocument::parse(
+      "side { dispinfo { power " + std::to_string(power)
+      + " startposition \"[0 0 0]\" } }");
+    return *SourceDisplacement::read(
+      document, document.roots()[0], smallCorners, {0, 0, 1}, vm::bbox3d{extent});
+  };
+  auto meshes = std::vector<SourceDisplacement>{
+    read(2, 128), read(2, 128).translated({8, 0, 0}), read(6, 16).translated({0, 8, 0})};
+  meshes[0].initializeOffsets();
+  meshes[0].setOffset(4, 4, {0, 0, 8});
+  auto control = meshes;
+  REQUIRE(SourceDisplacement::sewTogether(sewPointers(control)));
+  REQUIRE(control[2].positions()[sewCorner(control[2], {8, 8, 0})].z() > 2);
+  meshes[0].setOffset(4, 4, {0, 0, 96});
+  const auto before = meshes;
+  const auto pointers = sewPointers(meshes);
+  REQUIRE(
+    SourceDisplacement::canSewTogether(
+      std::vector<const SourceDisplacement*>{pointers.begin(), pointers.end()}));
+  CHECK_THROWS(SourceDisplacement::sewTogether(pointers)); // Mean32 exceeds LAST box16.
+  CHECK(meshes == before);
+}
+
 TEST_CASE("SourceDisplacement batch refuses unsupported seam graphs without mutation")
 {
   auto meshes = sewTiles(3);
@@ -221,12 +676,7 @@ TEST_CASE("SourceDisplacement batch refuses unsupported seam graphs without muta
   {
     meshes[2] = loadDisplacement(alphaFixture());
   }
-  SECTION("different power")
-  {
-    meshes[2] =
-      loadDisplacement("side { dispinfo { power 3 startposition \"[0 0 0]\" } }")
-        .translated({0, 64, 0});
-  }
+  // The exact former mixed-power refusal is promoted to the positive batch case above.
   SECTION("partial offsets")
   {
     meshes[2] = loadDisplacement(offsetFixture(1)).translated({0, 64, 0});

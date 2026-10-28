@@ -1,11 +1,46 @@
-# SourceBroom validation — A5.36 connected displacement position seams
+# SourceBroom validation — A5.37 mixed-power displacement position seams
 
 This is a native Source 1 VMF editor fork with configurable game/content/tool
 paths. CSS and Momentum/Strata are the first tested profiles; FTESurf is an
 optional runtime. Implemented, automated, packaged and manually accepted are
 separate states. Full A4/A5 exit and a general release are **not** claimed.
 
-## A5.36 — connected displacement position-seam batches
+## A5.37 — mixed-power displacement position seams
+
+- Red: against A5.36 production the promoted fixture (two power-2 tiles and a
+  power-3 tile) failed only its eligibility assertion (12 assertions, 11 passed),
+  after the same-power pair acted and the strict pair API refused the mixed pair.
+  The same test case passes after the change.
+- Focused core: all 21 SourceDisplacement cases pass (35537 assertions): analytic
+  curves (powers 2/3, 2/6, 3/5, both frames and selection orders, native
+  save/reopen), 2/3/4/6 three- and four-face corners against independently
+  computed positions, protected-data refusals after an acting control, and a late
+  world-bound failure that leaves every input unchanged; T-junction refusals, a
+  change of finer-only samples alone, and a rotated inexact pair closed within
+  1e-9.
+- Review: one independent read-only review (predicate, control flow, saved
+  data). Its T-junction finding was reproduced first: the unfixed planner
+  admitted both layouts and the sew opened cracks of 4.0 and 1.0 units. The
+  refusal makes both tests pass. Two calculated rounding quirks are in BACKLOG,
+  not fixed.
+- Discrimination: a mutant ignoring a second mixed-power edge match fails exactly
+  the pair-level ambiguity assertion (77 assertions, 1 failed).
+- Native inspector: 410 assertions pass, including a 2/3/4/6 four-tile corner
+  through the button (64 + mean(4,8,12,16) = 74; fine-only samples at 69, 71.5,
+  72.75 and 71.5), one command, no-op repeat, Undo/Redo, stale intent, Save As and
+  strict/read-only-preview reopen.
+- Full suites: Model330/UI64/App50/GL21/Render28 pass. The intermittent
+  QPreferenceStore Unicode rename failure recorded at A5.36 did not occur in this
+  run; it was not fixed or retried. Seven targets build with zero compiler
+  diagnostics.
+- Boundaries: all source hunks are in the sew planner and executor; reader, rebuild,
+  transforms and serializer are untouched, so the A5.31 corpus evidence carries
+  without a rerun.
+
+Position sewing only. No re-powering, normal welding, neighbor generation, SDK or
+Hammer parity, or human acceptance.
+
+## Retained A5.36 — connected displacement position-seam batches
 
 - Actual tests-only native inspector build0/runtime199:198 controls pass, ONE
   desired connected-three eligibility failure in OLD exactly-two production.

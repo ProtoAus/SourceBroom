@@ -119,7 +119,7 @@ public:
   bool canSewWith(const SourceDisplacement& other) const;
   /** Same-power, unique full base edge only. Stages both meshes; false is a no-op. */
   bool sewWith(SourceDisplacement& other);
-  /** Connected same-power full-edge batch; stages all meshes before committing. */
+  /** Connected full-edge batch; finer boundary samples follow the solved coarse edge. */
   static bool canSewTogether(const std::vector<const SourceDisplacement*>& meshes);
   static bool sewTogether(const std::vector<SourceDisplacement*>& meshes);
   bool canEditDistances() const;

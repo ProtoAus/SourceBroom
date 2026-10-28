@@ -1959,6 +1959,154 @@ TEST_CASE(
     CHECK(reopenedMap.modificationCount() == batchReopenCount);
     CHECK(reopenedMap.vmfScene()->serialize(reopenedMap.worldNode()) == batchSaved);
   }
+  env.createFile(
+    "mixed-displacement.vmf",
+    "world { id 1 classname worldspawn\n" + solid(2, 2, false) + solid(20, 3, false)
+      + solid(40, 4, false) + solid(60, 6, false) + "}\n");
+  auto mixedResult = MapDocument::loadDocument(
+    appController.environmentConfig(),
+    mdl::QuakeGameInfo,
+    mdl::MapFormat::SourceVMF,
+    vm::bbox3d{8192.0},
+    env.dir() / "mixed-displacement.vmf",
+    appController.taskManager(),
+    appController.glManager().resourceManager());
+  REQUIRE(mixedResult.is_success());
+  auto mixedDocument = std::move(mixedResult) | kdl::value();
+  auto& mixedMap = mixedDocument->map();
+  mixedMap.setIsCommandCollationEnabled(false);
+  auto mixedEditor = FaceAttribsEditor{appController, *mixedDocument};
+  const auto mixedNodes = mixedMap.worldNode().defaultLayer()->children();
+  REQUIRE(mixedNodes.size() == 4);
+  const auto mixedPowers = std::array<size_t, 4>{2, 3, 4, 6};
+  auto mixedFaces = std::vector<mdl::BrushFaceHandle>{};
+  for (size_t i = 0; i < mixedNodes.size(); ++i)
+  {
+    auto* brush = dynamic_cast<mdl::BrushNode*>(mixedNodes[i]);
+    REQUIRE(brush);
+    if (i != 0)
+    {
+      mdl::deselectAll(mixedMap);
+      mdl::selectNodes(mixedMap, {brush});
+      REQUIRE(
+        mdl::transformSelection(
+          mixedMap, "Place mixed-power tile", vm::translation_matrix(shifts[i])));
+    }
+    const auto face = brush->brush().findFace(vm::vec3d{0, 0, 1});
+    REQUIRE(face);
+    mixedFaces.emplace_back(*brush, *face);
+    mdl::deselectAll(mixedMap);
+    mdl::selectBrushFaces(mixedMap, {mixedFaces.back()});
+    const auto& mesh = *mixedFaces.back().face().sourceDisplacement();
+    REQUIRE(mesh.power() == mixedPowers[i]);
+    const auto corner = std::find(
+      mesh.basePositions().begin(), mesh.basePositions().end(), vm::vec3d{64, 64, 64});
+    REQUIRE(corner != mesh.basePositions().end());
+    const auto index = size_t(corner - mesh.basePositions().begin());
+    REQUIRE(
+      mdl::setSourceDisplacementDistance(
+        mixedMap, index / mesh.size(), index % mesh.size(), 4.0 * double(i + 1)));
+  }
+  const auto mixedHeight = [&](const size_t i, const vm::vec3d& base) {
+    const auto& mesh = *mixedFaces[i].face().sourceDisplacement();
+    const auto it =
+      std::find(mesh.basePositions().begin(), mesh.basePositions().end(), base);
+    REQUIRE(it != mesh.basePositions().end());
+    return mesh.positions()[size_t(it - mesh.basePositions().begin())].z();
+  };
+  const auto mixedBefore = mixedMap.vmfScene()->serialize(mixedMap.worldNode());
+  auto* mixedSew = mixedEditor.findChild<QPushButton*>("sourceDisplacementSew");
+  REQUIRE(mixedSew);
+  mdl::deselectAll(mixedMap);
+  mdl::selectBrushFaces(mixedMap, {mixedFaces[0], mixedFaces[1]});
+  QApplication::processEvents();
+  REQUIRE(mixedSew->isEnabled()); // Power 2 beside power 3 was refused before A5.37.
+  mixedSew->click();
+  CHECK(mixedHeight(0, {64, 64, 64}) == 70);
+  CHECK(mixedHeight(1, {64, 64, 64}) == 70);
+  CHECK(mixedHeight(1, {64, 56, 64}) == 67); // Fine-only sample on the coarse edge.
+  mixedMap.undoCommand();
+  QApplication::processEvents();
+  REQUIRE(mixedMap.vmfScene()->serialize(mixedMap.worldNode()) == mixedBefore);
+  mdl::deselectAll(mixedMap);
+  mdl::selectBrushFaces(
+    mixedMap, {mixedFaces[2], mixedFaces[0], mixedFaces[3], mixedFaces[1]});
+  QApplication::processEvents();
+  REQUIRE(mixedSew->isEnabled());
+  const auto mixedCount = mixedMap.modificationCount();
+  mixedSew->click();
+  CHECK(mixedMap.modificationCount() == mixedCount + 1);
+  const auto checkMixedSewn = [&](const auto& height) {
+    for (size_t i = 0; i < 4; ++i)
+    {
+      CHECK(height(i, {64, 64, 64}) == 74); // 64 + mean(4,8,12,16).
+    }
+    CHECK(height(1, {64, 56, 64}) == 69);    // Power 3 against power 2's 16 spacing.
+    CHECK(height(2, {60, 64, 64}) == 71.5);  // Power 4 against power 2.
+    CHECK(height(3, {65, 64, 64}) == 72.75); // Power 6 against power 3's 8 spacing.
+    CHECK(height(3, {64, 65, 64}) == 71.5);  // Power 6 against power 4's 4 spacing.
+    CHECK(height(3, {66, 66, 64}) == 64);    // Interior untouched.
+  };
+  checkMixedSewn(mixedHeight);
+  const auto mixedSaved = mixedMap.vmfScene()->serialize(mixedMap.worldNode());
+  REQUIRE(mixedSaved != mixedBefore);
+  mixedSew->click();
+  CHECK(mixedMap.modificationCount() == mixedCount + 1);
+  CHECK(mixedMap.vmfScene()->serialize(mixedMap.worldNode()) == mixedSaved);
+  mixedMap.undoCommand();
+  QApplication::processEvents();
+  CHECK(mixedMap.vmfScene()->serialize(mixedMap.worldNode()) == mixedBefore);
+  mixedMap.redoCommand();
+  QApplication::processEvents();
+  CHECK(mixedMap.vmfScene()->serialize(mixedMap.worldNode()) == mixedSaved);
+  REQUIRE(QMetaObject::invokeMethod(mixedSew, "pressed"));
+  mdl::deselectAll(mixedMap);
+  mdl::selectBrushFaces(mixedMap, {mixedFaces[0], mixedFaces[1], mixedFaces[2]});
+  CHECK_FALSE(mixedSew->isEnabled());
+  REQUIRE(QMetaObject::invokeMethod(mixedSew, "clicked"));
+  CHECK(mixedMap.modificationCount() == mixedCount + 1);
+  CHECK(mixedMap.vmfScene()->serialize(mixedMap.worldNode()) == mixedSaved);
+  const auto mixedPath = env.dir() / "mixed-sewn-copy.vmf";
+  REQUIRE(mixedMap.saveAs(mixedPath).is_success());
+  for (const auto preview : {false, true})
+  {
+    auto result = MapDocument::loadDocument(
+      appController.environmentConfig(),
+      mdl::QuakeGameInfo,
+      mdl::MapFormat::SourceVMF,
+      vm::bbox3d{8192.0},
+      mixedPath,
+      appController.taskManager(),
+      appController.glManager().resourceManager(),
+      preview);
+    REQUIRE(result.is_success());
+    auto reopened = std::move(result) | kdl::value();
+    auto& reopenedMap = reopened->map();
+    const auto children = reopenedMap.worldNode().defaultLayer()->children();
+    REQUIRE(children.size() == 4);
+    auto handles = std::vector<mdl::BrushFaceHandle>{};
+    for (auto* child : children)
+    {
+      auto* brush = dynamic_cast<mdl::BrushNode*>(child);
+      REQUIRE(brush);
+      const auto face = brush->brush().findFace(vm::vec3d{0, 0, 1});
+      REQUIRE(face);
+      handles.emplace_back(*brush, *face);
+    }
+    checkMixedSewn([&](const size_t i, const vm::vec3d& base) {
+      const auto& mesh = *handles[i].face().sourceDisplacement();
+      const auto it =
+        std::find(mesh.basePositions().begin(), mesh.basePositions().end(), base);
+      REQUIRE(it != mesh.basePositions().end());
+      return mesh.positions()[size_t(it - mesh.basePositions().begin())].z();
+    });
+    mdl::selectBrushFaces(reopenedMap, handles);
+    CHECK(mdl::canSewSourceDisplacements(reopenedMap) == !preview);
+    const auto mixedReopenCount = reopenedMap.modificationCount();
+    CHECK(mdl::sewSourceDisplacements(reopenedMap) == !preview);
+    CHECK(reopenedMap.modificationCount() == mixedReopenCount);
+    CHECK(reopenedMap.vmfScene()->serialize(reopenedMap.worldNode()) == mixedSaved);
+  }
 }
 
 TEST_CASE("Source material settings group game mounts without changing the catalog")

@@ -91,3 +91,18 @@ These are observed limitations/follow-ups, not a claim that all have a product f
   macOS binaries. Falsifier: a clean installed package launches through the OS's
   normal entrypoint with correct identity and resources, not just a build-tree
   executable on a developer machine.
+- **Displacement sew rounding — `SourceDisplacement::sewTogether`.** Found by the
+  A5.37 review by reading, not observed. (1) A group member whose position differs
+  from the computed mean only by rounding (for example Z values 0.1,
+  0.15000000000000002, 0.2) still gets an exact-difference offset write, so a mesh
+  that did not visibly move can gain an offsets table holding a ~1e-17 entry. This
+  predates A5.37. (2) Suspected: a finer-only sample skipped because it lies
+  within TransformEpsilon of its target could exceed epsilon against the rebuilt
+  coarse curve, refusing a sew that `canSewTogether` admitted. A rotated, inexact
+  A5.37 fixture did not show it. Falsifier: a fixture that reproduces either case,
+  then a fix that leaves current exact no-op/no-table tests passing.
+- **Displacement sew contact refusal is conservative.** A5.37 refuses a selection
+  where a boundary touches another selected mesh without being sewn to it and
+  either side belongs to a seam group, even when that group would not move.
+  Falsifier for loosening it: the same T-junction tests still refuse, and a
+  selection whose touching samples provably stay put sews.

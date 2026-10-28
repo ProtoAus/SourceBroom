@@ -21,7 +21,63 @@ The existing CMake application target remains `TrenchBroom`; the Windows alpha
 output, configuration namespace, and package identity are `SourceBroom`.
 A normal upstream build is not evidence of VMF GUI support.
 
-## Connected displacement position-seam batches — A5.36
+## Mixed-power displacement position seams — A5.37
+
+`planSewAcrossPowers` links two meshes of different power when a full base edge
+of each matches: every sample of the finer edge is compared with the coarser
+edge's base, linearly interpolated at the exact power-of-two ratio, within
+TransformEpsilon in either orientation. A second matching edge pair is reported
+as ambiguous. Equal powers still go through `planSew`; `planSew`, `sewWith` and
+the two-mesh same-power delegation are unchanged, so the strict instance pair
+API still refuses different powers.
+
+`SewBatchPlan` replaces the fixed per-mesh stride with prefix offsets (`starts`)
+so global sample IDs work for mixed grid sizes, and keeps each planned edge pair
+in one orientation. Only coincident samples (every ratio-th fine sample) join
+union-find groups. Fine-only samples join none, so the finiteness guard moved
+from groups to every planned edge sample. The 64-mesh cap, one partner per face
+edge, connectivity and the group base-diameter guard are unchanged.
+
+`sewContactsAreSewn` then refuses T-junctions and partial edges. A selected
+boundary sample lying on another selected mesh's straight base edge (within
+TransformEpsilon) must be grouped with that mesh or be a finer-only sample of
+their planned edge; otherwise the selection refuses if either side there could
+move: the sample itself, or the knot it touches (both ends of the touched segment
+when it falls between knots). Samples in a group or planned edge count as able to
+move even when their group will not change, so the refusal is conservative
+(BACKLOG).
+Before this check a long power-3 face beside two power-2 faces was admitted and
+the sew opened a 4-unit crack; a finer face along part of a coarser edge opened
+a 1-unit crack. Both are now tests that failed on the unfixed planner.
+
+The executor solves groups as in A5.36 (one sorted mean of original positions),
+then places each fine-only sample with `sewEdgePosition` on the solved coarse
+knots. All targets are collected before any offset is written; copies are staged
+and rebuilt, then every target, every group and every full edge curve is checked
+against the rebuilt positions before the nothrow assignments. A later world-bound
+failure leaves all inputs unchanged (tested with a power-6 mesh whose box is too
+small for the mean).
+
+Tests: the old batch mixed-power refusal fixture became the positive red case
+(12 assertions, 11 passed, against A5.36; green after). New cases cover analytic
+edge curves for powers 2/3, 2/6 and 3/5 in both frames and selection orders with
+a native save/reopen; three- and four-face 2/3/4/6 corners against an
+independently computed position for every sample; and refusals after an acting
+full-table control for partial and aliased power-3 offsets, ambiguous overlap,
+disconnected, non-manifold and tolerance-chained input. Power-3 fixtures need
+9-wide rows: a relabelled 5-wide fixture throws in `read` and never reaches sew.
+A mutant that ignores a second mixed-power edge match fails only the pair-level
+ambiguity check; the batch refusal beside it passes anyway (over-partnered edge).
+
+Focused core (21 cases, 35537 assertions) and the native inspector (410
+assertions) pass; full Model330/UI64/App50/GL21/Render28 pass. Seven targets
+build with zero compiler diagnostics. All source hunks lie in the sew planner
+(`planSewTogether`, new `sewContactsAreSewn`) and `sewTogether`; `read`,
+`rebuild`, the transforms and `editsFrom` are untouched, so A5.36's proof that
+those regions match A5.31, and the corpus evidence resting on it, carries without
+a rerun.
+
+## Retained connected displacement position-seam batches — A5.36
 
 The existing facade now accepts a connected set of2..64 supported same-power
 native displacement faces, retaining the two-face executor. The cap bounds UI
